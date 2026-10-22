@@ -186,6 +186,17 @@ function, a changed SQL table or model type, or a changed middleware with a chan
 Node (Express/Fastify) would use a regex route extractor and `require`/`import` edges; that is
 a stretch goal, not a promise.
 
+Implemented in `engine/scan` for Go `net/http` ServeMux registrations with string-literal
+patterns (`mux.HandleFunc("GET /books/{id}", h)`, `mux.Handle(p, mw(http.HandlerFunc(h)))`).
+Calls are resolved by name, without the type checker, which over-approximates. A function
+counts as changed when its lines overlap a hunk or when it uses a top-level const, var or type
+whose declaration overlaps one, so changing a constant marks its users. A route is **changed**
+when its handler or its middleware reaches a changed function within depth 2, and
+**affected** when it shares a function, a type or a package variable with a changed route. A
+function reached by more than half of all routes (such as a JSON writer) is ignored for the
+shared-function rule because sharing it carries no signal. Chi, Gin and Node frameworks are
+not supported.
+
 What this will miss: dynamic route registration, reflection, cross-service calls, changes
 that only matter through configuration. Reports say "static analysis, depth 2" so nobody
 reads the blast radius as complete.
