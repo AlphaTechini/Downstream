@@ -136,12 +136,13 @@ func (r *renderer) header() {
 	r.blank()
 	k6 := "k6 version not recorded"
 	if v := r.run.Settings.K6Version; v != "" {
-		k6 = "k6 " + oneLine(v)
+		k6 = oneLine(v)
 	}
 	r.line("Candidate `" + short(r.run.Head) + "` against baseline `" + short(r.run.Base) + "`. " +
 		"Run started " + oneLine(r.run.StartedAt) + ", ended " + oneLine(r.run.EndedAt) + ". " +
 		strconv.Itoa(r.run.Settings.VUs) + " VUs, " +
-		strconv.Itoa(r.run.Settings.DurationSeconds) + " s per pass, " + k6 + ".")
+		strconv.Itoa(r.run.Settings.Iterations) + " iterations per VU per pass (cap " +
+		strconv.Itoa(r.run.Settings.DurationSeconds) + " s), " + k6 + ".")
 	r.blank()
 }
 
@@ -206,12 +207,25 @@ func (r *renderer) issuesToOpen() {
 	}
 	r.line("**Issues to open**")
 	r.blank()
-	hs := issues.Headlines(r.run)
-	if len(hs) == 0 {
+	plan := issues.PlanIssues(r.run, r.scan)
+	if len(plan.Groups) == 0 {
 		r.line("none")
 	}
-	for _, f := range hs {
-		r.line("- " + code(f.ID))
+	for _, g := range plan.Groups {
+		suffix := ""
+		if n := len(g.Steps); n > 1 {
+			suffix = " (" + strconv.Itoa(n) + " steps)"
+		}
+		r.line("- " + code(g.Headline.ID) + suffix)
+	}
+	if plan.RegressedSteps > 0 {
+		r.blank()
+		r.line(strconv.Itoa(plan.RegressedSteps) + " regressed steps are grouped into " + strconv.Itoa(plan.TotalGroups) +
+			" by the changed functions on the routes they call; one issue per group.")
+		if plan.LeftOutGroups > 0 {
+			r.line("The " + strconv.Itoa(len(plan.Groups)) + " largest groups are listed. " + strconv.Itoa(plan.LeftOutGroups) +
+				" other groups (" + strconv.Itoa(plan.LeftOutSteps) + " steps) are left out; their steps are in the tables above.")
+		}
 	}
 	r.blank()
 }
@@ -224,12 +238,17 @@ func (r *renderer) journeyTables() {
 		r.line("|---|---|---|---|---|---|")
 		for _, s := range r.steps[jid] {
 			base := jid + "." + s + "."
-			if f, ok := r.byID[base+model.MetricP95]; ok {
-				r.line(row(code(s), f))
+			p95, hasP95 := r.byID[base+model.MetricP95]
+			if hasP95 {
+				r.line(row(code(s), p95))
 			}
+			// p50 and mean get a row only when they say something the p95 row does not.
 			for _, m := range []string{model.MetricP50, model.MetricMean, model.MetricFailures} {
 				f, ok := r.byID[base+m]
 				if !ok || f.Class == model.ClassNoise {
+					continue
+				}
+				if hasP95 && m != model.MetricFailures && f.Class == p95.Class {
 					continue
 				}
 				r.line(row(code(s)+" ("+metricShort(m)+")", f))
@@ -432,7 +451,7 @@ func (r *renderer) method() {
 		fixed(t.MinRelative*100) + "%, and by at least " + fixed(t.MinLatencyMS) + " ms (latency) or " +
 		fixed(t.MinMemoryMB) + " MB (memory). A step that passed on both baseline runs and failed on the candidate is a regression. " +
 		"The verdict is withheld when the baseline runs differ by more than " + fixed(t.MaxBaselineSpread*100) +
-		"% of the smaller one. A journey with a latency regression and a latency improvement is reported as a trade-off.")
+		"% of the smaller one and by at least the same minimum. A journey with a latency regression and a latency improvement is reported as a trade-off.")
 }
 
 // Formatting helpers.

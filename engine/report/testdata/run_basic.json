@@ -31,8 +31,8 @@
         },
         {
           "name": "add_book",
-          "method": "GET",
-          "path": "/x",
+          "method": "POST",
+          "path": "/shelf/books",
           "expect_status": 200
         },
         {
