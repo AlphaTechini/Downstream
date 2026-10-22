@@ -192,12 +192,10 @@ script · [`docs/CLAIMS.md`](docs/CLAIMS.md) claims with limits · [`evidence/`]
 
 MIT. See [LICENSE](LICENSE).
 
-## Hackathon workspace and mirror
+## Hackathon workspace
 
 Transcend Hackathon showcase workspace for @AlphaTechini (Devpost: alphatechini). Onboarding
 issue: [work item 1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/1).
 
-This GitLab project is the source of truth: the platform reads agent configuration from its
-default branch and runs the flow here. A copy is kept at
-[github.com/AlphaTechini/Downstream](https://github.com/AlphaTechini/Downstream); if the two
-ever differ, this project is correct.
+The platform reads agent configuration from this project's default branch and runs the flow
+here.
