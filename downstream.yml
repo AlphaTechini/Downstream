@@ -1,0 +1,9 @@
+# Downstream target config. Read from the BASE commit, never the head.
+root: examples/shelf                      # directory scanned for routes
+build: go build -o {out} ./examples/shelf/cmd/shelf
+start: "{out}"
+port_env: PORT                            # engine sets this to a free loopback port
+ready_path: /health
+vus: 2
+iterations: 20                            # per VU; fixed sample size per pass
+duration: 60s                             # cap per pass
