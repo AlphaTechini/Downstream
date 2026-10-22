@@ -19,7 +19,7 @@ have not been re-read against the live page since and are to be re-checked befor
 | Brief requirement | Where in this repo | Status |
 |---|---|---|
 | Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/probe.yml`](flows/probe.yml) ran as a real flow; [`flows/downstream.draft.yml`](flows/downstream.draft.yml) is the product flow | Probe verified. Product flow is a draft, not enabled |
-| Public MIT-licensed GitLab project | [`LICENSE`](LICENSE) here; the flow runs in the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) | Licence here. GitLab project visibility and licence not yet verified |
+| Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public per the GitLab API on 2026-10-22 ([record](evidence/gitlab-project-2026-10-22.json)). MIT `LICENSE` committed |
 | Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/) | 3 probe sessions, 0 engine runs |
 | Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
 | One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option and merges ([`docs/userflow.md`](docs/userflow.md)) | Design only |
@@ -80,6 +80,7 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | With that network policy, GitHub, npm, PyPI and the Go proxy answer from the sandbox | Verified | `.gitlab/duo/agent-config.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L91, L530-535 |
 | A server on 127.0.0.1 inside the sandbox answers | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L545-550 |
 | A 150 s command completes | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L561-586 |
+| This GitLab project is public | Verified | GitLab project settings | [API record](evidence/gitlab-project-2026-10-22.json) |
 | The engine finds regressions between two builds | Not built | planned `engine/` | none |
 | Journeys are generated from the diff and run by k6 against an app | Not built | planned `engine/` | none |
 | One issue per regression, starter tagged | Not built; issue creation untested | planned | none |
@@ -100,7 +101,7 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 ## 30-second check
 
 ```bash
-git clone https://github.com/AlphaTechini/Downstream && cd Downstream
+git clone https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git && cd showcase
 pip install pyyaml
 make verify
 ```
@@ -111,14 +112,14 @@ Expected output:
 python3 scripts/validate_yaml.py
 ok: 2 flow file(s), 1 agent config file(s)
 python3 scripts/check_evidence.py
-ok: links resolve, verified claims cite evidence, evidence is clean
+ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
 ```
 
 It validates the flow and config YAML, checks that docs links resolve, that every Verified
-row above links to committed evidence, and that logs hold no unredacted email. It does not run
-Downstream; the logs in `evidence/` show the platform behaviour. Flow runs happen in the
-[GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase)
-(access depends on its visibility, not yet verified).
+row above links to committed evidence, that logs hold no unredacted email, and that the
+evidence files match the checksums in `evidence/SHA256SUMS`. It does not run
+Downstream; the logs in `evidence/` show the platform behaviour. Flow runs happen in this
+project; their pipelines are under CI/CD > Pipelines.
 
 ## Architecture and file paths
 
@@ -190,3 +191,13 @@ script · [`docs/CLAIMS.md`](docs/CLAIMS.md) claims with limits · [`evidence/`]
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+## Hackathon workspace and mirror
+
+Transcend Hackathon showcase workspace for @AlphaTechini (Devpost: alphatechini). Onboarding
+issue: [work item 1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/1).
+
+This GitLab project is the source of truth: the platform reads agent configuration from its
+default branch and runs the flow here. A copy is kept at
+[github.com/AlphaTechini/Downstream](https://github.com/AlphaTechini/Downstream); if the two
+ever differ, this project is correct.

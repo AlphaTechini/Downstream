@@ -7,9 +7,12 @@
 3. Evidence files contain no email address other than the platform's noreply address
    and the <redacted-email> placeholder.
 4. Every job log under evidence/day0/ shows the CI job succeeded.
+5. Every file listed in evidence/SHA256SUMS exists and has the recorded SHA-256, so a
+   copy of the evidence that differs from what was committed first is detected.
 
 Usage: python3 scripts/check_evidence.py [repo_root]
 """
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -91,18 +94,35 @@ def check_evidence_files(root, errors):
             errors.append(f"{p.relative_to(root)}: no 'Job succeeded' line")
 
 
+def check_manifest(root, errors):
+    manifest = root / "evidence" / "SHA256SUMS"
+    if not manifest.exists():
+        errors.append("evidence/SHA256SUMS is missing")
+        return
+    for n, line in enumerate(manifest.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        digest, _, name = line.partition("  ")
+        target = root / name
+        if not target.exists():
+            errors.append(f"evidence/SHA256SUMS:{n}: {name} does not exist")
+        elif hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+            errors.append(f"evidence/SHA256SUMS:{n}: {name} does not match its recorded SHA-256")
+
+
 def main():
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
     errors = []
     check_links(root, errors)
     check_claims(root, errors)
     check_evidence_files(root, errors)
+    check_manifest(root, errors)
     if errors:
         print("FAIL")
         for e in errors:
             print(" -", e)
         return 1
-    print("ok: links resolve, verified claims cite evidence, evidence is clean")
+    print("ok: links resolve, verified claims cite evidence, evidence is clean, checksums match")
     return 0
 
 

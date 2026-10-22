@@ -9,6 +9,8 @@ Raw material behind the claims in the top-level README. Nothing here is a mock-u
 | [day0/run2-probe-v2-job-log.txt](day0/run2-probe-v2-job-log.txt) | Probe v2, five-step run |
 | [day0/run3-probe-v3-job-log.txt](day0/run3-probe-v3-job-log.txt) | Probe v3, k6 install, network and timeout checks |
 | [day0/probe-notes.txt](day0/probe-notes.txt) | Transcription of the notes the probe posted (owner's copy-paste, not a raw log) |
+| [gitlab-project-2026-10-22.json](gitlab-project-2026-10-22.json) | GitLab API record of the showcase project (visibility, default branch) |
+| [SHA256SUMS](SHA256SUMS) | SHA-256 of each evidence file above; checked by `make verify` |
 
 Engine evidence runs (the logged end-to-end runs required by `docs/requirements.md`) will be
 added under `evidence/runs/` when they exist. There are none yet.

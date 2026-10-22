@@ -86,6 +86,16 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-9. This GitLab project is public
+
+- **File:** GitLab project settings (not a repo file)
+- **Proof:** [gitlab-project-2026-10-22.json](../evidence/gitlab-project-2026-10-22.json) is the
+  GitLab API response for project 87948026 on 2026-10-22: `"visibility":"public"`,
+  `"default_branch":"main"`.
+- **Does not show:** that it stays public; visibility can be changed in settings.
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |
@@ -96,7 +106,7 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 | N-4 | `fix option N` applies a change and reruns the journey | `flows/downstream.yml` | T-09, T-10 |
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
-| N-7 | The GitLab project is public and MIT-licensed | GitLab project settings | T-12 |
+| N-7 | The GitLab project shows an MIT licence in its sidebar | `LICENSE` | T-12 (the file is committed; GitLab's detection not yet checked) |
 
 When one of these gets proof, move it to a numbered claim above, add the evidence file under
 `evidence/`, and flip its README row to Verified in the same commit.

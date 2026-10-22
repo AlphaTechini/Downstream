@@ -1,5 +1,3 @@
-# NOTE: @AlphaTechini is the GitHub handle. Replace with the GitLab username when this
-# is synced to the GitLab project, or the rules will not match anyone.
 # Protect the files that steer the agent. A human reviews every change.
 /AGENTS.md @AlphaTechini
 /agentnotes.md @AlphaTechini

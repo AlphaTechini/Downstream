@@ -416,10 +416,10 @@ and it stands or falls on the evidence runs.
 
 ## 14. Repo layout and sources of truth
 
-GitLab reads flow config from the **GitLab** project's default branch, so the GitLab
-Showcase project is the source of truth for anything the platform executes. This GitHub
-repository is the staging copy and the public record. The two histories differ and must be
-merged when syncing.
+The **GitLab** showcase project is the source of truth: the platform reads agent
+configuration from its default branch and runs the flow there, and the hackathon is judged on
+that project. The GitHub repository is a copy. The two were synced on 2026-10-22 by a branch
+and merge request on GitLab; later changes are made on GitLab first or synced the same way.
 
 ```text
 README.md              status, claims table, 30-second check
