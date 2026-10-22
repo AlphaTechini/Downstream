@@ -123,11 +123,32 @@ func TestParseTable(t *testing.T) {
 
 func TestCommands(t *testing.T) {
 	c := Config{Build: "go build -o {out} ./x", Start: "{out} --flag"}
-	if got := c.BuildCommand("/tmp/a"); got != "go build -o /tmp/a ./x" {
+	if got := c.BuildCommand("/tmp/a"); got != "go build -o '/tmp/a' ./x" {
 		t.Fatal(got)
 	}
-	if got := c.StartCommand("/tmp/a"); got != "/tmp/a --flag" {
+	if got := c.StartCommand("/tmp/a"); got != "'/tmp/a' --flag" {
 		t.Fatal(got)
+	}
+}
+
+func TestCommandsQuoteOut(t *testing.T) {
+	c := Config{Build: "printf %s {out}", Start: "{out}"}
+	out := "/tmp/my dir/it's $(touch pwned);x"
+	if got := c.BuildCommand(out); got != `printf %s '/tmp/my dir/it'\''s $(touch pwned);x'` {
+		t.Fatalf("build = %s", got)
+	}
+	// The shell must see exactly one word equal to out.
+	cmd := exec.Command("sh", "-c", `printf '%s' `+c.StartCommand(out))
+	cmd.Dir = t.TempDir()
+	got, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, got)
+	}
+	if string(got) != out {
+		t.Fatalf("shell read %q, want %q", got, out)
+	}
+	if _, err := os.Stat(filepath.Join(cmd.Dir, "pwned")); err == nil {
+		t.Fatal("command substitution ran")
 	}
 }
 
@@ -199,7 +220,7 @@ func TestRepoConfigParses(t *testing.T) {
 	if c.Root != "examples/shelf" || c.PortEnv != "PORT" || c.ReadyPath != "/health" || c.VUs != 2 || c.Iterations != 10 || c.Duration != 60*time.Second {
 		t.Fatalf("unexpected config %+v", c)
 	}
-	if got := c.StartCommand("/x/app"); got != "/x/app" {
+	if got := c.StartCommand("/x/app"); got != "'/x/app'" {
 		t.Fatalf("start = %q", got)
 	}
 }

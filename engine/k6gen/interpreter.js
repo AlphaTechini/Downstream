@@ -7,6 +7,7 @@ for (const j of JOURNEYS) {
     vus: VUS,
     iterations: ITERATIONS,
     maxDuration: MAX_DURATION,
+    gracefulStop: '5s',
   };
   for (const s of j.steps) {
     const id = j.id + '__' + s.name;
@@ -21,6 +22,8 @@ for (const j of JOURNEYS) {
 export const options = {
   summaryTrendStats: ['count', 'avg', 'med', 'p(95)', 'min', 'max'],
   scenarios: OPTIONS_SCENARIOS,
+  // A redirect could lead off loopback, so none is followed.
+  maxRedirects: 0,
 };
 
 function sub(str, vars, inPath) {
@@ -78,6 +81,7 @@ function walkSteps(j) {
     const res = http.request(s.method, BASE + sub(s.path, vars, true), body, {
       headers: headers,
       tags: { step: j.id + '__' + s.name },
+      timeout: '20s',
       responseCallback: http.expectedStatuses(s.expect_status),
     });
 

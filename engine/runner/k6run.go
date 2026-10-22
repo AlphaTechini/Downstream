@@ -14,7 +14,9 @@ import (
 	"downstream/engine/model"
 )
 
-const k6Slack = 30 * time.Second
+// k6Slack is the time k6 gets beyond the pass duration: the scenarios'
+// graceful stop plus startup and summary time. A var so tests can shorten it.
+var k6Slack = 60 * time.Second
 
 // k6Version returns the first line of `k6 version`.
 func k6Version(ctx context.Context, k6 string) (string, error) {
@@ -31,8 +33,10 @@ func k6Version(ctx context.Context, k6 string) (string, error) {
 
 // runK6 writes the script into a fresh directory under tmp, runs k6 there
 // (handleSummary writes steps.json relative to the working directory), and
-// returns the parsed steps.
-func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duration) ([]model.StepMetrics, error) {
+// returns the parsed steps. If k6 is killed or exits non-zero after writing
+// steps.json, the figures are still used and the k6 error goes to log; only a
+// missing or unreadable steps.json is an error.
+func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duration, log logger) ([]model.StepMetrics, error) {
 	dir, err := os.MkdirTemp(tmp, "k6-")
 	if err != nil {
 		return nil, err
@@ -41,6 +45,7 @@ func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duratio
 	if err := os.WriteFile(filepath.Join(dir, "script.js"), []byte(script), 0o600); err != nil {
 		return nil, err
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, maxDuration+k6Slack)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, k6, "run", "-q", "--no-color", "--no-usage-report", "--log-output=none", "script.js")
@@ -51,15 +56,33 @@ func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duratio
 	cmd.WaitDelay = 5 * time.Second
 	out := &tailBuffer{max: 4096}
 	cmd.Stdout, cmd.Stderr = out, out
+	var k6err error
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("k6 stopped: %w; output tail:\n%s", ctx.Err(), out.String())
+			k6err = fmt.Errorf("k6 stopped: %w", ctx.Err())
+		} else {
+			k6err = fmt.Errorf("k6 failed: %w", err)
 		}
-		return nil, fmt.Errorf("k6 failed: %w; output tail:\n%s", err, out.String())
+	}
+	if parent.Err() != nil && k6err != nil {
+		return nil, fmt.Errorf("%w; output tail:\n%s", k6err, out.String())
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "steps.json"))
 	if err != nil {
+		if k6err != nil {
+			return nil, fmt.Errorf("%w; no steps.json was written; output tail:\n%s", k6err, out.String())
+		}
 		return nil, fmt.Errorf("k6 wrote no steps.json: %w", err)
 	}
-	return k6gen.ParseSummary(data)
+	steps, err := k6gen.ParseSummary(data)
+	if err != nil {
+		if k6err != nil {
+			return nil, fmt.Errorf("%w; %v; output tail:\n%s", k6err, err, out.String())
+		}
+		return nil, err
+	}
+	if k6err != nil {
+		log.printf("%v; using the steps.json it wrote; output tail: %s", k6err, strings.TrimSpace(out.String()))
+	}
+	return steps, nil
 }

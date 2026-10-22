@@ -6,11 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -334,7 +339,7 @@ func tinyRepo(t *testing.T) (repo, base, head string) {
 
 func tmpDirFromLog(t *testing.T, log string) string {
 	t.Helper()
-	m := regexp.MustCompile(`-o (/\S+?)/bin/`).FindStringSubmatch(log)
+	m := regexp.MustCompile(`-o '(/[^']+?)/bin/`).FindStringSubmatch(log)
 	if m == nil {
 		t.Fatal("temp directory not found in the log")
 	}
@@ -475,5 +480,91 @@ func TestRunCleansUpOnCancel(t *testing.T) {
 	}
 	if _, err := os.Stat(tmp); err == nil {
 		t.Errorf("temp directory %s was not removed", tmp)
+	}
+}
+
+func TestWaitReadyDoesNotFollowRedirects(t *testing.T) {
+	var elsewhere atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhere.Add(1)
+	}))
+	defer other.Close()
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/health", http.StatusFound)
+	}))
+	defer first.Close()
+	_, portStr, _ := net.SplitHostPort(first.Listener.Addr().String())
+	port, _ := strconv.Atoi(portStr)
+
+	a := &app{port: port, done: make(chan struct{}), out: &tailBuffer{max: 64}}
+	ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
+	defer cancel()
+	err := a.waitReady(ctx, "/health")
+	if err == nil {
+		t.Fatal("a redirect was treated as ready")
+	}
+	if n := elsewhere.Load(); n != 0 {
+		t.Errorf("%d requests followed the redirect", n)
+	}
+}
+
+// fakeK6 writes an executable script standing in for k6.
+func fakeK6(t *testing.T, body string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "k6")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+const fakeSteps = `printf '%s' '[{"journey":"j","step":"s","count":4,"failures":1,"p50_ms":2,"p95_ms":9,"mean_ms":3}]' > steps.json`
+
+func TestRunK6KeepsStepsWhenK6ExitsNonZero(t *testing.T) {
+	var log bytes.Buffer
+	steps, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\necho boom >&2\nexit 3"), t.TempDir(), "x", time.Second, logger{&log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 1 || steps[0].Count != 4 || steps[0].P95 != 9 {
+		t.Errorf("steps = %+v", steps)
+	}
+	if !strings.Contains(log.String(), "k6 failed") || !strings.Contains(log.String(), "boom") {
+		t.Errorf("k6 error not logged: %q", log.String())
+	}
+}
+
+func TestRunK6KeepsStepsWhenK6IsKilled(t *testing.T) {
+	old := k6Slack
+	k6Slack = 500 * time.Millisecond
+	defer func() { k6Slack = old }()
+	var log bytes.Buffer
+	start := time.Now()
+	steps, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\nsleep 60"), t.TempDir(), "x", 0, logger{&log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) > 20*time.Second {
+		t.Errorf("k6 was not stopped promptly")
+	}
+	if len(steps) != 1 || !strings.Contains(log.String(), "k6 stopped") {
+		t.Errorf("steps %+v log %q", steps, log.String())
+	}
+}
+
+func TestRunK6ErrorsWithoutStepsFile(t *testing.T) {
+	_, err := runK6(context.Background(), fakeK6(t, "echo nope >&2\nexit 2"), t.TempDir(), "x", time.Second, logger{})
+	if err == nil || !strings.Contains(err.Error(), "k6 failed") || !strings.Contains(err.Error(), "nope") {
+		t.Errorf("err = %v", err)
+	}
+	_, err = runK6(context.Background(), fakeK6(t, "exit 0"), t.TempDir(), "x", time.Second, logger{})
+	if err == nil || !strings.Contains(err.Error(), "no steps.json") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestK6Timeout(t *testing.T) {
+	if k6Slack != 60*time.Second {
+		t.Errorf("k6Slack = %s, want 60s", k6Slack)
 	}
 }
