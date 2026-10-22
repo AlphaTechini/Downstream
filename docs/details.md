@@ -310,10 +310,10 @@ Humans reply in the issue thread. Every reply starts a new session.
 | `@<handle> correction: <text>` | Stretch. A maintainer says a journey is unrealistic or a verdict is wrong; the flow redoes the step with that correction in the goal. |
 
 If the flow cannot commit to the source branch (**UNVERIFIED, T-10**), the fallback is to
-post the change as a unified diff in the issue for a human to apply. The owner observed the built-in
-Developer flow creating branches, commits and a Draft MR on day 0 (screenshots are not
-committed, so this is not in `evidence/`), so the capability exists on the platform; whether it is reachable from a custom flow's toolset is the open
-question.
+post the change as a unified diff in the issue for a human to apply. The owner observed the
+built-in Developer flow creating branches, commits and a Draft MR on day 0 (screenshots are
+not committed, so this is not in `evidence/`), so the capability exists on the platform;
+whether it is reachable from a custom flow's toolset is the open question.
 
 Fix options are written by the model and checked by the engine only for whether they apply
 cleanly. The report does not claim an option is correct; it claims what the rerun measured.
