@@ -300,6 +300,16 @@ line is a hidden marker:
 <!-- downstream:v1 {"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95","step":"..."} -->
 ```
 
+Implemented in `engine/issues`: one issue per regressed **step** (not per metric). The
+headline metric, which gives the title, is picked in the order failures, p95, mean, p50; the
+other regressed metrics of that step are listed under it. App-wide regressions (CPU seconds,
+peak RSS) get one issue only when no step regressed; otherwise they are listed in each step
+issue. The likely cause and fix options come from a `notes.json` the model writes, keyed by
+headline finding ID and validated by the engine: no comment or fence markup, no table rows,
+and no figures with units, so the model cannot add numbers. `ParseMarker` accepts a whole
+issue body or the bare marker JSON. `Questions` writes one merge request question per
+trade-off journey.
+
 The marker embeds the one journey that regressed, so an issue is self-contained: replying
 `fix option 2` needs the issue and nothing else. **UNVERIFIED (T-08, T-09):** whether a
 custom flow can create issues, whether the starter's mention notifies them when the author
