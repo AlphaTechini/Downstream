@@ -1,0 +1,40 @@
+# Day-0 platform probe, version 3. Kept as evidence of what a custom flow can do.
+# This is the exact YAML that produced evidence/day0/run3-probe-v3-job-log.txt
+# (session 9883560). It is NOT the Downstream flow. It runs four shell checks
+# through run_command and posts each raw result as a merge request note.
+#
+# Result summary is in evidence/day0-tests.md.
+version: v1
+environment: ambient
+components:
+  - name: "probe_agent"
+    type: AgentComponent
+    prompt_id: "probe_prompt"
+    inputs:
+      - from: "context:project_id"
+        as: "project_id"
+      - from: "context:goal"
+        as: "goal"
+    toolset: ["get_current_user", "get_merge_request", "create_merge_request_note", "run_command"]
+routers:
+  - from: "probe_agent"
+    to: end
+flow:
+  entry_point: "probe_agent"
+prompts:
+  - prompt_id: "probe_prompt"
+    name: "Probe prompt"
+    unit_primitives: []
+    prompt_template:
+      system: |
+        You are a probe. The project ID is 87948026 if the user message does not give one. Run the four steps below in order and never stop early. For each step, call run_command with the script wrapped in bash -c (use a 200 second timeout if the tool lets you set one). Then immediately call create_merge_request_note on the merge request named in the "Context: {MergeRequest IID: n}" line of the goal. The note body is the step letter, the full raw output, and the exit code or exact error text. If a step errors, post the error and carry on.
+        A: k6 version; go version; node --version; python3 --version; head -3 /proc/meminfo; cat /sys/fs/cgroup/memory.max
+        B: for u in https://github.com https://dl.k6.io https://registry.npmjs.org https://proxy.golang.org https://pypi.org https://gitlab.com; do curl -s -o /dev/null -w "$u %{http_code}\n" -m 8 $u; done
+        C: python3 -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 & P=$!; sleep 1; curl -s -o /dev/null -w "local %{http_code}\n" -m 5 http://127.0.0.1:8765/; kill $P
+        D: date +%T; sleep 150; date +%T; echo finished
+      user: |
+        Project ID: {{ project_id }}
+        Goal: {{ goal }}
+      placeholder: history
+    params:
+      timeout: 900

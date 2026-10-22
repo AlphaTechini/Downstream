@@ -1,3 +1,6 @@
-test:
+verify:
+  image: python:3.12-slim
   script:
-    - echo hi
+    - apt-get update -qq && apt-get install -y -qq make
+    - pip install --quiet pyyaml
+    - make verify

@@ -1,93 +1,203 @@
-# Showcase
+# Downstream
 
-Transcend Hackathon Showcase workspace for @AlphaTechini (DevPost: alphatechini). Visit the [onboarding issue](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/1) to get started.
+**Before a reviewed change reaches users, Downstream runs realistic user traffic through the
+old and new builds, finds what else the change quietly broke or slowed, traces the likely
+cause, and files a fix.** It is a GitLab Duo Agent Platform flow. *Merged is not safe.*
 
-## Getting started
+For: maintainers and reviewers of web/API services on GitLab, especially small teams with no
+staging environment that replays real user behaviour.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+> **Status, 2026-10-22: platform tests are done and logged; the engine is not written yet.**
+> Today nothing in this repository finds a regression. The claims table says exactly what has
+> been shown. Anything not marked Verified is a plan.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Built for GitLab Transcend: Life After Code
 
-## Add your files
+Requirements below come from the Devpost Rules as read during research on 2026-10-21/22. They
+have not been re-read against the live page since and are to be re-checked before submission.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+| Brief requirement | Where in this repo | Status |
+|---|---|---|
+| Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/probe.yml`](flows/probe.yml) ran as a real flow; [`flows/downstream.draft.yml`](flows/downstream.draft.yml) is the product flow | Probe verified. Product flow is a draft, not enabled |
+| Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public per the GitLab API on 2026-10-22 ([record](evidence/gitlab-project-2026-10-22.json)). MIT `LICENSE` committed |
+| Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/) | 3 probe sessions, 0 engine runs |
+| Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
+| One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option and merges ([`docs/userflow.md`](docs/userflow.md)) | Design only |
+| Path A (new project) | first commit 2026-10-22 (`git log`) | Intended path |
 
+Not claimed: coverage of all nine lifecycle stages, the Google Cloud bonus (no deployment code
+here), the environmental prize.
+
+## The problem
+
+Review is the last routine human check before a change ships, and changes are where outages
+come from. Google's SRE book: "SRE has found that roughly 70% of outages are due to changes in
+a live system" ([ch. 1, Change Management](https://sre.google/sre-book/introduction/)). In
+Google's postmortem sample for 2010-2017, binary pushes were 37% and configuration pushes 31%
+of outage triggers ([SRE Workbook, Table C-1](https://sre.google/workbook/postmortem-analysis/)).
+Both are Google-specific.
+
+Our argument, which is not measured here: a diff shows what changed, not what the change does
+to routes the author never opened. That gap is what Downstream targets.
+
+## How it works
+
+| Step | What happens | Status |
+|---|---|---|
+| 1 | One mention on a merge request starts the flow | Verified (probe) |
+| 2 | It maps changed routes and routes that depend on them (blast radius) | Not built |
+| 3 | It writes 3 to 6 user journeys and shows them to the reviewer in plain English first | Not built |
+| 4 | k6 runs them on the old build twice and the new build once, so noise is measured | k6 installs and runs `version`; no journey run yet |
+| 5 | Only differences beyond the noise are reported: one issue per regression (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Not built |
+| 6 | `@handle fix option N` applies an option and reruns that journey; `verify` reruns after merge | Not built |
+
+User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
+chooses journeys and writes sentences; code produces every number, table and chart.
+Design: [`docs/details.md`](docs/details.md). What reviewers see: [`docs/userflow.md`](docs/userflow.md).
+
+## Duo Agent Platform features used
+
+| Feature | File | What breaks without it |
+|---|---|---|
+| Custom flow (YAML) | [`flows/`](flows/) | There is no product; the flow is the entry point |
+| Mention trigger on the flow's service account | set in the GitLab UI; logs show it firing | Nothing starts without a human typing a command |
+| `run_command` in the sandbox | `toolset` in [`flows/probe.yml`](flows/probe.yml) | The engine and k6 cannot run |
+| `setup_script` and `network_policy` | [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml) | k6 is not installed; only GitLab hosts are reachable |
+| MR notes (`create_merge_request_note`) | `toolset` in [`flows/probe.yml`](flows/probe.yml) | The session UI shows only "Ran tool", so notes are the only visible output |
+| Issues and issue replies (`create_issue`, `create_issue_note`) | not tested | No per-regression issues; fall back to MR threads |
+
+## Claims
+
+Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAIMS.md).
+
+| Claim | Status | File | Proof |
+|---|---|---|---|
+| Mentioning the flow's service account on an MR starts a session | Verified | `flows/probe.yml` | [run1](evidence/day0/run1-probe-v1-job-log.txt) L65, [run2](evidence/day0/run2-probe-v2-job-log.txt) L53, [run3](evidence/day0/run3-probe-v3-job-log.txt) L57 |
+| The goal contains the thread through the trigger, with authors, and the MR IID | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L57 (ends `Context: {MergeRequest IID: 1}`) |
+| The flow runs four shell commands in sequence, each with a 200 s timeout, and gets exit codes back | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L515-586 |
+| Each command's output was posted as an MR note (the note text is the owner's transcription; sizes match the log) | Verified | `flows/probe.yml` | [probe-notes](evidence/day0/probe-notes.txt), [cross-check](evidence/day0-tests.md) |
+| `setup_script` installs k6 v0.56.0; it prints its version in the sandbox | Verified | `.gitlab/duo/agent-config.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L42-45, L515-520 |
+| With that network policy, GitHub, npm, PyPI and the Go proxy answer from the sandbox | Verified | `.gitlab/duo/agent-config.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L91, L530-535 |
+| A server on 127.0.0.1 inside the sandbox answers | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L545-550 |
+| A 150 s command completes | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L561-586 |
+| This GitLab project is public | Verified | GitLab project settings | [API record](evidence/gitlab-project-2026-10-22.json) |
+| The engine finds regressions between two builds | Not built | planned `engine/` | none |
+| Journeys are generated from the diff and run by k6 against an app | Not built | planned `engine/` | none |
+| One issue per regression, starter tagged | Not built; issue creation untested | planned | none |
+| `fix option N` applies a change; `verify` reruns after merge | Not built; committing from a flow untested | planned | none |
+| Cost in credits of one run | Not measured | none | none |
+
+## What is mocked or not built
+
+- **No engine.** `flows/downstream.draft.yml` is a prompt and structure only, marked do-not-enable.
+- **No demo target app chosen** ([`docs/details.md`](docs/details.md) section 9). Any regression
+  in the final demo will be labelled planted or found, with the commit linked.
+- **Mock-ups.** Notes and issues in [`docs/userflow.md`](docs/userflow.md) are mock-ups with
+  placeholders such as `<p95_base_ms>`.
+- **Untested platform capabilities** are T-07 to T-15 in [`docs/requirements.md`](docs/requirements.md).
+- **Only project members (Developer or higher) can trigger the flow.** Visitors cannot; `evidence/`
+  is the substitute.
+
+## 30-second check
+
+```bash
+git clone https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git && cd showcase
+pip install pyyaml
+make verify
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git
-git branch -M main
-git push -uf origin main
+
+Expected output:
+
+```text
+python3 scripts/validate_yaml.py
+ok: 2 flow file(s), 1 agent config file(s)
+python3 scripts/check_evidence.py
+ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
 ```
 
-## Integrate with your tools
+It validates the flow and config YAML, checks that docs links resolve, that every Verified
+row above links to committed evidence, that logs hold no unredacted email, and that the
+evidence files match the checksums in `evidence/SHA256SUMS`. It does not run
+Downstream; the logs in `evidence/` show the platform behaviour. Flow runs happen in this
+project; their pipelines are under CI/CD > Pipelines.
 
-* [Set up project integrations](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/settings/integrations)
+## Architecture and file paths
 
-## Collaborate with your team
+```text
+mention on an MR
+ -> flows/downstream.draft.yml        exists, draft: one AgentComponent, one prompt
+     reads agentnotes.md              exists: journey style, thresholds, issue format
+     calls fixed engine commands      engine/ is planned: scan, schema, run, report, issues, marker
+       builds base and head from git, runs the app on 127.0.0.1
+       k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
+ -> MR notes and issues with a hidden marker so any reply rebuilds state from the issue
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+The model never writes shell for the engine and never writes a number. Details and the
+engine's planned interface: [`docs/details.md`](docs/details.md) sections 3 to 8.
 
-## Test and Deploy
+## Measured results
 
-Use the built-in continuous integration in GitLab.
+No engine measurements exist yet; the first will go in `evidence/runs/`. What has been measured
+is the platform, from the logs in `evidence/day0/`:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+| Measurement | Value | Source |
+|---|---|---|
+| Runner | `saas-linux-small-amd64`, 2 CPUs, 8145540 kB memory, 18G free in `/tmp` | [run1](evidence/day0/run1-probe-v1-job-log.txt) L1-2; [probe-notes](evidence/day0/probe-notes.txt) |
+| Probe v1 (stopped after one action), whole CI job | 45.4 s | [run1](evidence/day0/run1-probe-v1-job-log.txt) L1, L564 |
+| Probe v2, sandbox start to FINISHED | 21.5 s | [run2](evidence/day0/run2-probe-v2-job-log.txt) L114, L529 |
+| Probe v3 (four commands, one a deliberate 150 s sleep), sandbox start to FINISHED | 221.8 s | [run3](evidence/day0/run3-probe-v3-job-log.txt) L118, L599 |
+| Sandbox network allowlist with our config | 175 entries (the default list has 5) | [run3](evidence/day0/run3-probe-v3-job-log.txt) L91 |
 
-***
+## Built during the hackathon, and what is not
 
-# Editing this README
+Everything here was written for this entry; the first commit is 2026-10-22 and no earlier code
+is reused. Used but not written by us: GitLab Duo Agent Platform and its default job image,
+k6 v0.56.0 (downloaded at job start, not vendored), PyYAML (checks only).
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Reproduce the day-0 probe
 
-## Suggestions for a good README
+Needs a GitLab.com project where you have Developer role and Duo Agent Platform.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+1. Put [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml) on the default branch.
+2. Create a custom flow from [`flows/probe.yml`](flows/probe.yml) and add a mention trigger.
+3. Mention the flow's service account (`ai-<flow name>-<top-level group>`) on a merge request.
+4. The flow posts four notes, one per check.
 
-## Name
-Choose a self-explaining name for your project.
+**Environment.** No keys, tokens or `.env` are needed or present; the flow uses the platform's
+own credentials.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+**Deployment.** The flow is enabled in the GitLab project through the UI; there is nothing to
+deploy from this repo. What the brief means by deployment for a flow entry is unverified (T-12).
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+**Security.** The model's only output that reaches execution is validated JSON, the engine talks
+to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
+under CODEOWNERS. One known gap: a merge request could change `agentnotes.md` before the flow
+reads it ([`docs/details.md`](docs/details.md) section 11).
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Fri 23 Oct: choose the demo target, build the engine core. Sat 24: issues and the fix loop.
+Sun 25: at least five logged end-to-end runs; if there are fewer, submit the smaller version
+(report in the MR only) and say so. Mon 26: video. Tue 27: submit before 13:00 UTC.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+## Docs
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+[`docs/details.md`](docs/details.md) design · [`docs/requirements.md`](docs/requirements.md)
+requirements, tests T-01 to T-15 · [`docs/userflow.md`](docs/userflow.md) reviewer flow and demo
+script · [`docs/CLAIMS.md`](docs/CLAIMS.md) claims with limits · [`evidence/`](evidence/) raw logs ·
+[`AGENTS.md`](AGENTS.md) and [`agentnotes.md`](agentnotes.md) agent instructions.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Licence
 
-## License
-For open source projects, say how it is licensed.
+MIT. See [LICENSE](LICENSE).
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## Hackathon workspace and mirror
+
+Transcend Hackathon showcase workspace for @AlphaTechini (Devpost: alphatechini). Onboarding
+issue: [work item 1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/1).
+
+This GitLab project is the source of truth: the platform reads agent configuration from its
+default branch and runs the flow here. A copy is kept at
+[github.com/AlphaTechini/Downstream](https://github.com/AlphaTechini/Downstream); if the two
+ever differ, this project is correct.

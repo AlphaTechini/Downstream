@@ -1,0 +1,65 @@
+TRANSCRIPTION, NOT A RAW LOG.
+These are the contents of merge request notes that the probe flow posted on 2026-10-22,
+copied by the repository owner from the GitLab merge request page and pasted into a chat.
+The job logs next to this file (run1..run3) record each command, its timeout, its exit
+code and the SIZE of its output, but not the output text itself. Whitespace and line breaks
+here were not preserved exactly, except that for probe v3 the transcribed text has been
+checked against the sizes in the job log (see evidence/day0-tests.md, "Cross-check").
+Treat as the owner's report of what the notes said.
+
+----------------------------------------------------------------------------------
+Probe v2 (session 9881417, evidence/day0/run2-probe-v2-job-log.txt), Step 4 note
+----------------------------------------------------------------------------------
+Exit code: 0
+uid=0(root) gid=0(root) groups=0(root)
+Linux runner-nezyxejex-project-87948026-concurrent-0 5.15.154+ #1 SMP Sat May 4 12:14:42 UTC 2024 x86_64 ... GNU/Linux
+2
+bash: line 1: free: command not found
+Filesystem   Size  Used  Avail  Use%  Mounted on
+overlay      26G   8.0G  18G    32%   /tmp
+which: no docker in (/tmp/bin:/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin)
+which: no psql in (...)
+which: no k6 in (...)
+/usr/bin/curl
+/usr/bin/tar
+/usr/bin/python3
+/usr/local/go/bin/go
+/usr/bin/node
+HTTP/1.1 403 Forbidden
+HTTP/1.1 200 Connection Established
+
+(Reading: before the allowlist change and k6 install, the proxy at localhost:3128 refused
+a non-allowlisted host with 403 and tunnelled an allowlisted one with 200. The "2" is the
+CPU count. "free" is not installed. k6, docker and psql are absent in this run.)
+
+----------------------------------------------------------------------------------
+Probe v3 (session 9883560, evidence/day0/run3-probe-v3-job-log.txt)
+Flow YAML: flows/probe.yml. Config: .gitlab/duo/agent-config.yml.
+----------------------------------------------------------------------------------
+Step A
+  k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+  go version go1.22.12 linux/amd64
+  v20.20.2
+  Python 3.9.25
+  MemTotal:        8145540 kB
+  MemFree:         5775024 kB
+  MemAvailable:    7485020 kB
+  max                                 (contents of /sys/fs/cgroup/memory.max)
+  exit code 0
+
+Step B
+  https://github.com 200
+  https://dl.k6.io 200
+  https://registry.npmjs.org 200
+  https://proxy.golang.org 200
+  https://pypi.org 200
+  https://gitlab.com 301
+
+Step C
+  local 200
+
+Step D
+  11:31:48
+  11:34:18
+  finished
+  (sleep 150 between the two timestamps: 2 min 30 s, completed.)

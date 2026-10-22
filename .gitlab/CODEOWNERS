@@ -1,0 +1,5 @@
+# Protect the files that steer the agent. A human reviews every change.
+/AGENTS.md @AlphaTechini
+/agentnotes.md @AlphaTechini
+/flows/ @AlphaTechini
+/.gitlab/duo/ @AlphaTechini
