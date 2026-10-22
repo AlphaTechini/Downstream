@@ -414,12 +414,10 @@ and it stands or falls on the evidence runs.
 
 ---
 
-## 14. Repo layout and sources of truth
+## 14. Repo layout
 
-The **GitLab** showcase project is the source of truth: the platform reads agent
-configuration from its default branch and runs the flow there, and the hackathon is judged on
-that project. The GitHub repository is a copy. The two were synced on 2026-10-22 by a branch
-and merge request on GitLab; later changes are made on GitLab first or synced the same way.
+The platform reads agent configuration from the default branch of this GitLab project and
+runs the flow here.
 
 ```text
 README.md              status, claims table, 30-second check
