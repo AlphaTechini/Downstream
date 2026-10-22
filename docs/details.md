@@ -1,8 +1,8 @@
 # Downstream: design details
 
 Status of this document: written 2026-10-22, four days before the submission deadline
-(Tue 2026-10-27, 13:00 UTC). Day-0 platform tests are done and logged. The engine is not
-written. Everything under "Platform facts" is backed by a committed log; everything else is
+(Tue 2026-10-27, 13:00 UTC). Day-0 platform tests are done and logged. The engine is built
+and tested; it has no logged run yet. Everything under "Platform facts" is backed by a committed log; everything else is
 design. Items marked **UNVERIFIED** have not been exercised on the platform yet and are
 tracked in [requirements.md](requirements.md) as numbered tests (T-xx).
 
@@ -118,7 +118,7 @@ Three rules shape everything:
 | Component | What it is | Status |
 |---|---|---|
 | Flow | `flows/downstream.draft.yml`, one `AgentComponent`, one mention trigger | Draft, not enabled |
-| Engine | Go program `engine/` with subcommands below. Standard library first. | Not written |
+| Engine | Go program `engine/` with subcommands below. Standard library only. | Built and tested (`make test`); no logged run |
 | k6 | v0.56.0 installed by `setup_script` | Installed and version-checked (day 0); never yet run against an app |
 | Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Demo target `examples/shelf` and root `downstream.yml` written (section 9) |
 | Agent instructions | `AGENTS.md`, `agentnotes.md` | Written |
@@ -127,28 +127,37 @@ Three rules shape everything:
 ### 3.2 Engine interface
 
 The flow calls these and nothing else. Arguments are fixed by the prompt; the model
-supplies file contents (`journeys.json`) but never command lines.
+supplies file contents (`journeys.json`, `notes.json`) but never command lines. Built in
+`engine/cmd/downstream`; SHAs must be 7 to 40 hex characters, and a commit missing from a
+partial clone is fetched from `origin`.
 
 ```text
-downstream scan   --base <sha> --head <sha> --out scan.json
-downstream schema journeys                      # prints the JSON schema the model must follow
-downstream run    --journeys journeys.json --out run.json
-downstream report --run run.json --out report.md
-downstream issues --run run.json --out issues.json
-downstream marker parse   < issue_body.md       # rebuilds state from the hidden marker
-downstream fixcheck --issue-json marker.json --option N   # decides if option N is applicable
+downstream version
+downstream scan     --base <sha> --head <sha> [--repo .] --out scan.json
+downstream schema   journeys                    # the JSON schema the model must follow
+downstream validate --journeys journeys.json --scan scan.json
+downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
+downstream report   --run run.json [--scan scan.json] --out report.md
+downstream summary  --run run.json --scan scan.json   # one count per line: regression=N ...
+downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <user> --out issues.json
+downstream marker   parse [--journeys-out journeys.json] < issue_body.md
+downstream fixcheck --marker marker.json --option N  # checks option N exists; does not apply it
 ```
 
-`scan.json` (sketch): changed files and hunks; route table of the head build; for each
-changed or affected route, why it is in the blast radius.
+`run` writes `run.json` even when it stops early, with the stage and error, so `report` can
+say where it stopped. `issues` writes the issue titles and bodies, the trade-off questions for
+the merge request, and `needs_notes`: the finding IDs the model must write notes for.
 
-`journeys.json` (sketch): a list of journeys, each with `id`, `goal`, `why_included`, and
-ordered `steps`: `{method, path, body, expect_status, extract: {var: json_pointer}}`.
-Paths must come from the route table. Variables are carried between steps.
+The file formats are the Go types in `engine/model/model.go`:
 
-`run.json` (sketch): per journey and step, for baseline run 1, candidate, baseline run 2:
-count, failures, p50, p95, mean, plus process CPU seconds and peak RSS. Noise band per
-metric. Classification per finding: `regression`, `trade-off`, or `noise`.
+- `scan.json`: changed files and hunks, changed functions, the head build's route table, and
+  the changed and affected routes with the reasons each is there.
+- `journeys.json`: journeys, each with `id`, `goal`, `why_included` and ordered `steps`
+  `{name, method, path, headers, body, expect_status, extract: {var: json_pointer}}`.
+- `run.json`: settings and thresholds, kept and discarded journeys, the three passes in run
+  order with per-step count, failures, p50, p95 and mean plus app CPU seconds and peak RSS,
+  and one finding per metric with B1, C, B2, noise band, delta and class.
+- `notes.json`: per headline finding, a likely cause and fix options, written by the model.
 
 ### 3.3 Target config
 
@@ -497,6 +506,6 @@ flows/                 probe.yml (verified), downstream.draft.yml (not enabled)
 docs/                  details.md, requirements.md, userflow.md
 evidence/              raw logs and the results table
 scripts/               validate_yaml.py, check_evidence.py
-engine/                (not yet written)
+engine/                cmd/downstream (CLI), scan, journey, k6gen, runner, classify, report, issues
 examples/              shelf/ (demo target), changes/ (planted and clean patches)
 ```
