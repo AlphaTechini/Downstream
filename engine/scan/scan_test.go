@@ -143,7 +143,7 @@ func newApp(t *testing.T) (dir, base string) {
 	dir = t.TempDir()
 	gitT(t, dir, "init", "-q")
 	base = commitFiles(t, dir, map[string]*string{
-		"go.mod":       str("module example.com/shelf\n\ngo 1.26\n"),
+		"go.mod":       str("module example.com/shelf\n\ngo 1.22\n"),
 		"app/main.go":  str(appSrc),
 		"docs/note.md": str("hello\n"),
 	})

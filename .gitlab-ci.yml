@@ -32,7 +32,7 @@ k6:
 # integration tests run instead of skipping.
 go-test:
   stage: test
-  image: golang:1.26
+  image: golang:1.22
   needs: [k6]
   script:
     - export PATH="$CI_PROJECT_DIR/bin:$PATH"
@@ -48,7 +48,7 @@ go-test:
 # control and must come out clean.
 engine-e2e:
   stage: e2e
-  image: golang:1.26
+  image: golang:1.22
   needs: [k6]
   parallel:
     matrix:
