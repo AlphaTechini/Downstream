@@ -100,14 +100,6 @@ func judge(v1, vc, v2 float64, unit string, t model.Thresholds) model.Finding {
 		return f
 	}
 
-	if better > 0 && band/better > t.MaxBaselineSpread {
-		f.Class = model.ClassWithheld
-		f.Reason = "baseline spread rule: the two baseline runs differ by " +
-			num(band/better, 2) + " of the smaller one, above the limit of " +
-			num(t.MaxBaselineSpread, -1) + ", so no verdict is given"
-		return f
-	}
-
 	floor, floorWords := 0.0, ""
 	switch unit {
 	case "ms":
@@ -118,6 +110,16 @@ func judge(v1, vc, v2 float64, unit string, t model.Thresholds) model.Finding {
 	if floor > 0 {
 		floorWords = " and at least " + amount(floor, unit)
 	}
+	// A spread below the absolute floor is jitter on a fast step, not a noisy
+	// baseline, so it does not stop a verdict.
+	if better > 0 && band/better > t.MaxBaselineSpread && band >= floor {
+		f.Class = model.ClassWithheld
+		f.Reason = "baseline spread rule: the two baseline runs differ by " +
+			num(band/better, 2) + " of the smaller one, above the limit of " +
+			num(t.MaxBaselineSpread, -1) + ", so no verdict is given"
+		return f
+	}
+
 	bandWords := num(t.BandMultiplier, -1) + " times the noise band of " + amount(band, unit)
 	relWords := num(t.MinRelative*100, 1) + "%"
 	relWords = trimZero(relWords)
