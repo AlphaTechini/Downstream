@@ -289,6 +289,14 @@ Two levels, the second only if time allows:
 3. **A final note is always posted**, including on failure. A failed run is reported as
    failed, with the engine's error text and the step it failed at.
 
+Implemented in `engine/report`. Each figure comes from `run.json` and is formatted with
+fixed decimals (ms 1, s 2, MB 1). Besides the tables and chart above, the report has a
+findings line (regressed steps, trade-off journeys, improved and withheld metrics), the list
+of issues to open, the blast radius from `scan.json`, and the method and thresholds in words.
+The chart is a Mermaid `xychart-beta` block, capped at 20 steps; whether GitLab's Mermaid
+version renders `xychart-beta` in a note is **unverified**. A golden-file test checks the
+output, and a second test checks that every number in it is derived from the input.
+
 ### 7.2 Issues (one per regression)
 
 Title: `[Downstream] <journey>: <metric> <direction> <amount>`. Body, in order: who started
