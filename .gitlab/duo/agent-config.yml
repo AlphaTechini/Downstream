@@ -1,0 +1,25 @@
+# Duo Agent Platform runtime config for flow sessions.
+# GitLab reads this file from the DEFAULT BRANCH of the GitLab project only,
+# so the copy that matters lives in the GitLab showcase project. This copy is
+# the staged source (see README, "Repo layout").
+#
+# VERIFIED on 2026-10-22 (evidence/day0/run3-probe-v3-job-log.txt):
+#   - setup_script runs as plain job-script lines, outside the srt sandbox.
+#   - k6 v0.56.0 installs into /tmp/bin and is on PATH inside the sandbox.
+#   - With the network_policy below: github.com, dl.k6.io, registry.npmjs.org,
+#     proxy.golang.org, pypi.org and gitlab.com were all reachable from run_command.
+#
+# NOT YET TESTED: narrowing the allowlist (include_recommended_allowed: false
+# plus an explicit list). That is a hardening step, not a requirement.
+setup_script:
+  - mkdir -p /tmp/bin
+  - curl -sSL -o /tmp/k6.tgz https://github.com/grafana/k6/releases/download/v0.56.0/k6-v0.56.0-linux-amd64.tar.gz
+  - tar -xzf /tmp/k6.tgz -C /tmp --strip-components=1 k6-v0.56.0-linux-amd64/k6
+  - mv /tmp/k6 /tmp/bin/k6
+network_policy:
+  include_recommended_allowed: true
+  allowed_domains:
+    - github.com
+    - objects.githubusercontent.com
+    - release-assets.githubusercontent.com
+    - dl.k6.io
