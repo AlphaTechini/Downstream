@@ -22,7 +22,7 @@ have not been re-read against the live page since and are to be re-checked befor
 |---|---|---|
 | Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/probe.yml`](flows/probe.yml) ran as a real flow; [`flows/downstream.draft.yml`](flows/downstream.draft.yml) is the product flow | Probe verified. Product flow is a draft, not enabled |
 | Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public per the GitLab API on 2026-10-22 ([record](evidence/gitlab-project-2026-10-22.json)). MIT `LICENSE` committed |
-| Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/) | 3 probe sessions, 0 engine runs |
+| Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/). [`.gitlab-ci.yml`](.gitlab-ci.yml) runs `make verify`, the Go tests, and `engine-e2e`, which runs the engine end to end on the demo app for the planted and the clean change | 3 probe sessions, 0 engine runs; no `engine-e2e` log committed yet |
 | Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
 | One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option and merges ([`docs/userflow.md`](docs/userflow.md)) | Design only |
 | Path A (new project) | first commit 2026-10-22 (`git log`) | Intended path |
@@ -126,7 +126,10 @@ python3 scripts/check_evidence.py
 ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
 ```
 
-It validates the flow and config YAML, checks that docs links resolve, that every Verified
+With Go 1.26 and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
+including the integration tests that start an app and run k6 (they skip without k6).
+
+`make verify` validates the flow and config YAML, checks that docs links resolve, that every Verified
 row above links to committed evidence, that logs hold no unredacted email, and that the
 evidence files match the checksums in `evidence/SHA256SUMS`. It does not run
 Downstream; the logs in `evidence/` show the platform behaviour. Flow runs happen in this
