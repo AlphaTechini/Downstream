@@ -105,7 +105,9 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 - **The demo regression is planted.** The demo target is [`examples/shelf`](examples/shelf/), a
   small API written for this project. [`examples/changes/raise-hash-cost.patch`](examples/changes/raise-hash-cost.patch)
   is a change made to look safe in review and to slow every authenticated route; it was not
-  found in real history. [`examples/changes/README.md`](examples/changes/README.md) says why.
+  found in real history. It was added in the commit "Add the shelf demo API with a planted
+  regression and a clean change" (`git log --grep "planted regression"`).
+  [`examples/changes/README.md`](examples/changes/README.md) says why.
 - **Mock-ups.** Notes and issues in [`docs/userflow.md`](docs/userflow.md) are mock-ups with
   placeholders such as `<p95_base_ms>`.
 - **Untested platform capabilities** are T-07 to T-15 in [`docs/requirements.md`](docs/requirements.md).
