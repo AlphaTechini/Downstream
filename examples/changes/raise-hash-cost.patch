@@ -1,0 +1,13 @@
+diff --git a/examples/shelf/secret.go b/examples/shelf/secret.go
+--- a/examples/shelf/secret.go
++++ b/examples/shelf/secret.go
+@@ -5,7 +5,8 @@
+ 	"crypto/sha256"
+ )
+ 
+-const hashIterations = 1000
++// OWASP guidance for PBKDF2-HMAC-SHA256 is 600,000 iterations; 210,000 is our step towards it.
++const hashIterations = 210000
+ 
+ // hashSecret derives a 32-byte key from a password or an API token secret. Both
+ // kinds of secret go through it, so it runs on every login and on every

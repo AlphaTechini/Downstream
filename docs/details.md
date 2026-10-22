@@ -1,8 +1,8 @@
 # Downstream: design details
 
 Status of this document: written 2026-10-22, four days before the submission deadline
-(Tue 2026-10-27, 13:00 UTC). Day-0 platform tests are done and logged. The engine is not
-written. Everything under "Platform facts" is backed by a committed log; everything else is
+(Tue 2026-10-27, 13:00 UTC). Day-0 platform tests are done and logged. The engine is built
+and tested; it has no logged run yet. Everything under "Platform facts" is backed by a committed log; everything else is
 design. Items marked **UNVERIFIED** have not been exercised on the platform yet and are
 tracked in [requirements.md](requirements.md) as numbered tests (T-xx).
 
@@ -117,52 +117,68 @@ Three rules shape everything:
 
 | Component | What it is | Status |
 |---|---|---|
-| Flow | `flows/downstream.draft.yml`, one `AgentComponent`, one mention trigger | Draft, not enabled |
-| Engine | Go program `engine/` with subcommands below. Standard library first. | Not written |
+| Flow | `flows/downstream.yml`, one `AgentComponent`, one mention trigger | Written, not yet run on the platform |
+| Engine | Go program `engine/` with subcommands below. Standard library only. | Built and tested (`make test`); no logged run |
 | k6 | v0.56.0 installed by `setup_script` | Installed and version-checked (day 0); never yet run against an app |
-| Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Not chosen (section 9) |
+| Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Demo target `examples/shelf` and root `downstream.yml` written (section 9) |
 | Agent instructions | `AGENTS.md`, `agentnotes.md` | Written |
-| Report | MR notes (tables + Mermaid), issues; optional Pages page | Not built |
+| Report | MR notes (tables + Mermaid), issues; optional Pages page | Report and issue bodies built (`engine/report`, `engine/issues`); posting them from the flow not yet run; Pages not built |
 
 ### 3.2 Engine interface
 
 The flow calls these and nothing else. Arguments are fixed by the prompt; the model
-supplies file contents (`journeys.json`) but never command lines.
+supplies file contents (`journeys.json`, `notes.json`) but never command lines. Built in
+`engine/cmd/downstream`; SHAs must be 7 to 40 hex characters, and a commit missing from a
+partial clone is fetched from `origin`.
 
 ```text
-downstream scan   --base <sha> --head <sha> --out scan.json
-downstream schema journeys                      # prints the JSON schema the model must follow
-downstream run    --journeys journeys.json --out run.json
-downstream report --run run.json --out report.md
-downstream issues --run run.json --out issues.json
-downstream marker parse   < issue_body.md       # rebuilds state from the hidden marker
-downstream fixcheck --issue-json marker.json --option N   # decides if option N is applicable
+downstream version
+downstream scan     --base <sha> --head <sha> [--repo .] --out scan.json
+downstream schema   journeys                    # the JSON schema the model must follow
+downstream validate --journeys journeys.json --scan scan.json
+downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
+downstream report   --run run.json [--scan scan.json] --out report.md
+downstream summary  --run run.json --scan scan.json   # one count per line: regression=N ...
+downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <user> --out issues.json
+downstream marker   parse [--journeys-out journeys.json] < issue_body.md
+downstream fixcheck --marker marker.json --option N  # checks option N exists; does not apply it
 ```
 
-`scan.json` (sketch): changed files and hunks; route table of the head build; for each
-changed or affected route, why it is in the blast radius.
+`run` writes `run.json` even when it stops early, with the stage and error, so `report` can
+say where it stopped. `issues` writes the issue titles and bodies, the trade-off questions for
+the merge request, and `needs_notes`: the finding IDs the model must write notes for.
 
-`journeys.json` (sketch): a list of journeys, each with `id`, `goal`, `why_included`, and
-ordered `steps`: `{method, path, body, expect_status, extract: {var: json_pointer}}`.
-Paths must come from the route table. Variables are carried between steps.
+The file formats are the Go types in `engine/model/model.go`:
 
-`run.json` (sketch): per journey and step, for baseline run 1, candidate, baseline run 2:
-count, failures, p50, p95, mean, plus process CPU seconds and peak RSS. Noise band per
-metric. Classification per finding: `regression`, `trade-off`, or `noise`.
+- `scan.json`: changed files and hunks, changed functions, the head build's route table, and
+  the changed and affected routes with the reasons each is there.
+- `journeys.json`: journeys, each with `id`, `goal`, `why_included` and ordered `steps`
+  `{name, method, path, headers, body, expect_status, extract: {var: json_pointer}}`.
+- `run.json`: settings and thresholds, kept and discarded journeys, the three passes in run
+  order with per-step count, failures, p50, p95 and mean plus app CPU seconds and peak RSS,
+  and one finding per metric with B1, C, B2, noise band, delta and class.
+- `notes.json`: per headline finding, a likely cause and fix options, written by the model.
 
 ### 3.3 Target config
 
-The target repository carries a small file so the engine can build and start it without
-guessing:
+The target repository carries a small `downstream.yml` so the engine can build and start it
+without guessing. The engine reads it from the **base** commit, so a merge request cannot
+change how it is measured. Parser: `engine/target`. This repository's own file:
 
 ```yaml
-# downstream.yml in the target repo (sketch)
-build: "go build -o /tmp/app ./cmd/api"
-start: "/tmp/app"
-port_env: "PORT"
-ready_path: "/health"
-setup: []            # optional commands to seed data through the app itself
+root: examples/shelf                      # directory scanned for routes
+build: go build -o {out} ./examples/shelf/cmd/shelf
+start: "{out}"
+port_env: PORT                            # engine sets this to a free loopback port
+ready_path: /health
+vus: 2
+iterations: 10                            # per VU; fixed sample size per pass
+duration: 60s                             # cap per pass
 ```
+
+Only flat `key: value` lines and comments are accepted; anything else is an error with its
+line number. `{out}` is the binary path the engine chooses. `build` and `start` run with
+`sh -c` and come from a committed file, never from model output.
 
 ---
 
@@ -178,6 +194,17 @@ calls (to depth 2) overlaps a diff hunk. A route is **affected** if it shares a 
 function, a changed SQL table or model type, or a changed middleware with a changed route.
 Node (Express/Fastify) would use a regex route extractor and `require`/`import` edges; that is
 a stretch goal, not a promise.
+
+Implemented in `engine/scan` for Go `net/http` ServeMux registrations with string-literal
+patterns (`mux.HandleFunc("GET /books/{id}", h)`, `mux.Handle(p, mw(http.HandlerFunc(h)))`).
+Calls are resolved by name, without the type checker, which over-approximates. A function
+counts as changed when its lines overlap a hunk or when it uses a top-level const, var or type
+whose declaration overlaps one, so changing a constant marks its users. A route is **changed**
+when its handler or its middleware reaches a changed function within depth 2, and
+**affected** when it shares a function, a type or a package variable with a changed route. A
+function reached by more than half of all routes (such as a JSON writer) is ignored for the
+shared-function rule because sharing it carries no signal. Chi, Gin and Node frameworks are
+not supported.
 
 What this will miss: dynamic route registration, reflection, cross-service calls, changes
 that only matter through configuration. Reports say "static analysis, depth 2" so nobody
@@ -203,6 +230,20 @@ The model writes journeys; the engine decides whether to trust them.
 At least one journey must avoid the changed route and share only a dependency with it. That
 is the point of the product: finding the thing nobody was looking at.
 
+Implemented in `engine/journey` (schema and validation) and `engine/k6gen` (script). Limits:
+1 to 6 journeys, 1 to 12 steps each, bodies up to 4 KiB, methods GET, POST, PUT, PATCH,
+DELETE, header names limited to Authorization, Content-Type, Accept and `X-*`. Each path must
+match a route in the head build's route table. Values carry between steps as `{{name}}`
+placeholders filled from an earlier step's `extract` (an RFC 6901 JSON pointer into the
+response), plus a built-in `{{uniq}}` for unique usernames. A step fails when its status is not
+`expect_status` or an extract is missing, and the rest of that iteration is skipped.
+
+The k6 script is generated by the engine: the journeys are embedded as a JSON literal and run
+by one fixed interpreter function (`engine/k6gen/interpreter.js`), so no model text becomes
+script source. Each step has its own k6 Trend and Counters, and `handleSummary` writes the
+per-step figures to a file the engine reads. The base URL must be `http://127.0.0.1:<port>`;
+anything else is rejected before a script is written.
+
 ---
 
 ## 6. Measuring and deciding
@@ -214,6 +255,7 @@ other and call it a regression):
 
 ```text
 build base, build head
+start base  -> one iteration of each journey (baseline check) -> stop
 start base  -> run journeys (B1)   -> stop
 start head  -> run journeys (C)    -> stop
 start base  -> run journeys (B2)   -> stop
@@ -223,12 +265,26 @@ B1 and B2 bracket C so that drift on the machine over the run shows up in the no
 rather than being blamed on the change. Each app start uses a fresh data store, seeded only
 through the app's own API by the journeys.
 
+Implemented in `engine/runner`. Each commit is extracted with `git archive` into a temporary
+directory, so the repository and its working tree are never changed. The app is started with
+`exec` so its process is the one measured, on a free port on 127.0.0.1, and stopped with
+SIGTERM then SIGKILL. In each pass every journey is its own k6 scenario with a fixed number of
+iterations per VU (`downstream.yml`), so B1, C and B2 attempt the same journeys the same
+number of times. Counts can still differ: a failing step skips the rest of its iteration, and
+the per-pass cap can cut a pass short; findings say when counts differ. The scenarios run at
+the same time, the same way in every pass. Requests time out after 20 s.
+
+Traffic stays on 127.0.0.1: the base URL is checked, k6 runs with `maxRedirects: 0` and
+`--no-usage-report`, and the readiness check does not follow redirects, so a target that
+answers with a redirect to another host is never followed.
+
 ### 6.2 Metrics
 
 - Per step: request count, failure count, p50, p95, mean latency (from k6 trends the
   generated script defines per step).
-- Per run: process CPU seconds and peak RSS of the app, sampled from `/proc/<pid>` every
-  250 ms by the engine.
+- Per pass: CPU seconds the app used while k6 ran (user plus system time from
+  `/proc/<pid>/stat`, read before and after) and its peak RSS (`VmHWM` from
+  `/proc/<pid>/status` after k6 exits).
 - Database time: **not measured in the MVP.** It is reported only if the target exposes it
   (for example a debug route). Otherwise the report says "DB time: not measured". We do not
   guess.
@@ -247,6 +303,18 @@ in the README with the evidence:
 
 These thresholds are a starting point and are not claimed to be statistically rigorous. A
 three-run design cannot give a confidence interval; the report says so in one line.
+
+Implemented in `engine/classify` with these rules plus three more, all stated in the report's
+method paragraph. Rules are applied in this order: regression, then **improved** (the
+opposite of regression: better than the better baseline run by the same margins), then
+**withheld** (the two baseline runs differ by more than 50 percent of the smaller one and by
+at least the absolute floor, so no verdict is given; a clear regression or improvement is
+never withheld), then noise. **not-reached**: a step with no requests in B1, C or B2 (an
+earlier step of its journey failed) has its latencies left uncompared, so a broken endpoint
+cannot make a later step look faster. Every metric counts higher as worse. Absolute floors:
+10 ms latency, 10 MB memory, 0.5 s CPU. A journey with a latency regression and a latency
+improvement has both re-classed as trade-off. Unit tests cover each class with synthetic
+inputs (FR-23).
 
 ### 6.4 Finding the cause
 
@@ -270,20 +338,45 @@ Two levels, the second only if time allows:
 1. **Journeys added** (posted before the run): plain-English summary per journey.
 2. **Report** (posted after): script-rendered tables: per journey and step, baseline range,
    candidate, change, noise band, verdict; a Mermaid chart comparing p95 per step;
-   discarded journeys; what was not measured; links to the issues opened.
+   discarded journeys; what was not measured; the issues to open (the flow posts the list of
+   issues it opened in a separate note).
 3. **A final note is always posted**, including on failure. A failed run is reported as
    failed, with the engine's error text and the step it failed at.
 
-### 7.2 Issues (one per regression)
+Implemented in `engine/report`. Each figure comes from `run.json` and is formatted with
+fixed decimals (ms 1, s 2, MB 1). Besides the tables and chart above, the report has a
+findings line (regressed steps, trade-off journeys, improved and withheld metrics), the list
+of issues to open, the blast radius from `scan.json`, and the method and thresholds in words.
+The chart is a Mermaid `xychart-beta` block, capped at 20 steps; whether GitLab's Mermaid
+version renders `xychart-beta` in a note is **unverified**. A golden-file test checks the
+output, and a second test checks that every number in it is derived from the input.
 
-Title: `[Downstream] <journey>: <metric> <direction> <amount>`. Body, in order: who started
-the run (tagged with `@username` so they are notified), the repro, baseline and candidate
-figures with the noise band, a likely cause, numbered fix options, how to reply. The last
+### 7.2 Issues (one per cause)
+
+Title: `[Downstream] <journey>: <metric> <direction> <amount>` for a single step, or
+`[Downstream] <N> steps slower via <changed functions>: worst <step> ...` for a group. Body, in
+order: who started the run (tagged with `@username` so they are notified), the changed
+functions, the figures for every step in the group with the noise band, the repro, a likely
+cause, numbered fix options, how to reply. The last
 line is a hidden marker:
 
 ```html
 <!-- downstream:v1 {"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95","step":"..."} -->
 ```
+
+Implemented in `engine/issues`. One change usually slows many steps for one reason, so
+issues are grouped by cause rather than opened per step: regressed steps are keyed by the
+changed functions (from `scan.json`) on the routes they call, and each key gets one issue.
+Steps whose routes reach no changed function share one more issue ("slower on routes outside
+the diff's call paths"); on the demo that group holds public reads slowed by CPU contention.
+At most 5 issues per run. Each issue has an engine-rendered table of every step in the group,
+and its headline (the title and the marker) is the step that got slowest in absolute terms,
+with failures always first. The likely cause and fix options come from a `notes.json` the
+model writes, keyed by headline finding ID and validated by the engine: no comment or fence
+markup, no table rows, and no figures with units, so the model cannot add numbers.
+`ParseMarker` accepts a whole
+issue body or the bare marker JSON. `Questions` writes one merge request question per
+trade-off journey.
 
 The marker embeds the one journey that regressed, so an issue is self-contained: replying
 `fix option 2` needs the issue and nothing else. **UNVERIFIED (T-08, T-09):** whether a
@@ -315,34 +408,30 @@ built-in Developer flow creating branches, commits and a Draft MR on day 0 (scre
 not committed, so this is not in `evidence/`), so the capability exists on the platform;
 whether it is reachable from a custom flow's toolset is the open question.
 
-Fix options are written by the model and checked by the engine only for whether they apply
-cleanly. The report does not claim an option is correct; it claims what the rerun measured.
+Fix options are written by the model. The engine checks only that option N exists
+(`downstream fixcheck`); it does not check that a change applies or builds, and applying a
+change from the flow is not built. The report does not claim an option is correct; it claims what the rerun measured.
 
 ---
 
-## 9. Demo target app (open decision)
+## 9. Demo target app
 
-The demo needs an app with a believable regression. Criteria: permissive licence (MIT or
-similar), HTTP JSON API, a store that needs no server (SQLite or in-memory), Go or Node,
-builds in about a minute, and a change that causes a measurable side effect somewhere the
-author did not look.
+Criteria: permissive licence, HTTP JSON API, a store that needs no server, Go or Node, builds
+in about a minute, and a change that causes a measurable side effect somewhere the author did
+not look. Two RealWorld ("Conduit") API implementations were checked on 2026-10-22 and
+rejected: both default to Postgres, one states no licence, and the container has no Postgres
+and no docker.
 
-State on 2026-10-22: **no target chosen.** Two RealWorld ("Conduit") API implementations
-were checked and rejected: one is MIT but defaults to Postgres, the other states no licence
-and also uses Postgres. The container has no Postgres and no docker.
+**Chosen: a purpose-built small API**, `examples/shelf`: a reading-list JSON API, Go standard
+library only, in-memory store, 11 routes registered in `examples/shelf/routes.go`. The root
+`downstream.yml` tells the engine how to build and start it.
 
-Options, with the trade-off stated plainly:
-
-- **A purpose-built small API** in `examples/`, Go, SQLite through a pure-Go driver, with a
-  clearly labelled planted regression. Lowest risk and fully controlled. Weakness: a judge can
-  say the regression was staged. Mitigation: the README labels it as planted and shows the
-  planting commit.
-- **An existing open-source app** with SQLite or an in-memory mode, with the regression
-  found in its real history. More credible; more risk of the build not working inside the
-  sandbox within the time left.
-
-Whichever is picked, the README says which it is and links the commit that introduced the
-regression. The decision is due by end of Friday 2026-10-23.
+The regression is **planted**, not found: `examples/changes/raise-hash-cost.patch` raises the
+PBKDF2 iteration count of the shared `hashSecret` helper. In review it reads as a security
+improvement. The diff does not show that `requireAuth` checks every API token through the same
+helper, so every authenticated route pays the cost, including routes the diff never mentions.
+`examples/changes/clean-change.patch` is the control: a change with no performance effect.
+The weakness is plain: the regression was staged. The README says so.
 
 ---
 
@@ -363,18 +452,27 @@ is loaded automatically. So:
 
 ## 11. Security model
 
-- The model's only output that reaches execution is `journeys.json`, which the engine
-  validates against a schema and against the route table. No model text reaches a shell.
-- The engine sends traffic only to `127.0.0.1`. No absolute URLs are accepted in journeys.
+- The model's only output that reaches execution is `journeys.json` and `notes.json`, which
+  the engine validates (schema, route table, text rules). They reach the shell only as the
+  body of a quoted heredoc (`<<'DOWNSTREAM_JSON'`), so the shell expands nothing in them; the
+  prompt requires one-line JSON, and JSON cannot hold a raw newline inside a string, so valid
+  output cannot contain the terminator line. A model that ignored the prompt could still
+  write a terminator line; the platform's sandbox and the CODEOWNERS rules are the remaining
+  limits. A flow file-writing tool would close this gap; none is used yet.
+- The engine is built from the merge request's own checkout, so a merge request could change
+  the engine that measures it. Reviewers see engine changes in the diff; building the engine
+  from the target branch is not done yet.
+- `agentnotes.md` and `downstream.yml` are read from the **base** commit (`git show
+  <base>:agentnotes.md`, `target.Load`), so a merge request cannot change them for its own
+  run. That needs the base commit in the flow's workspace; the engine fetches it from `origin`
+  if the clone lacks it (untested on the platform).
+- The engine sends traffic only to `127.0.0.1`. No absolute URLs are accepted in journeys,
+  and redirects are never followed (k6 `maxRedirects: 0`; the readiness check refuses them).
+- `build` and `start` from `downstream.yml` run through `sh -c`; the binary path the engine
+  substitutes for `{out}` is single-quoted.
 - Diffs, issue text, notes and file contents are treated as data. The prompt says so, and
   the engine never interprets them as commands.
 - Files that steer the agent are protected by CODEOWNERS and the flow does not edit them.
-  The workspace is checked out on the merge request **source** branch (verified), so a
-  plain `cat agentnotes.md` reads the source branch's copy, and a merge request could
-  propose a change to the very file that steers the agent reviewing it. The intended
-  mitigation is to read the target branch's copy with `git show` against the target ref.
-  Whether that ref is available in the workspace is **unverified**; until it is tested,
-  the file is protected by CODEOWNERS only.
 - The network allowlist is wide: with `include_recommended_allowed: true` the sandbox
   config in run3 line 91 lists 175 entries. That is acceptable for the hackathon and noted
   as a hardening item (T-14): narrow it to the hosts actually needed once the engine's
@@ -382,6 +480,18 @@ is loaded automatically. So:
 - Triggering needs Developer role or higher on the project. A judge who is not a member
   cannot trigger the flow; the README must show recorded evidence runs instead of asking
   anyone to trigger it.
+
+## 11a. CI
+
+`.gitlab-ci.yml` has four jobs. `verify` runs `make verify`. `k6` copies the k6 binary out of
+the official `grafana/k6:0.56.0` image as an artifact. `go-test` runs gofmt, go vet and
+`go test ./...` on `golang:1.22` with that k6 on PATH, so the integration tests that start an
+app and run k6 run there too. `engine-e2e` runs twice, once per patch in
+`examples/changes/`: it commits the patch on top of the pipeline commit, then runs `scan`,
+`validate`, `run`, `report`, `issues` and `summary` with the hand-written
+`examples/shelf/journeys.example.json` (no model involved), keeps `out/` as an artifact, and
+fails unless all three passes ran and the planted change has at least one regression and the
+clean change has none. None of these jobs has run yet; their first logs go in `evidence/`.
 
 ---
 
@@ -414,10 +524,10 @@ and it stands or falls on the evidence runs.
 
 ---
 
-## 14. Repo layout and sources of truth
+## 14. Repo layout
 
 The platform reads agent configuration from the default branch of this GitLab project and
-runs the flow there, and the hackathon is judged on this project.
+runs the flow here.
 
 ```text
 README.md              status, claims table, 30-second check
@@ -425,10 +535,10 @@ AGENTS.md              rules for agents working in this repo
 agentnotes.md          operating notes the flow reads each run
 .gitlab/duo/           agent-config.yml (verified)
 .gitlab/CODEOWNERS     protects the files above
-flows/                 probe.yml (verified), downstream.draft.yml (not enabled)
+flows/                 probe.yml (verified), downstream.yml (not yet run)
 docs/                  details.md, requirements.md, userflow.md
 evidence/              raw logs and the results table
 scripts/               validate_yaml.py, check_evidence.py
-engine/                (not yet written)
-examples/              (demo target, if we build one)
+engine/                cmd/downstream (CLI), scan, journey, k6gen, runner, classify, report, issues
+examples/              shelf/ (demo target), changes/ (planted and clean patches)
 ```

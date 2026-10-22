@@ -100,13 +100,17 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 | ID | Claim | Planned file | Blocking test |
 |---|---|---|---|
-| N-1 | The engine finds regressions between two builds | `engine/` | none (just unwritten) |
-| N-2 | Journeys are generated from the diff and run by k6 against an app | `engine/` | T-07 |
-| N-3 | One issue per regression, starter tagged | `flows/downstream.yml` | T-08 |
-| N-4 | `fix option N` applies a change and reruns the journey | `flows/downstream.yml` | T-09, T-10 |
-| N-5 | `verify` reruns after merge | `flows/downstream.yml` | T-09 |
+| N-1 | The engine finds regressions between two builds | `engine/` (built) | none; needs a committed run |
+| N-2 | Journeys are generated from the diff and run by k6 against an app | `engine/journey`, `engine/k6gen`, `engine/runner` (built); the model step is in the flow prompt | T-07 |
+| N-3 | One issue per cause, starter tagged | `engine/issues` (bodies built); `flows/downstream.yml` | T-08 |
+| N-4 | `fix option N` applies a change and reruns the journey | `engine/issues` checks the option number only; applying is not built | T-09, T-10 |
+| N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
 | N-7 | The GitLab project shows an MIT licence in its sidebar | `LICENSE` | T-12 (the file is committed; GitLab's detection not yet checked) |
+
+What exists for N-1 to N-3 today is code with unit and integration tests (`make test`); a
+passing test on a developer machine is not committed evidence, so these stay unverified until
+a run's output is committed under `evidence/`.
 
 When one of these gets proof, move it to a numbered claim above, add the evidence file under
 `evidence/`, and flip its README row to Verified in the same commit.

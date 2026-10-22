@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base": "1111111122223333444455556666777788889999",
+  "head": "aaaaaaaabbbbccccddddeeeeffff000011112222",
+  "root": "examples/shelf",
+  "method": "Go AST route table and static call graph, depth 2; calls through interfaces and reflection are not followed.",
+  "changed_files": null,
+  "changed_funcs": null,
+  "routes": null,
+  "changed": [
+    {
+      "method": "POST",
+      "path": "/shelf/books",
+      "handler": "",
+      "file": "",
+      "line": 0,
+      "reasons": [
+        "handler addBook calls changed function store.AddBook"
+      ],
+      "changed_funcs": [
+        "store.AddBook"
+      ]
+    }
+  ],
+  "affected": [
+    {
+      "method": "GET",
+      "path": "/shelf",
+      "handler": "",
+      "file": "",
+      "line": 0,
+      "reasons": [
+        "reads the shelf table that store.AddBook writes"
+      ]
+    }
+  ]
+}

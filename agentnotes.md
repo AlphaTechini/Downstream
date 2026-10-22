@@ -38,13 +38,20 @@ is a thing users do" or "no, add one for Y" in under a minute.
 - trade-off: one metric clearly better and another clearly worse on the same journey.
   Ask a question in the merge request. Do not open an issue.
 
-## Issues (one per regression)
+## Issues (one per cause)
 
-Title: `[Downstream] <journey>: <metric> <direction> <amount>` (amount from the engine).
-Body, in order: who started the run (tag them), repro (the journey steps and the command
-to rerun it), baseline and candidate figures with the noise band, likely cause (one or two
-sentences, labelled "likely"), numbered fix options, how to reply (`@<handle> fix option N`).
-The hidden marker comes from the engine and is never edited.
+The engine groups regressed steps by the changed functions on the routes they call and writes
+one issue per group; steps on routes the diff does not reach share one more issue. Titles,
+figures, the repro and the hidden marker come from the engine and are never edited. Post each
+title and body exactly as `downstream issues` prints them.
+
+What you write, in `notes.json`, per finding ID the engine lists in `needs_notes`:
+- `likely_cause`: one or two sentences starting with "Likely", naming the changed function
+  and how it reaches these steps. If the steps are on routes the diff does not reach, say what
+  they share with the changed code (CPU, a lock, a table) and that this is a hypothesis.
+- `fix_options`: one to five concrete code changes, each one sentence, most targeted first.
+  Say what each costs (for example, a security property it weakens).
+- No figures, units, tables or markup. The engine rejects them.
 
 ## Tone
 

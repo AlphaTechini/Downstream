@@ -89,6 +89,25 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 
 ---
 
+### 2.7 Engine status (2026-10-22)
+
+The engine side of these requirements is built and covered by tests in `engine/` (`make
+test`). A passing test is not the "Check" above: each requirement is done only when its check
+has been run in a logged run with the output committed under `evidence/`. None has been.
+
+| Requirement | Engine code | Test |
+|---|---|---|
+| FR-10, FR-14 | `engine/journey` (schema, validation, loopback-only base URL in `engine/k6gen`) | `engine/journey/journey_test.go`, `engine/k6gen/k6gen_test.go` |
+| FR-12 | baseline check in `engine/runner` | `engine/runner/runner_test.go` |
+| FR-20, FR-21 | `engine/runner` | `engine/runner/runner_test.go` (integration, needs k6) |
+| FR-22, FR-23 | `engine/classify` | `engine/classify/classify_test.go` |
+| FR-25, FR-30, FR-31 | `engine/report` | `engine/report/report_test.go` (golden file; every number derived from input) |
+| FR-32, FR-34 | `engine/issues` (bodies, marker, trade-off questions) | `engine/issues/issues_test.go` |
+| FR-41 | `downstream fixcheck` checks the option number only | `engine/issues/issues_test.go` |
+| NFR-02 | `engine/cmd/downstream` takes fixed flags and SHAs only | `engine/cmd/downstream/main_test.go` |
+| NFR-03 | `engine/k6gen` rejects any base URL but `http://127.0.0.1:<port>` | `engine/k6gen/k6gen_test.go` |
+| NFR-04 | `make test` runs gofmt, go vet and the tests; the `go-test` CI job runs the same | `.gitlab-ci.yml` |
+
 ## 3. Non-functional requirements
 
 | ID | Requirement | Check |
@@ -106,7 +125,7 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 
 ## 4. Platform tests
 
-Done means the output is committed under `evidence/`. IDs match references in the flow draft
+Done means the output is committed under `evidence/`. IDs match references in the flow
 and in [details.md](details.md).
 
 | ID | Test | Status | Evidence |
