@@ -468,9 +468,10 @@ is loaded automatically. So:
 
 ## 11a. CI
 
-`.gitlab-ci.yml` has four jobs. `verify` runs `make verify`. `go-test` runs gofmt, go vet and
-`go test -short ./...` on `golang:1.26`. `k6` copies the k6 binary out of the official
-`grafana/k6:0.56.0` image as an artifact. `engine-e2e` runs twice, once per patch in
+`.gitlab-ci.yml` has four jobs. `verify` runs `make verify`. `k6` copies the k6 binary out of
+the official `grafana/k6:0.56.0` image as an artifact. `go-test` runs gofmt, go vet and
+`go test ./...` on `golang:1.26` with that k6 on PATH, so the integration tests that start an
+app and run k6 run there too. `engine-e2e` runs twice, once per patch in
 `examples/changes/`: it commits the patch on top of the pipeline commit, then runs `scan`,
 `validate`, `run`, `report`, `issues` and `summary` with the hand-written
 `examples/shelf/journeys.example.json` (no model involved), keeps `out/` as an artifact, and

@@ -11,13 +11,6 @@ verify:
     - pip install --quiet pyyaml
     - make verify
 
-go-test:
-  stage: test
-  image: golang:1.26
-  script:
-    - test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-    - go vet ./...
-    - go test -short ./...
 
 # k6 comes from its official image and is handed to the next stage as an
 # artifact, so the engine job can use the golang image.
@@ -34,6 +27,20 @@ k6:
     paths:
       - bin/k6
     expire_in: 1 day
+
+# Same checks as `make test`. With k6 on PATH the runner and k6gen
+# integration tests run instead of skipping.
+go-test:
+  stage: test
+  image: golang:1.26
+  needs: [k6]
+  script:
+    - export PATH="$CI_PROJECT_DIR/bin:$PATH"
+    - git config --global user.name "Downstream CI"
+    - git config --global user.email "downstream-ci@example.invalid"
+    - test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+    - go vet ./...
+    - go test ./...
 
 # Runs the engine end to end on the demo app: the pipeline commit is the
 # baseline, and the same commit with one patch from examples/changes applied is
