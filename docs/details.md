@@ -255,6 +255,14 @@ in the README with the evidence:
 These thresholds are a starting point and are not claimed to be statistically rigorous. A
 three-run design cannot give a confidence interval; the report says so in one line.
 
+Implemented in `engine/classify` with these rules plus two more, both in the report's method
+paragraph: **improved** is the mirror of regression (better than the better baseline run by
+the same margins), and **withheld** means the two baseline runs differ by more than 50 percent
+of the smaller one, so no verdict is given for that metric. Every metric counts higher as
+worse. CPU seconds have no absolute floor. A journey with a latency regression and a latency
+improvement has both re-classed as trade-off. Unit tests cover each class with synthetic
+inputs (FR-23).
+
 ### 6.4 Finding the cause
 
 Two levels, the second only if time allows:
