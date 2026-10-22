@@ -1,7 +1,6 @@
 # Duo Agent Platform runtime config for flow sessions.
-# GitLab reads this file from the DEFAULT BRANCH of the GitLab project only,
-# so the copy that matters lives in the GitLab showcase project. This copy is
-# the staged source (see README, "Repo layout").
+# GitLab reads this file from the DEFAULT BRANCH of the project only, so a change
+# here takes effect for flow sessions after it is merged.
 #
 # VERIFIED on 2026-10-22 (evidence/day0/run3-probe-v3-job-log.txt):
 #   - setup_script runs as plain job-script lines, outside the srt sandbox.

@@ -414,10 +414,10 @@ and it stands or falls on the evidence runs.
 
 ---
 
-## 14. Repo layout and sources of truth
+## 14. Repo layout
 
 The platform reads agent configuration from the default branch of this GitLab project and
-runs the flow there, and the hackathon is judged on this project.
+runs the flow here.
 
 ```text
 README.md              status, claims table, 30-second check
