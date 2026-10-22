@@ -1,7 +1,6 @@
 package shelf
 
 import (
-	"crypto/pbkdf2"
 	"crypto/sha256"
 )
 
@@ -11,10 +10,5 @@ const hashIterations = 1000
 // kinds of secret go through it, so it runs on every login and on every
 // authenticated request.
 func hashSecret(secret string, salt []byte) []byte {
-	key, err := pbkdf2.Key(sha256.New, secret, salt, hashIterations, 32)
-	if err != nil {
-		// Only an invalid key length can fail, and the length is a constant.
-		panic("shelf: pbkdf2: " + err.Error())
-	}
-	return key
+	return pbkdf2(sha256.New, []byte(secret), salt, hashIterations, 32)
 }
