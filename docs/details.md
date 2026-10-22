@@ -152,17 +152,24 @@ metric. Classification per finding: `regression`, `trade-off`, or `noise`.
 
 ### 3.3 Target config
 
-The target repository carries a small file so the engine can build and start it without
-guessing:
+The target repository carries a small `downstream.yml` so the engine can build and start it
+without guessing. The engine reads it from the **base** commit, so a merge request cannot
+change how it is measured. Parser: `engine/target`. This repository's own file:
 
 ```yaml
-# downstream.yml in the target repo (sketch)
-build: "go build -o /tmp/app ./cmd/api"
-start: "/tmp/app"
-port_env: "PORT"
-ready_path: "/health"
-setup: []            # optional commands to seed data through the app itself
+root: examples/shelf                      # directory scanned for routes
+build: go build -o {out} ./examples/shelf/cmd/shelf
+start: "{out}"
+port_env: PORT                            # engine sets this to a free loopback port
+ready_path: /health
+vus: 2
+iterations: 20                            # per VU; fixed sample size per pass
+duration: 60s                             # cap per pass
 ```
+
+Only flat `key: value` lines and comments are accepted; anything else is an error with its
+line number. `{out}` is the binary path the engine chooses. `build` and `start` run with
+`sh -c` and come from a committed file, never from model output.
 
 ---
 
