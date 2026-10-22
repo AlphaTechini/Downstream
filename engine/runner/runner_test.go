@@ -220,7 +220,7 @@ func TestRunWithoutK6ReportsStage(t *testing.T) {
 
 // ---- integration ----
 
-const tinyGoMod = "module tinyapp\n\ngo 1.26\n"
+const tinyGoMod = "module tinyapp\n\ngo 1.22\n"
 
 const tinyMain = `package main
 

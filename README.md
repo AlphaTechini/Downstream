@@ -64,7 +64,7 @@ Design: [`docs/details.md`](docs/details.md). What reviewers see: [`docs/userflo
 | Custom flow (YAML) | [`flows/`](flows/) | There is no product; the flow is the entry point |
 | Mention trigger on the flow's service account | set in the GitLab UI; logs show it firing | Nothing starts without a human typing a command |
 | `run_command` in the sandbox | `toolset` in [`flows/probe.yml`](flows/probe.yml) (verified) and [`flows/downstream.yml`](flows/downstream.yml) | The engine and k6 cannot run |
-| `setup_script` and `network_policy` | [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml) | k6 and Go 1.26 are not installed; only GitLab hosts are reachable |
+| `setup_script` and `network_policy` | [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml) | k6 is not installed; only GitLab hosts are reachable |
 | MR notes (`create_merge_request_note`) | `toolset` in [`flows/probe.yml`](flows/probe.yml) | The session UI shows only "Ran tool", so notes are the only visible output |
 | Issues and issue replies (`create_issue`, `get_issue`, `create_issue_note`) | `toolset` in [`flows/downstream.yml`](flows/downstream.yml); not tested (T-08, T-09) | No per-cause issues; fall back to MR threads |
 
@@ -95,8 +95,7 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
   report from it is committed, so its claims are not Verified.
 - **The product flow has not run.** [`flows/downstream.yml`](flows/downstream.yml) uses tools
   not yet exercised from a custom flow (`create_issue`, `get_issue`, `create_issue_note`;
-  T-08, T-09) and Go 1.26 lines in `setup_script` that have not run (see
-  [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml)).
+  T-08, T-09), and the engine has not yet been built inside the sandbox.
 - **Static analysis covers Go `net/http` only.** Routes must be registered with string-literal
   patterns on a ServeMux. Other frameworks and languages are not supported.
 - **Fixes are not applied.** `fix option N` checks the option exists; the change itself would
@@ -131,7 +130,7 @@ python3 scripts/check_evidence.py
 ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
 ```
 
-With Go 1.26 and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
+With Go 1.22 or newer and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
 including the integration tests that start an app and run k6 (they skip without k6).
 
 `make verify` validates the flow and config YAML, checks that docs links resolve, that every Verified
@@ -150,7 +149,7 @@ mention on an MR
                                       summary, issues, marker, fixcheck (built, no logged run)
        builds base and head from git, runs the app on 127.0.0.1
        k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
-       Go 1.26 toolchain              fetched by .gitlab/duo/agent-config.yml (not yet run)
+       Go 1.22.12                     already in the sandbox image (verified), nothing to install
  -> MR notes and issues with a hidden marker so any reply rebuilds state from the issue
 ```
 
@@ -173,7 +172,7 @@ is the platform, from the logs in `evidence/day0/`:
 ## Built during the hackathon, and what is not
 
 Everything here was written for this entry; the first commit is 2026-10-22 and no earlier code
-is reused. The engine and the demo app use the Go standard library only (Go 1.26). Used but not
+is reused. The engine and the demo app use the Go standard library only (Go 1.22). Used but not
 written by us: GitLab Duo Agent Platform and its default job image, Go, k6 v0.56.0 (downloaded
 at job start, not vendored), PyYAML (checks only).
 
