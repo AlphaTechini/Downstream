@@ -246,6 +246,7 @@ other and call it a regression):
 
 ```text
 build base, build head
+start base  -> one iteration of each journey (baseline check) -> stop
 start base  -> run journeys (B1)   -> stop
 start head  -> run journeys (C)    -> stop
 start base  -> run journeys (B2)   -> stop
@@ -255,12 +256,21 @@ B1 and B2 bracket C so that drift on the machine over the run shows up in the no
 rather than being blamed on the change. Each app start uses a fresh data store, seeded only
 through the app's own API by the journeys.
 
+Implemented in `engine/runner`. Each commit is extracted with `git archive` into a temporary
+directory, so the repository and its working tree are never changed. The app is started with
+`exec` so its process is the one measured, on a free port on 127.0.0.1, and stopped with
+SIGTERM then SIGKILL. In each pass every journey is its own k6 scenario with a fixed number of
+iterations per VU (`downstream.yml`), so B1, C and B2 send the same number of requests. The
+scenarios run at the same time, the same way in every pass. k6 runs with
+`--no-usage-report`, so nothing leaves the machine.
+
 ### 6.2 Metrics
 
 - Per step: request count, failure count, p50, p95, mean latency (from k6 trends the
   generated script defines per step).
-- Per run: process CPU seconds and peak RSS of the app, sampled from `/proc/<pid>` every
-  250 ms by the engine.
+- Per pass: CPU seconds the app used while k6 ran (user plus system time from
+  `/proc/<pid>/stat`, read before and after) and its peak RSS (`VmHWM` from
+  `/proc/<pid>/status` after k6 exits).
 - Database time: **not measured in the MVP.** It is reported only if the target exposes it
   (for example a debug route). Otherwise the report says "DB time: not measured". We do not
   guess.

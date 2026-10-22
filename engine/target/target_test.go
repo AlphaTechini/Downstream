@@ -196,7 +196,7 @@ func TestRepoConfigParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Root != "examples/shelf" || c.PortEnv != "PORT" || c.ReadyPath != "/health" || c.VUs != 2 || c.Iterations != 20 || c.Duration != 60*time.Second {
+	if c.Root != "examples/shelf" || c.PortEnv != "PORT" || c.ReadyPath != "/health" || c.VUs != 2 || c.Iterations != 10 || c.Duration != 60*time.Second {
 		t.Fatalf("unexpected config %+v", c)
 	}
 	if got := c.StartCommand("/x/app"); got != "/x/app" {

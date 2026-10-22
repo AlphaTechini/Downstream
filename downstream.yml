@@ -5,5 +5,5 @@ start: "{out}"
 port_env: PORT                            # engine sets this to a free loopback port
 ready_path: /health
 vus: 2
-iterations: 20                            # per VU; fixed sample size per pass
+iterations: 10                            # per VU; fixed sample size per pass
 duration: 60s                             # cap per pass
