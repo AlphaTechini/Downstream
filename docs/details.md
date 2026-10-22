@@ -300,7 +300,7 @@ These thresholds are a starting point and are not claimed to be statistically ri
 three-run design cannot give a confidence interval; the report says so in one line.
 
 Implemented in `engine/classify` with these rules plus two more, both in the report's method
-paragraph: **improved** is the mirror of regression (better than the better baseline run by
+paragraph: **improved** is the opposite of regression (better than the better baseline run by
 the same margins), and **withheld** means the two baseline runs differ by more than 50 percent
 of the smaller one and by at least the absolute floor, so no verdict is given for that metric
 (a 1 ms wobble on a 2 ms step is jitter, not a noisy baseline). Every metric counts higher as
