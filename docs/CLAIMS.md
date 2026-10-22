@@ -104,7 +104,7 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 | N-2 | Journeys are generated from the diff and run by k6 against an app | `engine/journey`, `engine/k6gen`, `engine/runner` (built); the model step is in the flow prompt | T-07 |
 | N-3 | One issue per cause, starter tagged | `engine/issues` (bodies built); `flows/downstream.yml` | T-08 |
 | N-4 | `fix option N` applies a change and reruns the journey | `engine/issues` checks the option number only; applying is not built | T-09, T-10 |
-| N-5 | `verify` reruns after merge | `flows/downstream.yml` | T-09 |
+| N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
 | N-7 | The GitLab project shows an MIT licence in its sidebar | `LICENSE` | T-12 (the file is committed; GitLab's detection not yet checked) |
 

@@ -20,7 +20,7 @@ have not been re-read against the live page since and are to be re-checked befor
 
 | Brief requirement | Where in this repo | Status |
 |---|---|---|
-| Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/probe.yml`](flows/probe.yml) ran as a real flow; [`flows/downstream.draft.yml`](flows/downstream.draft.yml) is the product flow | Probe verified. Product flow is a draft, not enabled |
+| Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/probe.yml`](flows/probe.yml) ran as a real flow; [`flows/downstream.yml`](flows/downstream.yml) is the product flow | Probe verified. Product flow written, not yet run on the platform |
 | Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public per the GitLab API on 2026-10-22 ([record](evidence/gitlab-project-2026-10-22.json)). MIT `LICENSE` committed |
 | Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/). [`.gitlab-ci.yml`](.gitlab-ci.yml) runs `make verify`, the Go tests, and `engine-e2e`, which runs the engine end to end on the demo app for the planted and the clean change | 3 probe sessions, 0 engine runs; no `engine-e2e` log committed yet |
 | Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
@@ -63,10 +63,10 @@ Design: [`docs/details.md`](docs/details.md). What reviewers see: [`docs/userflo
 |---|---|---|
 | Custom flow (YAML) | [`flows/`](flows/) | There is no product; the flow is the entry point |
 | Mention trigger on the flow's service account | set in the GitLab UI; logs show it firing | Nothing starts without a human typing a command |
-| `run_command` in the sandbox | `toolset` in [`flows/probe.yml`](flows/probe.yml) | The engine and k6 cannot run |
-| `setup_script` and `network_policy` | [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml) | k6 is not installed; only GitLab hosts are reachable |
+| `run_command` in the sandbox | `toolset` in [`flows/probe.yml`](flows/probe.yml) (verified) and [`flows/downstream.yml`](flows/downstream.yml) | The engine and k6 cannot run |
+| `setup_script` and `network_policy` | [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml) | k6 and Go 1.26 are not installed; only GitLab hosts are reachable |
 | MR notes (`create_merge_request_note`) | `toolset` in [`flows/probe.yml`](flows/probe.yml) | The session UI shows only "Ran tool", so notes are the only visible output |
-| Issues and issue replies (`create_issue`, `create_issue_note`) | not tested | No per-regression issues; fall back to MR threads |
+| Issues and issue replies (`create_issue`, `get_issue`, `create_issue_note`) | `toolset` in [`flows/downstream.yml`](flows/downstream.yml); not tested (T-08, T-09) | No per-cause issues; fall back to MR threads |
 
 ## Claims
 
@@ -92,8 +92,11 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 ## What is mocked or not built
 
 - **The engine has no logged run.** It is built and tested (`make test`), but no `run.json` or
-  report from it is committed, so its claims are not Verified. `flows/downstream.draft.yml` is
-  still a draft, marked do-not-enable.
+  report from it is committed, so its claims are not Verified.
+- **The product flow has not run.** [`flows/downstream.yml`](flows/downstream.yml) uses tools
+  not yet exercised from a custom flow (`create_issue`, `get_issue`, `create_issue_note`;
+  T-08, T-09) and Go 1.26 lines in `setup_script` that have not run (see
+  [`.gitlab/duo/agent-config.yml`](.gitlab/duo/agent-config.yml)).
 - **Static analysis covers Go `net/http` only.** Routes must be registered with string-literal
   patterns on a ServeMux. Other frameworks and languages are not supported.
 - **Fixes are not applied.** `fix option N` checks the option exists; the change itself would
@@ -139,12 +142,13 @@ project; their pipelines are under CI/CD > Pipelines.
 
 ```text
 mention on an MR
- -> flows/downstream.draft.yml        exists, draft: one AgentComponent, one prompt
-     reads agentnotes.md              exists: journey style, thresholds, issue format
+ -> flows/downstream.yml              one AgentComponent, one prompt (written, not yet run)
+     reads agentnotes.md              from the base commit: journey style, issue format
      calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
                                       summary, issues, marker, fixcheck (built, no logged run)
        builds base and head from git, runs the app on 127.0.0.1
        k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
+       Go 1.26 toolchain              fetched by .gitlab/duo/agent-config.yml (not yet run)
  -> MR notes and issues with a hidden marker so any reply rebuilds state from the issue
 ```
 
@@ -188,8 +192,10 @@ deploy from this repo. What the brief means by deployment for a flow entry is un
 
 **Security.** The model's only output that reaches execution is validated JSON, the engine talks
 to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
-under CODEOWNERS. One known gap: a merge request could change `agentnotes.md` before the flow
-reads it ([`docs/details.md`](docs/details.md) section 11).
+under CODEOWNERS. `agentnotes.md` and `downstream.yml` are read from the base commit, so a
+merge request cannot rewrite them for its own run. Known gaps: the model's JSON reaches the
+shell inside a quoted heredoc, and the engine is built from the merge request's own checkout
+([`docs/details.md`](docs/details.md) section 11).
 
 ## Roadmap
 

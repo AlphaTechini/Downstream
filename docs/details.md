@@ -117,7 +117,7 @@ Three rules shape everything:
 
 | Component | What it is | Status |
 |---|---|---|
-| Flow | `flows/downstream.draft.yml`, one `AgentComponent`, one mention trigger | Draft, not enabled |
+| Flow | `flows/downstream.yml`, one `AgentComponent`, one mention trigger | Written, not yet run on the platform |
 | Engine | Go program `engine/` with subcommands below. Standard library only. | Built and tested (`make test`); no logged run |
 | k6 | v0.56.0 installed by `setup_script` | Installed and version-checked (day 0); never yet run against an app |
 | Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Demo target `examples/shelf` and root `downstream.yml` written (section 9) |
@@ -440,18 +440,24 @@ is loaded automatically. So:
 
 ## 11. Security model
 
-- The model's only output that reaches execution is `journeys.json`, which the engine
-  validates against a schema and against the route table. No model text reaches a shell.
+- The model's only output that reaches execution is `journeys.json` and `notes.json`, which
+  the engine validates (schema, route table, text rules). They reach the shell only as the
+  body of a quoted heredoc (`<<'DOWNSTREAM_JSON'`), so the shell expands nothing in them; the
+  prompt requires one-line JSON, and JSON cannot hold a raw newline inside a string, so valid
+  output cannot contain the terminator line. A model that ignored the prompt could still
+  write a terminator line; the platform's sandbox and the CODEOWNERS rules are the remaining
+  limits. A flow file-writing tool would close this gap; none is used yet.
+- The engine is built from the merge request's own checkout, so a merge request could change
+  the engine that measures it. Reviewers see engine changes in the diff; building the engine
+  from the target branch is not done yet.
+- `agentnotes.md` and `downstream.yml` are read from the **base** commit (`git show
+  <base>:agentnotes.md`, `target.Load`), so a merge request cannot change them for its own
+  run. That needs the base commit in the flow's workspace; the engine fetches it from `origin`
+  if the clone lacks it (untested on the platform).
 - The engine sends traffic only to `127.0.0.1`. No absolute URLs are accepted in journeys.
 - Diffs, issue text, notes and file contents are treated as data. The prompt says so, and
   the engine never interprets them as commands.
 - Files that steer the agent are protected by CODEOWNERS and the flow does not edit them.
-  The workspace is checked out on the merge request **source** branch (verified), so a
-  plain `cat agentnotes.md` reads the source branch's copy, and a merge request could
-  propose a change to the very file that steers the agent reviewing it. The intended
-  mitigation is to read the target branch's copy with `git show` against the target ref.
-  Whether that ref is available in the workspace is **unverified**; until it is tested,
-  the file is protected by CODEOWNERS only.
 - The network allowlist is wide: with `include_recommended_allowed: true` the sandbox
   config in run3 line 91 lists 175 entries. That is acceptable for the hackathon and noted
   as a hardening item (T-14): narrow it to the hosts actually needed once the engine's
@@ -513,7 +519,7 @@ AGENTS.md              rules for agents working in this repo
 agentnotes.md          operating notes the flow reads each run
 .gitlab/duo/           agent-config.yml (verified)
 .gitlab/CODEOWNERS     protects the files above
-flows/                 probe.yml (verified), downstream.draft.yml (not enabled)
+flows/                 probe.yml (verified), downstream.yml (not yet run)
 docs/                  details.md, requirements.md, userflow.md
 evidence/              raw logs and the results table
 scripts/               validate_yaml.py, check_evidence.py

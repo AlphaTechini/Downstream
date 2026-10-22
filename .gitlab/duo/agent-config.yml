@@ -8,6 +8,12 @@
 #   - With the network_policy below: github.com, dl.k6.io, registry.npmjs.org,
 #     proxy.golang.org, pypi.org and gitlab.com were all reachable from run_command.
 #
+# NOT YET TESTED: the two Go lines. They fetch the Go 1.26.10 toolchain from the
+# Go module proxy with the image's own go command, then put that toolchain's go
+# first on PATH, because the engine's go.mod needs Go 1.26 and the image has
+# Go 1.22. Run here, outside the sandbox, so the download can write the module
+# cache; inside the sandbox the flow builds with GOTOOLCHAIN=local.
+#
 # NOT YET TESTED: narrowing the allowlist (include_recommended_allowed: false
 # plus an explicit list). That is a hardening step, not a requirement.
 setup_script:
@@ -15,6 +21,8 @@ setup_script:
   - curl -sSL -o /tmp/k6.tgz https://github.com/grafana/k6/releases/download/v0.56.0/k6-v0.56.0-linux-amd64.tar.gz
   - tar -xzf /tmp/k6.tgz -C /tmp --strip-components=1 k6-v0.56.0-linux-amd64/k6
   - mv /tmp/k6 /tmp/bin/k6
+  - GOTOOLCHAIN=go1.26.10 go version
+  - ln -sf "$(GOTOOLCHAIN=go1.26.10 go env GOROOT)/bin/go" /tmp/bin/go
 network_policy:
   include_recommended_allowed: true
   allowed_domains:
