@@ -54,6 +54,7 @@ func TestClassifyP95(t *testing.T) {
 		{"inside band", vals{100, 130, 150}, model.ClassNoise, -20, -100.0 * 20 / 150, 50, "inside the range"},
 		{"just over band, small", vals{100, 160, 140}, model.ClassNoise, 20, 100.0 * 20 / 140, 40, "not more than 2 times the noise band of 40.0 ms"},
 		{"withheld", vals{100, 400, 180}, model.ClassWithheld, 220, 100.0 * 220 / 180, 80, "baseline spread rule"},
+		{"spread below floor is not withheld", vals{2.6, 536.6, 4.6}, model.ClassRegression, 532, 100.0 * 532 / 4.6, 2, "more than 2 times the noise band of 2.0 ms"},
 		{"improved", vals{200, 80, 204}, model.ClassImproved, 80 - 204, 100.0 * (80 - 204) / 204, 4, "better than the better baseline by 120.0 ms"},
 	}
 	for _, tc := range cases {
