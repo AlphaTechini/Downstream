@@ -100,6 +100,7 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 | NFR-05 | Raw evidence is committed unaltered except for documented redactions. | `scripts/check_evidence.py` flags unredacted addresses. |
 | NFR-06 | `make verify` finishes in about 30 seconds on a clean machine with Python and PyYAML. | CI and local run. |
 | NFR-07 | Every claim in the README links to committed evidence or says "not verified / not built". | README claims table; `check_evidence.py` confirms the linked files exist. |
+| NFR-08 | README, `docs/CLAIMS.md` and the status tables are updated in the same commit as any feature, following `agentnotes.md` "Keeping the README honest". | Review of each feature commit; `make verify` passes. |
 
 ---
 
@@ -121,7 +122,7 @@ and in [details.md](details.md).
 | T-09 | Mention inside an issue starts the flow; the goal format for issues; the flow can read the issue body and reply in the thread (`create_issue_note`). | Open | |
 | T-10 | `create_commit` (or equivalent) to the merge request source branch from a custom flow. | Open | |
 | T-11 | Credit cost of one full run; re-read the credits dashboard after the first full engine run. | Open | |
-| T-12 | Official brief: repository visibility, licence, and what "deployment" means for a flow-based entry. | Open | |
+| T-12 | Official brief: re-read the live Devpost Rules. Earlier research (2026-10-21/22, not re-read since) lists as hard gates: genuine Duo Agent Platform use, a public MIT-licensed GitLab project, visible CI/CD pipeline history, a demo video under three minutes. Still to verify: that text, the GitLab showcase project's visibility and licence, and what "deployment" means for a flow-based entry. | Partly answered, unverified | |
 | T-13 | Pages publishing on the Free tier (default branch only). | Open, optional | |
 | T-14 | Narrowed allowlist (`include_recommended_allowed: false` plus explicit hosts) still allows the engine's needs. | Open, hardening | |
 | T-15 | `AGENTS.md` injection through `context:inputs.user_rule` in a custom flow. | Open, optional (not depended on) | |

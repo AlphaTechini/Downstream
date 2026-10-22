@@ -2,8 +2,8 @@
 """Check that documentation points at evidence that exists, and that evidence is clean.
 
 1. Every relative markdown link in README.md, docs/ and evidence/ resolves to a file.
-2. Every row of the README claims table whose status starts with "Verified" links to at
-   least one file under evidence/.
+2. Every row of a README table with Status and Proof columns whose status starts with
+   "Verified" links to at least one file under evidence/. docs/CLAIMS.md must exist.
 3. Evidence files contain no email address other than the platform's noreply address
    and the <redacted-email> placeholder.
 4. Every job log under evidence/day0/ shows the CI job succeeded.
@@ -47,23 +47,33 @@ def check_links(root, errors):
 
 
 def check_claims(root, errors):
+    """Every README table that has Status and Proof columns is a claims table.
+    A row whose status starts with "Verified" must link to a file under evidence/."""
     readme = root / "README.md"
     if not readme.exists():
         errors.append("README.md is missing")
         return
-    rows = 0
+    status_i = proof_i = None
+    verified_rows = 0
     for n, line in enumerate(readme.read_text(encoding="utf-8").splitlines(), 1):
         if not line.startswith("|"):
+            status_i = proof_i = None
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 3:
+        lowered = [c.lower() for c in cells]
+        if "status" in lowered and "proof" in lowered:
+            status_i, proof_i = lowered.index("status"), lowered.index("proof")
             continue
-        if cells[1].lower().startswith("verified"):
-            rows += 1
-            if "](evidence/" not in cells[2]:
+        if status_i is None or len(cells) <= max(status_i, proof_i):
+            continue
+        if cells[status_i].lower().startswith("verified"):
+            verified_rows += 1
+            if "](evidence/" not in cells[proof_i]:
                 errors.append(f"README.md:{n}: 'Verified' claim without a link to evidence/")
-    if rows == 0:
-        errors.append("README.md: no 'Verified' rows found in the claims table")
+    if verified_rows == 0:
+        errors.append("README.md: no 'Verified' rows found in a Status/Proof table")
+    if not (root / "docs" / "CLAIMS.md").exists():
+        errors.append("docs/CLAIMS.md is missing")
 
 
 def check_evidence_files(root, errors):

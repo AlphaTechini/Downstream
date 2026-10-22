@@ -30,6 +30,8 @@ working unless README.md's claims table says so and links committed evidence.
    implemented. Say "not built" or "not verified" instead.
 7. The engine only sends traffic to `127.0.0.1`. Do not add any other target.
 8. Spend nothing. No paid services, no paid tiers.
+9. Update `README.md`, `docs/CLAIMS.md` and the status tables in the same commit as any
+   feature or platform test. Procedure: `agentnotes.md`, "Keeping the README honest".
 
 ## Conventions
 
