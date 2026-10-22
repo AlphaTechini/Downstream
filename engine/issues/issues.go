@@ -1,4 +1,4 @@
-// Package issues builds one issue per regression from run.json, scan.json and
+// Package issues builds the issues for the regressions in run.json, scan.json and
 // notes.json, and reads back the hidden marker that makes an issue
 // self-contained. The engine places the model's text; it never computes from it.
 package issues
@@ -19,9 +19,10 @@ import (
 
 // Issue is one issue to open.
 type Issue struct {
-	FindingID string
-	Title     string
-	Body      string
+	FindingID string   `json:"finding_id"` // the group's headline finding
+	Title     string   `json:"title"`
+	Body      string   `json:"body"`
+	Steps     []string `json:"steps"` // finding IDs covered: each step's headline
 }
 
 const markerPrefix = "<!-- downstream:v1 "
@@ -32,9 +33,11 @@ var (
 	shaRe     = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 )
 
-// Build returns one issue per regressed step, ordered by headline finding ID.
-// When no step regressed but the app process did, it returns one combined
-// app issue. notes may be nil; each issue then says no notes were supplied.
+// Build returns the issues for the run: regressed steps are grouped by the
+// changed functions on the routes they call, and each group becomes one issue
+// (at most maxIssues, the groups with the most steps first). When no step
+// regressed but the app process did, there is one app issue. notes may be nil;
+// each issue then says no notes were supplied.
 func Build(run model.Run, scan *model.Scan, notes *model.Notes, mr int, starter string) ([]Issue, error) {
 	starter = strings.TrimPrefix(starter, "@")
 	if !starterRe.MatchString(starter) {
@@ -47,24 +50,21 @@ func Build(run model.Run, scan *model.Scan, notes *model.Notes, mr int, starter 
 		return nil, errors.New("run.json base and head must be 7 to 40 lowercase hex characters")
 	}
 	if notes != nil {
-		if err := ValidateNotes(*notes, run); err != nil {
+		if err := ValidateNotes(*notes, run, scan); err != nil {
 			return nil, err
 		}
 	}
 
-	groups, app := regressionGroups(run)
-	var out []Issue
-	if len(groups) == 0 && len(app) > 0 {
-		groups, app = [][]model.Finding{app}, nil
-	}
-	for _, g := range groups {
+	plan := PlanIssues(run, scan)
+	out := make([]Issue, 0, len(plan.Groups))
+	for _, g := range plan.Groups {
 		var note *model.Note
 		if notes != nil {
-			if n, ok := notes.Items[g[0].ID]; ok {
+			if n, ok := notes.Items[g.Headline.ID]; ok {
 				note = &n
 			}
 		}
-		is, err := build(run, scan, note, g, app, mr, starter)
+		is, err := build(run, scan, note, g, mr, starter)
 		if err != nil {
 			return nil, err
 		}
@@ -73,79 +73,9 @@ func Build(run model.Run, scan *model.Scan, notes *model.Notes, mr int, starter 
 	return out, nil
 }
 
-// headlineOrder and appOrder say which metric speaks for a step or the app.
-var (
-	headlineOrder = []string{model.MetricFailures, model.MetricP95, model.MetricMean, model.MetricP50}
-	appOrder      = []string{model.MetricRSS, model.MetricCPU}
-)
-
-// Headlines returns the finding that names each issue Build would open: one per
-// regressed step (failures, p95, mean, p50 in that order of preference), or, when
-// no step regressed, one for the app process (peak RSS, then CPU). Notes are
-// keyed by these IDs. The result is ordered by ID.
-func Headlines(run model.Run) []model.Finding {
-	groups, app := regressionGroups(run)
-	if len(groups) == 0 && len(app) > 0 {
-		groups = [][]model.Finding{app}
-	}
-	out := make([]model.Finding, 0, len(groups))
-	for _, g := range groups {
-		out = append(out, g[0])
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out
-}
-
-// regressionGroups collects regression findings per (journey, step), headline
-// first, and the app-wide regressions separately, also headline first. Groups
-// are ordered by headline ID.
-func regressionGroups(run model.Run) (groups [][]model.Finding, app []model.Finding) {
-	type key struct{ journey, step string }
-	by := map[key][]model.Finding{}
-	for _, f := range run.Findings {
-		if f.Class != model.ClassRegression {
-			continue
-		}
-		if f.Journey == "" {
-			app = append(app, f)
-			continue
-		}
-		k := key{f.Journey, f.Step}
-		by[k] = append(by[k], f)
-	}
-	for _, g := range by {
-		groups = append(groups, rank(g, headlineOrder))
-	}
-	sort.Slice(groups, func(i, j int) bool { return groups[i][0].ID < groups[j][0].ID })
-	return groups, rank(app, appOrder)
-}
-
-// rank orders findings by the preferred metric order; metrics not in the list
-// follow, by ID, so no regression is dropped.
-func rank(fs []model.Finding, order []string) []model.Finding {
-	pos := func(m string) int {
-		for i, o := range order {
-			if o == m {
-				return i
-			}
-		}
-		return len(order)
-	}
-	out := append([]model.Finding(nil), fs...)
-	sort.SliceStable(out, func(i, j int) bool {
-		pi, pj := pos(out[i].Metric), pos(out[j].Metric)
-		if pi != pj {
-			return pi < pj
-		}
-		return out[i].ID < out[j].ID
-	})
-	return out
-}
-
-func build(run model.Run, scan *model.Scan, note *model.Note, group, app []model.Finding, mr int, starter string) (Issue, error) {
-	f := group[0]
+func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, starter string) (Issue, error) {
+	f := g.Headline
 	var j model.Journey
-	label := "app"
 	if f.Journey != "" {
 		found := false
 		for _, rj := range run.Journeys {
@@ -156,10 +86,6 @@ func build(run model.Run, scan *model.Scan, note *model.Note, group, app []model
 		}
 		if !found {
 			return Issue{}, fmt.Errorf("finding %s: journey %q is not in run.json, so the issue cannot be made self-contained", f.ID, f.Journey)
-		}
-		label = oneLine(j.Goal)
-		if label == "" {
-			label = j.ID
 		}
 	}
 
@@ -185,6 +111,36 @@ func build(run model.Run, scan *model.Scan, note *model.Note, group, app []model
 
 	w("Run started by @" + starter + " on !" + strconv.Itoa(mr) + ".")
 	w("")
+	w("**Changed functions**")
+	w("")
+	for _, l := range changedFuncLines(g, scan) {
+		w(l)
+	}
+	w("")
+	w("**Measured**")
+	w("")
+	if len(g.Steps) > 0 {
+		w("| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |")
+		w("|---|---|---|---|---|---|---|---|")
+		for _, s := range g.Steps {
+			w("| " + cell(s.Journey) + " | " + cell(s.Step) + " | " + metricWords(s.Metric) +
+				" | " + figure(s.B1, s.Unit) + " | " + figure(s.B2, s.Unit) + " | " + figure(s.C, s.Unit) +
+				" | " + figure(s.Band, s.Unit) + " | " + cell(deltaWords(s)) + " |")
+		}
+		w("")
+		w("Each row is the step's headline regression (failures, then p95, mean, p50). Change is against the worse baseline run.")
+		w("")
+	}
+	if len(g.App) > 0 {
+		w("App process:")
+		w("")
+		for _, a := range g.App {
+			measuredLines(w, a)
+		}
+		w("")
+	}
+	w("Rule for the headline (" + code(f.ID) + "): " + oneLine(f.Reason))
+	w("")
 	w("**Repro**")
 	w("")
 	if f.Journey != "" {
@@ -198,11 +154,15 @@ func build(run model.Run, scan *model.Scan, note *model.Note, group, app []model
 		w("downstream run --base " + run.Base + " --head " + run.Head + " --journeys journeys.json --out run.json")
 		w("```")
 		w("")
-		w("`journeys.json` is the journey embedded in this issue's hidden marker. Recover it with:")
+		w("`journeys.json` is the journey embedded in this issue's hidden marker (the journey of the headline step). Recover it with:")
 		w("")
 		w("```")
 		w("downstream marker parse --journeys-out journeys.json < issue.md")
 		w("```")
+		if g.otherJourneys(f.Journey) {
+			w("")
+			w("Other steps in the table belong to other journeys of the run; their definitions are in `run.json` under `journeys`.")
+		}
 	} else {
 		w("This figure covers the whole app process across every journey of the run, so the marker holds no single journey. " +
 			"The journeys that were run are listed in `run.json` under `journeys`.")
@@ -210,27 +170,6 @@ func build(run model.Run, scan *model.Scan, note *model.Note, group, app []model
 		w("```")
 		w("downstream run --base " + run.Base + " --head " + run.Head + " --journeys journeys.json --out run.json")
 		w("```")
-	}
-	w("")
-	w("**Measured**")
-	w("")
-	if f.Journey != "" {
-		w("- Step: " + code(f.Step))
-	}
-	for _, g := range group {
-		measuredLines(w, g, "")
-	}
-	if len(app) > 0 {
-		w("- App process:")
-		for _, g := range app {
-			measuredLines(w, g, "  ")
-		}
-	}
-	w("")
-	w("**Changed functions on this path**")
-	w("")
-	for _, l := range changedFuncs(run, scan, f) {
-		w(l)
 	}
 	w("")
 	w("**Likely cause**")
@@ -264,32 +203,41 @@ func build(run model.Run, scan *model.Scan, note *model.Note, group, app []model
 	w("")
 	w(mline)
 
-	return Issue{FindingID: f.ID, Title: title(label, f), Body: b.String()}, nil
+	ids := make([]string, 0, len(g.Steps))
+	for _, s := range g.Steps {
+		ids = append(ids, s.ID)
+	}
+	if len(ids) == 0 {
+		ids = append(ids, f.ID)
+	}
+	sort.Strings(ids)
+	return Issue{FindingID: f.ID, Title: g.title(run), Body: b.String(), Steps: ids}, nil
 }
 
-func measuredLines(w func(string), f model.Finding, indent string) {
-	w(indent + "- " + metricWords(f.Metric) + ": B1 " + figure(f.B1, f.Unit) + ", B2 " + figure(f.B2, f.Unit) +
+func measuredLines(w func(string), f model.Finding) {
+	w("- " + metricWords(f.Metric) + ": B1 " + figure(f.B1, f.Unit) + ", B2 " + figure(f.B2, f.Unit) +
 		", C " + figure(f.C, f.Unit) + ", noise band " + figure(f.Band, f.Unit) +
 		", change " + deltaWords(f) + " against the worse baseline")
-	w(indent + "  - Rule: " + oneLine(f.Reason))
 }
 
-func title(label string, f model.Finding) string {
+func cell(s string) string {
+	return strings.ReplaceAll(oneLine(s), "|", `\|`)
+}
+
+// amountWords is "up 410.5 ms (+853%)" or "up 30 (was 0)".
+func amountWords(f model.Finding) string {
 	dir := "up"
 	if f.Delta < 0 {
 		dir = "down"
 	}
-	var amt string
-	switch f.Unit {
-	case "count":
-		amt = strconv.FormatFloat(abs(f.Delta), 'f', 0, 64) + " (was " + strconv.FormatFloat(max(f.B1, f.B2), 'f', 0, 64) + ")"
-	default:
-		amt = figure(abs(f.Delta), f.Unit)
-		if max(f.B1, f.B2) != 0 {
-			amt += " (" + signed(f.DeltaPct, 0) + "%)"
-		}
+	if f.Unit == "count" {
+		return dir + " " + strconv.FormatFloat(abs(f.Delta), 'f', 0, 64) + " (was " + strconv.FormatFloat(max(f.B1, f.B2), 'f', 0, 64) + ")"
 	}
-	return "[Downstream] " + label + ": " + metricWords(f.Metric) + " " + dir + " " + amt
+	amt := figure(abs(f.Delta), f.Unit)
+	if max(f.B1, f.B2) != 0 {
+		amt += " (" + signed(f.DeltaPct, 0) + "%)"
+	}
+	return dir + " " + amt
 }
 
 func deltaWords(f model.Finding) string {
@@ -362,63 +310,6 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 func code(s string) string {
 	return "`" + strings.ReplaceAll(oneLine(s), "`", "'") + "`"
-}
-
-// changedFuncs lists changed functions on routes the journey's steps hit
-// (every kept journey for app-wide findings).
-func changedFuncs(run model.Run, scan *model.Scan, f model.Finding) []string {
-	if scan == nil {
-		return []string{"Not available: no scan was supplied."}
-	}
-	var steps []model.Step
-	for _, j := range run.Journeys {
-		if f.Journey == "" || j.ID == f.Journey {
-			steps = append(steps, j.Steps...)
-		}
-	}
-	routesOf := map[string]map[string]bool{}
-	for _, list := range [][]model.Impact{scan.Changed, scan.Affected} {
-		for _, im := range list {
-			if len(im.ChangedFuncs) == 0 {
-				continue
-			}
-			hit := false
-			for _, s := range steps {
-				if routeMatches(im.Method, im.Path, s.Method, s.Path) {
-					hit = true
-					break
-				}
-			}
-			if !hit {
-				continue
-			}
-			rname := strings.TrimSpace(im.Method + " " + im.Path)
-			for _, fn := range im.ChangedFuncs {
-				if routesOf[fn] == nil {
-					routesOf[fn] = map[string]bool{}
-				}
-				routesOf[fn][rname] = true
-			}
-		}
-	}
-	if len(routesOf) == 0 {
-		return []string{"None: no changed function was found on the call path of the routes this journey calls."}
-	}
-	fns := make([]string, 0, len(routesOf))
-	for fn := range routesOf {
-		fns = append(fns, fn)
-	}
-	sort.Strings(fns)
-	var out []string
-	for _, fn := range fns {
-		rs := make([]string, 0, len(routesOf[fn]))
-		for r := range routesOf[fn] {
-			rs = append(rs, code(r))
-		}
-		sort.Strings(rs)
-		out = append(out, "- "+code(fn)+" on "+strings.Join(rs, ", "))
-	}
-	return out
 }
 
 // routeMatches reports whether a request (method, path) is served by a
@@ -594,9 +485,9 @@ var (
 
 // ValidateNotes checks notes.json before any of it is placed in an issue. Keys
 // must be headline finding IDs (see Headlines).
-func ValidateNotes(n model.Notes, run model.Run) error {
+func ValidateNotes(n model.Notes, run model.Run, scan *model.Scan) error {
 	headline := map[string]bool{}
-	for _, f := range Headlines(run) {
+	for _, f := range Headlines(run, scan) {
 		headline[f.ID] = true
 	}
 	known := map[string]model.Finding{}
@@ -617,7 +508,7 @@ func ValidateNotes(n model.Notes, run model.Run) error {
 		case f.Class != model.ClassRegression:
 			return fmt.Errorf("notes: %q is not a regression; notes are only for regressions", k)
 		case !headline[k]:
-			return fmt.Errorf("notes: %q is not a headline finding; one issue is opened per regressed step and notes are keyed by its headline finding (see Headlines)", k)
+			return fmt.Errorf("notes: %q is not a headline finding; issues are opened per group of regressed steps and notes are keyed by the group's headline finding (see Headlines)", k)
 		}
 		if l := utf8.RuneCountInString(strings.TrimSpace(note.LikelyCause)); l < 1 || l > 600 {
 			return fmt.Errorf("notes: %q: likely_cause must be 1 to 600 characters, got %d", k, l)

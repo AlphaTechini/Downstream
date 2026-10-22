@@ -344,13 +344,17 @@ line is a hidden marker:
 <!-- downstream:v1 {"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95","step":"..."} -->
 ```
 
-Implemented in `engine/issues`: one issue per regressed **step** (not per metric). The
-headline metric, which gives the title, is picked in the order failures, p95, mean, p50; the
-other regressed metrics of that step are listed under it. App-wide regressions (CPU seconds,
-peak RSS) get one issue only when no step regressed; otherwise they are listed in each step
-issue. The likely cause and fix options come from a `notes.json` the model writes, keyed by
-headline finding ID and validated by the engine: no comment or fence markup, no table rows,
-and no figures with units, so the model cannot add numbers. `ParseMarker` accepts a whole
+Implemented in `engine/issues`. One change usually slows many steps for one reason, so
+issues are grouped by cause rather than opened per step: regressed steps are keyed by the
+changed functions (from `scan.json`) on the routes they call, and each key gets one issue.
+Steps whose routes reach no changed function share one more issue ("slower on routes outside
+the diff's call paths"); on the demo that group holds public reads slowed by CPU contention.
+At most 5 issues per run. Each issue has an engine-rendered table of every step in the group,
+and its headline (the title and the marker) is the step with the largest relative change,
+with failures always first. The likely cause and fix options come from a `notes.json` the
+model writes, keyed by headline finding ID and validated by the engine: no comment or fence
+markup, no table rows, and no figures with units, so the model cannot add numbers.
+`ParseMarker` accepts a whole
 issue body or the bare marker JSON. `Questions` writes one merge request question per
 trade-off journey.
 

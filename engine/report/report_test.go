@@ -85,6 +85,12 @@ func TestFiguresAppear(t *testing.T) {
 		if f.Journey == "" && f.Class == model.ClassNoise {
 			continue
 		}
+		// p50 and mean rows are left out when they repeat the p95 verdict.
+		if f.Metric == model.MetricP50 || f.Metric == model.MetricMean {
+			if p, ok := findingByID(run, f.Journey+"."+f.Step+"."+model.MetricP95); ok && p.Class == f.Class {
+				continue
+			}
+		}
 		for _, v := range []float64{f.B1, f.C, f.B2, f.Band} {
 			s := val(v, f.Unit)
 			if !strings.Contains(out, s) {
@@ -209,14 +215,19 @@ func TestChangeWithoutPercentWhenBaselineZero(t *testing.T) {
 
 func TestSummaryAndIssuesToOpen(t *testing.T) {
 	run := load[model.Run](t, "run_basic.json")
-	out := Render(run, nil)
+	scan := load[model.Scan](t, "scan_basic.json")
+	out := Render(run, &scan)
 	for _, w := range []string{
 		"**Findings:** regressed steps 2, trade-off journeys 1, improved metrics 0, withheld metrics 3. App process regressions: 2.",
-		"**Issues to open**\n\n- `shelf.add_book.p95_ms`\n- `signin.login.failures`\n",
+		"**Issues to open**\n\n- `shelf.add_book.p95_ms`\n- `signin.login.failures`\n\n2 regressed steps are grouped into 2 by the changed functions",
 	} {
 		if !strings.Contains(out, w) {
 			t.Errorf("missing %q", w)
 		}
+	}
+	// without a scan both steps share one group, headed by the failures finding
+	if out := Render(run, nil); !strings.Contains(out, "**Issues to open**\n\n- `signin.login.failures` (2 steps)\n\n2 regressed steps are grouped into 1 by") {
+		t.Errorf("no-scan grouping wrong:\n%s", out)
 	}
 
 	// no regressions: no app clause, issues "none"
@@ -227,7 +238,7 @@ func TestSummaryAndIssuesToOpen(t *testing.T) {
 		}
 	}
 	run.Findings = keep
-	out = Render(run, nil)
+	out = Render(run, &scan)
 	if !strings.Contains(out, "regressed steps 0, trade-off journeys 1, improved metrics 0, withheld metrics 3.\n") {
 		t.Errorf("summary without regressions wrong:\n%s", out)
 	}
@@ -252,5 +263,45 @@ func TestSummaryAndIssuesToOpen(t *testing.T) {
 	if !strings.Contains(out, "regressed steps 0,") || !strings.Contains(out, "App process regressions: 2.") ||
 		!strings.Contains(out, "**Issues to open**\n\n- `app.peak_rss_mb`\n") {
 		t.Errorf("app-only summary wrong:\n%s", out)
+	}
+}
+
+func findingByID(run model.Run, id string) (model.Finding, bool) {
+	for _, f := range run.Findings {
+		if f.ID == id {
+			return f, true
+		}
+	}
+	return model.Finding{}, false
+}
+
+func TestIssuesToOpenCap(t *testing.T) {
+	run := model.Run{
+		Settings: model.Settings{VUs: 1, DurationSeconds: 5},
+		Passes:   []model.Pass{{Label: "B1"}, {Label: "C"}, {Label: "B2"}},
+	}
+	scan := &model.Scan{}
+	for g := 1; g <= 7; g++ {
+		jid := "j" + strconv.Itoa(g)
+		path := "/r" + strconv.Itoa(g)
+		scan.Changed = append(scan.Changed, model.Impact{Route: model.Route{Method: "GET", Path: path}, ChangedFuncs: []string{"f" + strconv.Itoa(g)}})
+		j := model.Journey{ID: jid, Goal: jid}
+		for s := 1; s <= g; s++ {
+			name := "s" + strconv.Itoa(s)
+			j.Steps = append(j.Steps, model.Step{Name: name, Method: "GET", Path: path})
+			run.Findings = append(run.Findings, model.Finding{ID: jid + "." + name + ".p95_ms", Journey: jid, Step: name,
+				Metric: model.MetricP95, Unit: "ms", Delta: 1, Class: model.ClassRegression})
+		}
+		run.Journeys = append(run.Journeys, j)
+	}
+	out := Render(run, scan)
+	for _, w := range []string{
+		"28 regressed steps are grouped into 7 by",
+		"The 5 largest groups are listed. 2 other groups (3 steps) are left out",
+		"- `j7.s1.p95_ms` (7 steps)",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q in:\n%s", w, out)
+		}
 	}
 }
