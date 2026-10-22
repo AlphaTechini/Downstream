@@ -36,7 +36,7 @@ by step, and the demo script: [docs/userflow.md](docs/userflow.md). Requirements
 ## 30-second check
 
 ```bash
-git clone https://github.com/AlphaTechini/downstream && cd downstream
+git clone https://github.com/AlphaTechini/Downstream && cd Downstream
 pip install pyyaml
 make verify
 ```
