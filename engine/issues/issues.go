@@ -221,7 +221,7 @@ func measuredLines(w func(string), f model.Finding) {
 }
 
 func cell(s string) string {
-	return strings.ReplaceAll(oneLine(s), "|", `\\|`)
+	return strings.ReplaceAll(oneLine(s), "|", `\|`)
 }
 
 // amountWords is "up 410.5 ms (+853%)" or "up 30 (was 0)".
