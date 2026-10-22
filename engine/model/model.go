@@ -114,6 +114,7 @@ type Run struct {
 // Settings records how the run was configured.
 type Settings struct {
 	VUs             int        `json:"vus"`
+	Iterations      int        `json:"iterations"` // journey iterations per VU in each pass
 	DurationSeconds int        `json:"duration_seconds"`
 	K6Version       string     `json:"k6_version"`
 	Thresholds      Thresholds `json:"thresholds"`
