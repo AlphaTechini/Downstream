@@ -1,6 +1,72 @@
+stages:
+  - verify
+  - test
+  - e2e
+
 verify:
+  stage: verify
   image: python:3.12-slim
   script:
     - apt-get update -qq && apt-get install -y -qq make
     - pip install --quiet pyyaml
     - make verify
+
+go-test:
+  stage: test
+  image: golang:1.26
+  script:
+    - test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+    - go vet ./...
+    - go test -short ./...
+
+# k6 comes from its official image and is handed to the next stage as an
+# artifact, so the engine job can use the golang image.
+k6:
+  stage: test
+  image:
+    name: grafana/k6:0.56.0
+    entrypoint: [""]
+  script:
+    - mkdir -p bin
+    - cp /usr/bin/k6 bin/k6
+    - bin/k6 version
+  artifacts:
+    paths:
+      - bin/k6
+    expire_in: 1 day
+
+# Runs the engine end to end on the demo app: the pipeline commit is the
+# baseline, and the same commit with one patch from examples/changes applied is
+# the candidate. raise-hash-cost is a planted regression; clean-change is the
+# control and must come out clean.
+engine-e2e:
+  stage: e2e
+  image: golang:1.26
+  needs: [k6]
+  parallel:
+    matrix:
+      - CHANGE: [raise-hash-cost, clean-change]
+  script:
+    - export PATH="$CI_PROJECT_DIR/bin:$PATH"
+    - git config user.name "Downstream CI"
+    - git config user.email "downstream-ci@example.invalid"
+    - BASE=$(git rev-parse HEAD)
+    - git apply "examples/changes/$CHANGE.patch"
+    - git commit --quiet --all --message "Apply examples/changes/$CHANGE.patch for the end-to-end job"
+    - HEAD_SHA=$(git rev-parse HEAD)
+    - go build -o bin/downstream ./engine/cmd/downstream
+    - mkdir -p out
+    - downstream scan --base "$BASE" --head "$HEAD_SHA" --out out/scan.json
+    - downstream validate --journeys examples/shelf/journeys.example.json --scan out/scan.json
+    - downstream run --base "$BASE" --head "$HEAD_SHA" --journeys examples/shelf/journeys.example.json --out out/run.json || echo "run exited non-zero; the report says where it stopped"
+    - downstream report --run out/run.json --scan out/scan.json --out out/report.md
+    - downstream issues --run out/run.json --scan out/scan.json --mr 1 --starter downstream-ci --out out/issues.json
+    - downstream summary --run out/run.json --scan out/scan.json | tee out/summary.txt
+    - cat out/report.md
+    - grep -qx 'passes=3' out/summary.txt
+    - if [ "$CHANGE" = clean-change ]; then grep -qx 'regression=0' out/summary.txt; else grep -q '^regression=[1-9]' out/summary.txt; fi
+  artifacts:
+    when: always
+    paths:
+      - out/
+    expire_in: 90 days

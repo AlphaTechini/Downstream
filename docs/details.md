@@ -460,6 +460,17 @@ is loaded automatically. So:
   cannot trigger the flow; the README must show recorded evidence runs instead of asking
   anyone to trigger it.
 
+## 11a. CI
+
+`.gitlab-ci.yml` has four jobs. `verify` runs `make verify`. `go-test` runs gofmt, go vet and
+`go test -short ./...` on `golang:1.26`. `k6` copies the k6 binary out of the official
+`grafana/k6:0.56.0` image as an artifact. `engine-e2e` runs twice, once per patch in
+`examples/changes/`: it commits the patch on top of the pipeline commit, then runs `scan`,
+`validate`, `run`, `report`, `issues` and `summary` with the hand-written
+`examples/shelf/journeys.example.json` (no model involved), keeps `out/` as an artifact, and
+fails unless all three passes ran and the planted change has at least one regression and the
+clean change has none. None of these jobs has run yet; their first logs go in `evidence/`.
+
 ---
 
 ## 12. Budget

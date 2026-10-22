@@ -106,7 +106,7 @@ has been run in a logged run with the output committed under `evidence/`. None h
 | FR-41 | `downstream fixcheck` checks the option number only | `engine/issues/issues_test.go` |
 | NFR-02 | `engine/cmd/downstream` takes fixed flags and SHAs only | `engine/cmd/downstream/main_test.go` |
 | NFR-03 | `engine/k6gen` rejects any base URL but `http://127.0.0.1:<port>` | `engine/k6gen/k6gen_test.go` |
-| NFR-04 | `make test` runs gofmt, go vet and the tests | |
+| NFR-04 | `make test` runs gofmt, go vet and the tests; the `go-test` CI job runs the same | `.gitlab-ci.yml` |
 
 ## 3. Non-functional requirements
 
