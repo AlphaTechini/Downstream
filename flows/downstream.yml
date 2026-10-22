@@ -139,8 +139,8 @@ prompts:
             downstream marker parse --journeys-out /tmp/ds/journeys.json < /tmp/ds/marker.json
         V2. get_merge_request for the marker's "mr". If it is not merged, say so and stop.
             Use the merge request's diff_refs.base_sha as <base> and merge_commit_sha (or
-            squash_commit_sha) as <head>, then R8 and R9, and post the report with
-            create_issue_note.
+            squash_commit_sha) as <head>, then R4, R8 and R9 with those SHAs, and post the
+            report with create_issue_note.
       user: |
         Project ID: {{ project_id }}
         Goal: {{ goal }}
