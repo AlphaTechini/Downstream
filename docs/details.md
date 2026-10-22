@@ -122,7 +122,7 @@ Three rules shape everything:
 | k6 | v0.56.0 installed by `setup_script` | Installed and version-checked (day 0); never yet run against an app |
 | Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Demo target `examples/shelf` and root `downstream.yml` written (section 9) |
 | Agent instructions | `AGENTS.md`, `agentnotes.md` | Written |
-| Report | MR notes (tables + Mermaid), issues; optional Pages page | Not built |
+| Report | MR notes (tables + Mermaid), issues; optional Pages page | Report and issue bodies built (`engine/report`, `engine/issues`); posting them from the flow not yet run; Pages not built |
 
 ### 3.2 Engine interface
 
@@ -330,7 +330,8 @@ Two levels, the second only if time allows:
 1. **Journeys added** (posted before the run): plain-English summary per journey.
 2. **Report** (posted after): script-rendered tables: per journey and step, baseline range,
    candidate, change, noise band, verdict; a Mermaid chart comparing p95 per step;
-   discarded journeys; what was not measured; links to the issues opened.
+   discarded journeys; what was not measured; the issues to open (the flow posts the list of
+   issues it opened in a separate note).
 3. **A final note is always posted**, including on failure. A failed run is reported as
    failed, with the engine's error text and the step it failed at.
 
@@ -342,11 +343,13 @@ The chart is a Mermaid `xychart-beta` block, capped at 20 steps; whether GitLab'
 version renders `xychart-beta` in a note is **unverified**. A golden-file test checks the
 output, and a second test checks that every number in it is derived from the input.
 
-### 7.2 Issues (one per regression)
+### 7.2 Issues (one per cause)
 
-Title: `[Downstream] <journey>: <metric> <direction> <amount>`. Body, in order: who started
-the run (tagged with `@username` so they are notified), the repro, baseline and candidate
-figures with the noise band, a likely cause, numbered fix options, how to reply. The last
+Title: `[Downstream] <journey>: <metric> <direction> <amount>` for a single step, or
+`[Downstream] <N> steps slower via <changed functions>: worst <step> ...` for a group. Body, in
+order: who started the run (tagged with `@username` so they are notified), the changed
+functions, the figures for every step in the group with the noise band, the repro, a likely
+cause, numbered fix options, how to reply. The last
 line is a hidden marker:
 
 ```html
@@ -397,8 +400,9 @@ built-in Developer flow creating branches, commits and a Draft MR on day 0 (scre
 not committed, so this is not in `evidence/`), so the capability exists on the platform;
 whether it is reachable from a custom flow's toolset is the open question.
 
-Fix options are written by the model and checked by the engine only for whether they apply
-cleanly. The report does not claim an option is correct; it claims what the rerun measured.
+Fix options are written by the model. The engine checks only that option N exists
+(`downstream fixcheck`); it does not check that a change applies or builds, and applying a
+change from the flow is not built. The report does not claim an option is correct; it claims what the rerun measured.
 
 ---
 

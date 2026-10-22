@@ -125,7 +125,7 @@ has been run in a logged run with the output committed under `evidence/`. None h
 
 ## 4. Platform tests
 
-Done means the output is committed under `evidence/`. IDs match references in the flow draft
+Done means the output is committed under `evidence/`. IDs match references in the flow
 and in [details.md](details.md).
 
 | ID | Test | Status | Evidence |
