@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "base": "1111111122223333444455556666777788889999",
+  "head": "aaaaaaaabbbbccccddddeeeeffff000011112222",
+  "started_at": "2026-10-22T09:00:00Z",
+  "ended_at": "2026-10-22T09:00:07Z",
+  "settings": {
+    "vus": 2,
+    "duration_seconds": 15,
+    "k6_version": "v0.56.0",
+    "thresholds": {
+      "band_multiplier": 2,
+      "min_relative": 0.2,
+      "min_latency_ms": 10,
+      "min_memory_mb": 10,
+      "max_baseline_spread": 0.5
+    }
+  },
+  "journeys": [],
+  "discarded": [],
+  "passes": [],
+  "findings": [],
+  "not_measured": [
+    "DB time: not measured; the target exposes no database timing."
+  ],
+  "error": {
+    "stage": "build (head)",
+    "message": "go build: examples/shelf/store/store.go:41:2: undefined: shelfTable\n```\nexit status 1"
+  }
+}
