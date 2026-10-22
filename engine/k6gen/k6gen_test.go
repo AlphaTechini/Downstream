@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -62,6 +63,9 @@ func TestScriptContents(t *testing.T) {
 		"export function handleSummary(data)",
 		"per-vu-iterations",
 		`"id":"signup"`,
+		"maxRedirects: 0,",
+		"gracefulStop: '5s',",
+		"timeout: '20s',",
 		"summaryTrendStats: ['count', 'avg', 'med', 'p(95)', 'min', 'max']",
 		"'ds_' + id + '_duration'",
 	} {
@@ -302,5 +306,60 @@ func TestK6Integration(t *testing.T) {
 			t.Errorf("uniq not substituted or not unique: %q", tok)
 		}
 		seen[tok] = true
+	}
+}
+
+func TestK6DoesNotFollowRedirects(t *testing.T) {
+	k6 := findK6()
+	if k6 == "" {
+		t.Skip("k6 not installed")
+	}
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+	var elsewhere atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhere.Add(1)
+	}))
+	defer other.Close()
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/x", http.StatusFound)
+	}))
+	defer first.Close()
+
+	f := model.JourneyFile{Version: 1, Journeys: []model.Journey{{ID: "r", Goal: "g", WhyIncluded: "w", Steps: []model.Step{
+		{Name: "go", Method: "GET", Path: "/start", ExpectStatus: 200},
+	}}}}
+	o := opts()
+	o.BaseURL = first.URL
+	script, err := Script(f, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "script.js"), []byte(script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, k6, "run", "-q", "--no-color", "--no-usage-report", "--log-output=none", "script.js")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "K6_NO_USAGE_REPORT=true")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("k6: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "steps.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps, err := ParseSummary(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if steps[0].Count == 0 || steps[0].Failures != steps[0].Count {
+		t.Errorf("a redirect should be a failed step: %+v", steps[0])
+	}
+	if n := elsewhere.Load(); n != 0 {
+		t.Errorf("%d requests followed the redirect", n)
 	}
 }

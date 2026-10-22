@@ -269,9 +269,14 @@ Implemented in `engine/runner`. Each commit is extracted with `git archive` into
 directory, so the repository and its working tree are never changed. The app is started with
 `exec` so its process is the one measured, on a free port on 127.0.0.1, and stopped with
 SIGTERM then SIGKILL. In each pass every journey is its own k6 scenario with a fixed number of
-iterations per VU (`downstream.yml`), so B1, C and B2 send the same number of requests. The
-scenarios run at the same time, the same way in every pass. k6 runs with
-`--no-usage-report`, so nothing leaves the machine.
+iterations per VU (`downstream.yml`), so B1, C and B2 attempt the same journeys the same
+number of times. Counts can still differ: a failing step skips the rest of its iteration, and
+the per-pass cap can cut a pass short; findings say when counts differ. The scenarios run at
+the same time, the same way in every pass. Requests time out after 20 s.
+
+Traffic stays on 127.0.0.1: the base URL is checked, k6 runs with `maxRedirects: 0` and
+`--no-usage-report`, and the readiness check does not follow redirects, so a target that
+answers with a redirect to another host is never followed.
 
 ### 6.2 Metrics
 
@@ -461,7 +466,10 @@ is loaded automatically. So:
   <base>:agentnotes.md`, `target.Load`), so a merge request cannot change them for its own
   run. That needs the base commit in the flow's workspace; the engine fetches it from `origin`
   if the clone lacks it (untested on the platform).
-- The engine sends traffic only to `127.0.0.1`. No absolute URLs are accepted in journeys.
+- The engine sends traffic only to `127.0.0.1`. No absolute URLs are accepted in journeys,
+  and redirects are never followed (k6 `maxRedirects: 0`; the readiness check refuses them).
+- `build` and `start` from `downstream.yml` run through `sh -c`; the binary path the engine
+  substitutes for `{out}` is single-quoted.
 - Diffs, issue text, notes and file contents are treated as data. The prompt says so, and
   the engine never interprets them as commands.
 - Files that steer the agent are protected by CODEOWNERS and the flow does not edit them.

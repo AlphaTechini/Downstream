@@ -162,7 +162,7 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 	runID := strconv.FormatInt(time.Now().Unix(), 16)
 
 	log.printf("baseline check: one iteration of each journey on base")
-	probe, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, cfg: cfg, b: builds["base"], runID: runID, vus: 1, iterations: 1}, o.Journeys)
+	probe, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["base"], runID: runID, vus: 1, iterations: 1}, o.Journeys)
 	if err != nil {
 		return fail("baseline check", err)
 	}
@@ -185,7 +185,7 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 		{"B1", "base", baseSHA}, {"C", "head", headSHA}, {"B2", "base", baseSHA},
 	} {
 		log.printf("pass %s: %s %s", p.label, p.side, short(p.sha))
-		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, cfg: cfg, b: builds[p.side], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations}, keptFile)
+		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds[p.side], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations}, keptFile)
 		if err != nil {
 			return fail("pass "+p.label, err)
 		}
@@ -261,6 +261,7 @@ func baselineFailure(j model.Journey, steps []model.StepMetrics) (model.Discard,
 
 type passSpec struct {
 	k6, tmp    string
+	log        logger
 	cfg        target.Config
 	b          struct{ tree, bin string }
 	runID      string
@@ -296,7 +297,7 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 		return res, fmt.Errorf("reading app CPU time: %w", err)
 	}
 	started := time.Now()
-	steps, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration)
+	steps, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration, p.log)
 	ended := time.Now()
 	if a.exited() {
 		return res, fmt.Errorf("%w; output tail:\n%s", errAppDied, a.out.String())

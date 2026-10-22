@@ -71,9 +71,15 @@ func (a *app) exited() bool {
 	}
 }
 
-// waitReady polls readyPath until it answers 200.
+// waitReady polls readyPath until it answers 200. A redirect is not followed
+// and counts as not ready, so the poll cannot leave loopback.
 func (a *app) waitReady(ctx context.Context, readyPath string) error {
-	client := &http.Client{Timeout: time.Second}
+	client := &http.Client{
+		Timeout: time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	deadline := time.NewTimer(readyTimeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(100 * time.Millisecond)

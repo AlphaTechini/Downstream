@@ -196,12 +196,19 @@ func Load(repo, commit string) (Config, error) {
 	return cfg, nil
 }
 
-// BuildCommand returns the build command with {out} replaced.
+// BuildCommand returns the build command with {out} replaced by out as one
+// quoted shell word.
 func (c Config) BuildCommand(out string) string {
-	return strings.ReplaceAll(c.Build, "{out}", out)
+	return strings.ReplaceAll(c.Build, "{out}", shellQuote(out))
 }
 
-// StartCommand returns the start command with {out} replaced.
+// StartCommand returns the start command with {out} replaced by out as one
+// quoted shell word.
 func (c Config) StartCommand(out string) string {
-	return strings.ReplaceAll(c.Start, "{out}", out)
+	return strings.ReplaceAll(c.Start, "{out}", shellQuote(out))
+}
+
+// shellQuote makes s a single word for sh, whatever characters it holds.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
