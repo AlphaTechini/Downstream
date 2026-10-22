@@ -53,7 +53,8 @@ func TestClassifyP95(t *testing.T) {
 		{"below relative", vals{1000, 1105, 1010}, model.ClassNoise, 95, 100.0 * 95 / 1010, 10, "below the minimum of 20%"},
 		{"inside band", vals{100, 130, 150}, model.ClassNoise, -20, -100.0 * 20 / 150, 50, "inside the range"},
 		{"just over band, small", vals{100, 160, 140}, model.ClassNoise, 20, 100.0 * 20 / 140, 40, "not more than 2 times the noise band of 40.0 ms"},
-		{"withheld", vals{100, 400, 180}, model.ClassWithheld, 220, 100.0 * 220 / 180, 80, "baseline spread rule"},
+		{"withheld", vals{100, 150, 180}, model.ClassWithheld, -30, -100.0 * 30 / 180, 80, "baseline spread rule"},
+		{"big regression beats spread rule", vals{10, 1000, 30}, model.ClassRegression, 970, 100.0 * 970 / 30, 20, "more than 2 times the noise band of 20.0 ms"},
 		{"spread below floor is not withheld", vals{2.6, 536.6, 4.6}, model.ClassRegression, 532, 100.0 * 532 / 4.6, 2, "more than 2 times the noise band of 2.0 ms"},
 		{"improved", vals{200, 80, 204}, model.ClassImproved, 80 - 204, 100.0 * (80 - 204) / 204, 4, "better than the better baseline by 120.0 ms"},
 	}
@@ -134,9 +135,9 @@ func TestAppMetrics(t *testing.T) {
 func TestTradeOff(t *testing.T) {
 	mk := func(label string, p95, p50 float64) model.Pass {
 		return model.Pass{Label: label, Steps: []model.StepMetrics{
-			{Journey: "j", Step: "a", P95: p95, P50: 20, Mean: 25},
-			{Journey: "j", Step: "b", P95: 100, P50: p50, Mean: 25},
-			{Journey: "k", Step: "a", P95: 100, P50: 20, Mean: 25},
+			{Journey: "j", Step: "a", Count: 10, P95: p95, P50: 20, Mean: 25},
+			{Journey: "j", Step: "b", Count: 10, P95: 100, P50: p50, Mean: 25},
+			{Journey: "k", Step: "a", Count: 10, P95: 100, P50: 20, Mean: 25},
 		}}
 	}
 	// step a p95 regresses, step b p50 improves, same journey j.
@@ -156,7 +157,7 @@ func TestTradeOff(t *testing.T) {
 func TestTradeOffIgnoresFailures(t *testing.T) {
 	mk := func(label string, p95 float64, fail int) model.Pass {
 		return model.Pass{Label: label, Steps: []model.StepMetrics{
-			{Journey: "j", Step: "a", P95: p95, P50: 20, Mean: 25, Failures: fail},
+			{Journey: "j", Step: "a", Count: 10, P95: p95, P50: 20, Mean: 25, Failures: fail},
 		}}
 	}
 	// p95 improves, failures regress: no latency regression, so no trade-off.
@@ -213,7 +214,88 @@ func TestOrderAndCount(t *testing.T) {
 
 func TestDefaults(t *testing.T) {
 	d := DefaultThresholds()
-	if d.BandMultiplier != 2 || d.MinRelative != 0.20 || d.MinLatencyMS != 10 || d.MinMemoryMB != 10 || d.MaxBaselineSpread != 0.5 {
+	if d.BandMultiplier != 2 || d.MinRelative != 0.20 || d.MinLatencyMS != 10 || d.MinMemoryMB != 10 || d.MinCPUSeconds != 0.5 || d.MaxBaselineSpread != 0.5 {
 		t.Errorf("defaults: %+v", d)
+	}
+}
+
+func TestCPUFloor(t *testing.T) {
+	cpu := func(b1, c, b2 float64) model.Finding {
+		ps := passes(vals{100, 100, 100}, vals{})
+		ps[0].Process.CPUSeconds, ps[1].Process.CPUSeconds, ps[2].Process.CPUSeconds = b1, c, b2
+		return find(t, Classify(ps, DefaultThresholds()), "app.cpu_seconds")
+	}
+	// +0.3 s is 300% of the baseline but below the absolute floor.
+	f := cpu(0.10, 0.40, 0.10)
+	if f.Class != model.ClassNoise || !strings.Contains(f.Reason, "below the minimum of 0.50 s") {
+		t.Errorf("small CPU rise: %q / %q", f.Class, f.Reason)
+	}
+	f = cpu(0.10, 0.80, 0.10)
+	if f.Class != model.ClassRegression || !strings.Contains(f.Reason, "at least 0.50 s") {
+		t.Errorf("large CPU rise: %q / %q", f.Class, f.Reason)
+	}
+}
+
+// twoSteps builds passes with steps a then b on journey j. Counts and p95s
+// are given per pass in the order B1, C, B2.
+func twoSteps(countB [3]int, p95B [3]float64) []model.Pass {
+	labels := []string{"B1", "C", "B2"}
+	a95 := [3]float64{100, 300, 102} // step a regresses
+	var ps []model.Pass
+	for i, l := range labels {
+		ps = append(ps, model.Pass{Label: l, Steps: []model.StepMetrics{
+			{Journey: "j", Step: "a", Count: 50, P95: a95[i], P50: 20, Mean: 25},
+			{Journey: "j", Step: "b", Count: countB[i], P95: p95B[i], P50: 20, Mean: 25},
+		}})
+	}
+	return ps
+}
+
+func TestNotReached(t *testing.T) {
+	// Step b was never reached on C: its latencies are 0, which must not read
+	// as an improvement that turns step a's real regression into a trade-off.
+	fs := Classify(twoSteps([3]int{50, 0, 50}, [3]float64{200, 0, 204}), DefaultThresholds())
+	for _, m := range []string{model.MetricP95, model.MetricP50, model.MetricMean} {
+		f := find(t, fs, "j.b."+m)
+		if f.Class != model.ClassNotReached {
+			t.Errorf("%s class = %q", m, f.Class)
+		}
+		if !strings.Contains(f.Reason, "pass C") || strings.Contains(f.Reason, "B1") {
+			t.Errorf("%s reason = %q", m, f.Reason)
+		}
+	}
+	if f := find(t, fs, "j.a.p95_ms"); f.Class != model.ClassRegression {
+		t.Errorf("real regression class = %q (%s)", f.Class, f.Reason)
+	}
+	if f := find(t, fs, "j.b.failures"); f.Class != model.ClassNoise {
+		t.Errorf("failures are still judged: %q", f.Class)
+	}
+}
+
+func TestNotReachedNamesEveryEmptyPass(t *testing.T) {
+	fs := Classify(twoSteps([3]int{0, 50, 0}, [3]float64{0, 5, 0}), DefaultThresholds())
+	f := find(t, fs, "j.b.p95_ms")
+	if f.Class != model.ClassNotReached || !strings.Contains(f.Reason, "passes B1, B2") {
+		t.Errorf("got %q / %q", f.Class, f.Reason)
+	}
+}
+
+func TestNotReachedFailuresStillJudged(t *testing.T) {
+	ps := twoSteps([3]int{50, 0, 50}, [3]float64{200, 0, 204})
+	ps[1].Steps[1].Failures = 3
+	f := find(t, Classify(ps, DefaultThresholds()), "j.b.failures")
+	if f.Class != model.ClassRegression {
+		t.Errorf("failures class = %q", f.Class)
+	}
+}
+
+func TestUnequalCounts(t *testing.T) {
+	fs := Classify(twoSteps([3]int{50, 40, 48}, [3]float64{200, 201, 204}), DefaultThresholds())
+	f := find(t, fs, "j.b.p95_ms")
+	if f.Class != model.ClassNoise || !strings.Contains(f.Reason, "counts B1 50, C 40, B2 48") {
+		t.Errorf("got %q / %q", f.Class, f.Reason)
+	}
+	if f := find(t, fs, "j.a.p95_ms"); strings.Contains(f.Reason, "counts") {
+		t.Errorf("equal counts mentioned: %q", f.Reason)
 	}
 }

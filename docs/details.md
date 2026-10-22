@@ -299,12 +299,15 @@ in the README with the evidence:
 These thresholds are a starting point and are not claimed to be statistically rigorous. A
 three-run design cannot give a confidence interval; the report says so in one line.
 
-Implemented in `engine/classify` with these rules plus two more, both in the report's method
-paragraph: **improved** is the opposite of regression (better than the better baseline run by
-the same margins), and **withheld** means the two baseline runs differ by more than 50 percent
-of the smaller one and by at least the absolute floor, so no verdict is given for that metric
-(a 1 ms wobble on a 2 ms step is jitter, not a noisy baseline). Every metric counts higher as
-worse. CPU seconds have no absolute floor. A journey with a latency regression and a latency
+Implemented in `engine/classify` with these rules plus three more, all stated in the report's
+method paragraph. Rules are applied in this order: regression, then **improved** (the
+opposite of regression: better than the better baseline run by the same margins), then
+**withheld** (the two baseline runs differ by more than 50 percent of the smaller one and by
+at least the absolute floor, so no verdict is given; a clear regression or improvement is
+never withheld), then noise. **not-reached**: a step with no requests in B1, C or B2 (an
+earlier step of its journey failed) has its latencies left uncompared, so a broken endpoint
+cannot make a later step look faster. Every metric counts higher as worse. Absolute floors:
+10 ms latency, 10 MB memory, 0.5 s CPU. A journey with a latency regression and a latency
 improvement has both re-classed as trade-off. Unit tests cover each class with synthetic
 inputs (FR-23).
 

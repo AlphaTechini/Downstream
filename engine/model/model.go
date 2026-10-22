@@ -126,6 +126,7 @@ type Thresholds struct {
 	MinRelative       float64 `json:"min_relative"`        // and delta >= this fraction of the worse baseline
 	MinLatencyMS      float64 `json:"min_latency_ms"`      // and delta >= this for latency metrics
 	MinMemoryMB       float64 `json:"min_memory_mb"`       // and delta >= this for memory
+	MinCPUSeconds     float64 `json:"min_cpu_seconds"`     // and delta >= this for CPU time
 	MaxBaselineSpread float64 `json:"max_baseline_spread"` // verdict withheld when |B1-B2| / min(B1,B2) exceeds this
 }
 
@@ -170,6 +171,9 @@ const (
 	ClassImproved   = "improved"
 	ClassNoise      = "noise"
 	ClassWithheld   = "withheld" // baseline runs disagreed too much to judge
+	// ClassNotReached marks a latency figure for a step that recorded no
+	// requests in at least one pass, so there is nothing to compare.
+	ClassNotReached = "not-reached"
 )
 
 // Metric names used in findings.

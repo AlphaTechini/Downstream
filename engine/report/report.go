@@ -173,9 +173,12 @@ func (r *renderer) summary() {
 	}
 	regSteps := map[string]bool{}
 	tradeJourneys := map[string]bool{}
+	notReached := map[string]bool{}
 	improved, withheld, appRegs := 0, 0, 0
 	for _, f := range r.run.Findings {
 		switch f.Class {
+		case model.ClassNotReached:
+			notReached[f.Journey+"\x00"+f.Step] = true
 		case model.ClassRegression:
 			if f.Journey == "" {
 				appRegs++
@@ -194,6 +197,9 @@ func (r *renderer) summary() {
 		", trade-off journeys " + strconv.Itoa(len(tradeJourneys)) +
 		", improved metrics " + strconv.Itoa(improved) +
 		", withheld metrics " + strconv.Itoa(withheld) + "."
+	if len(notReached) > 0 {
+		s += " Steps not reached in at least one pass: " + strconv.Itoa(len(notReached)) + "."
+	}
 	if appRegs > 0 {
 		s += " App process regressions: " + strconv.Itoa(appRegs) + "."
 	}
@@ -319,7 +325,7 @@ func (r *renderer) chart() {
 	var pts []point
 	for _, jid := range r.journeys {
 		for _, s := range r.steps[jid] {
-			if f, ok := r.byID[jid+"."+s+"."+model.MetricP95]; ok {
+			if f, ok := r.byID[jid+"."+s+"."+model.MetricP95]; ok && f.Class != model.ClassNotReached {
 				pts = append(pts, point{label: chartLabel("j" + strconv.Itoa(r.number[jid]) + "." + s), jn: r.number[jid], f: f})
 			}
 		}
@@ -448,10 +454,10 @@ func (r *renderer) method() {
 	}
 	r.line("Thresholds in effect: a metric is a regression when the candidate is worse than the worse baseline run by more than " +
 		fixed(t.BandMultiplier) + " times the noise band (the difference between B1 and B2), by at least " +
-		fixed(t.MinRelative*100) + "%, and by at least " + fixed(t.MinLatencyMS) + " ms (latency) or " +
-		fixed(t.MinMemoryMB) + " MB (memory). A step that passed on both baseline runs and failed on the candidate is a regression. " +
+		fixed(t.MinRelative*100) + "%, and by at least " + fixed(t.MinLatencyMS) + " ms (latency), " +
+		fixed(t.MinMemoryMB) + " MB (memory) or " + fixed(t.MinCPUSeconds) + " s (CPU). A step that passed on both baseline runs and failed on the candidate is a regression. " +
 		"The verdict is withheld when the baseline runs differ by more than " + fixed(t.MaxBaselineSpread*100) +
-		"% of the smaller one and by at least the same minimum. A journey with a latency regression and a latency improvement is reported as a trade-off.")
+		"% of the smaller one and by at least the same minimum, unless the candidate is clearly worse or better than both. A journey with a latency regression and a latency improvement is reported as a trade-off.")
 }
 
 // Formatting helpers.
@@ -489,6 +495,9 @@ func signed(v float64, dec int) string {
 // change is the Change column: the delta against the worse baseline, with a
 // percentage when the worse baseline is not zero (otherwise it is undefined).
 func change(f model.Finding) string {
+	if f.Class == model.ClassNotReached {
+		return "n/a"
+	}
 	dec := 1
 	switch f.Unit {
 	case "s":
