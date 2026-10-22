@@ -305,3 +305,36 @@ func TestIssuesToOpenCap(t *testing.T) {
 		}
 	}
 }
+
+func TestThresholdsSentenceUsesCPUFloor(t *testing.T) {
+	run := load[model.Run](t, "run_basic.json")
+	run.Settings.Thresholds.MinCPUSeconds = 0.6
+	out := Render(run, nil)
+	if !strings.Contains(out, "or 0.6 s (CPU)") {
+		t.Errorf("CPU floor not taken from the thresholds:\n%s", out)
+	}
+	run.Settings.Thresholds.MinCPUSeconds = 2
+	if out := Render(run, nil); !strings.Contains(out, "or 2 s (CPU)") {
+		t.Errorf("CPU floor not taken from the thresholds")
+	}
+}
+
+func TestNotReachedIsNotCharted(t *testing.T) {
+	run := load[model.Run](t, "run_basic.json")
+	var id string
+	for i, f := range run.Findings {
+		if f.Metric == model.MetricP95 && f.Journey != "" {
+			run.Findings[i].Class = model.ClassNotReached
+			run.Findings[i].Reason = "step not reached"
+			id = f.Journey + "." + f.Step
+			break
+		}
+	}
+	out := Render(run, nil)
+	if !strings.Contains(out, "Steps not reached in at least one pass: 1.") || !strings.Contains(out, "| not-reached |") {
+		t.Errorf("not-reached step not reported (%s):\n%s", id, out)
+	}
+	if !strings.Contains(out, "| n/a |") {
+		t.Errorf("change column should be n/a")
+	}
+}

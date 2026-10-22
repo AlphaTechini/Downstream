@@ -13,6 +13,7 @@
       "min_relative": 0.2,
       "min_latency_ms": 10,
       "min_memory_mb": 10,
+      "min_cpu_seconds": 0.5,
       "max_baseline_spread": 0.5
     }
   },

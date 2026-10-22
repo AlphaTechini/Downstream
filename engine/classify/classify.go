@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	"downstream/engine/model"
 )
@@ -19,6 +20,7 @@ func DefaultThresholds() model.Thresholds {
 		MinRelative:       0.20,
 		MinLatencyMS:      10,
 		MinMemoryMB:       10,
+		MinCPUSeconds:     0.5,
 		MaxBaselineSpread: 0.5,
 	}
 }
@@ -45,6 +47,7 @@ func Classify(passes []model.Pass, t model.Thresholds) []model.Finding {
 
 	idx1, idxC, idx2 := index(b1), index(c), index(b2)
 	var out []model.Finding
+	counts := map[key][3]int{}
 	for k, mc := range idxC {
 		m1, ok1 := idx1[k]
 		m2, ok2 := idx2[k]
@@ -52,8 +55,13 @@ func Classify(passes []model.Pass, t model.Thresholds) []model.Finding {
 			continue
 		}
 		id := k.journey + "." + k.step + "."
+		counts[k] = [3]int{m1.Count, mc.Count, m2.Count}
 		add := func(metric, unit string, v1, vc, v2 float64) {
 			f := judge(v1, vc, v2, unit, t)
+			if unit != "count" && (m1.Count == 0 || mc.Count == 0 || m2.Count == 0) {
+				f.Class = model.ClassNotReached
+				f.Reason = notReachedReason(m1.Count, mc.Count, m2.Count)
+			}
 			f.ID = id + metric
 			f.Journey, f.Step, f.Metric, f.Unit = k.journey, k.step, metric, unit
 			out = append(out, f)
@@ -74,6 +82,7 @@ func Classify(passes []model.Pass, t model.Thresholds) []model.Finding {
 	app(model.MetricRSS, "MB", b1.Process.PeakRSSMB, c.Process.PeakRSSMB, b2.Process.PeakRSSMB)
 
 	tradeOffs(out)
+	noteUnequalCounts(out, counts)
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
@@ -106,20 +115,12 @@ func judge(v1, vc, v2 float64, unit string, t model.Thresholds) model.Finding {
 		floor = t.MinLatencyMS
 	case "MB":
 		floor = t.MinMemoryMB
+	case "s":
+		floor = t.MinCPUSeconds
 	}
 	if floor > 0 {
 		floorWords = " and at least " + amount(floor, unit)
 	}
-	// A spread below the absolute floor is jitter on a fast step, not a noisy
-	// baseline, so it does not stop a verdict.
-	if better > 0 && band/better > t.MaxBaselineSpread && band >= floor {
-		f.Class = model.ClassWithheld
-		f.Reason = "baseline spread rule: the two baseline runs differ by " +
-			num(band/better, 2) + " of the smaller one, above the limit of " +
-			num(t.MaxBaselineSpread, -1) + ", so no verdict is given"
-		return f
-	}
-
 	bandWords := num(t.BandMultiplier, -1) + " times the noise band of " + amount(band, unit)
 	relWords := num(t.MinRelative*100, 1) + "%"
 	relWords = trimZero(relWords)
@@ -138,6 +139,18 @@ func judge(v1, vc, v2 float64, unit string, t model.Thresholds) model.Finding {
 		f.Reason = "better than the better baseline by " + amount(gain, unit) +
 			" (" + num(100*gain/better, 1) + "%), which is more than " + bandWords +
 			", at least " + relWords + floorWords
+		return f
+	}
+
+	// The spread rule only applies when the candidate is neither clearly
+	// worse nor clearly better than both baselines: a gap that large is
+	// visible however noisy the baselines are. A spread below the absolute
+	// floor is jitter on a fast step, so it does not stop a verdict.
+	if better > 0 && band/better > t.MaxBaselineSpread && band >= floor {
+		f.Class = model.ClassWithheld
+		f.Reason = "baseline spread rule: the two baseline runs differ by " +
+			num(band/better, 2) + " of the smaller one, above the limit of " +
+			num(t.MaxBaselineSpread, -1) + ", so no verdict is given"
 		return f
 	}
 
@@ -239,4 +252,39 @@ func amount(v float64, unit string) string {
 		return num(v, 2) + " s"
 	}
 	return num(v, 0)
+}
+
+// notReachedReason names the passes that recorded no requests for a step.
+func notReachedReason(c1, cc, c2 int) string {
+	var empty []string
+	for _, p := range []struct {
+		label string
+		n     int
+	}{{"B1", c1}, {"C", cc}, {"B2", c2}} {
+		if p.n == 0 {
+			empty = append(empty, p.label)
+		}
+	}
+	pass := "pass "
+	if len(empty) > 1 {
+		pass = "passes "
+	}
+	return "step not reached: no requests recorded in " + pass + strings.Join(empty, ", ") +
+		" (an earlier step in the journey failed), so latencies are not compared"
+}
+
+// noteUnequalCounts adds the request counts to latency findings whose passes
+// recorded different numbers of requests. The comparison still stands.
+func noteUnequalCounts(fs []model.Finding, counts map[key][3]int) {
+	for i := range fs {
+		f := &fs[i]
+		if !isLatency(f.Metric) || f.Class == model.ClassNotReached {
+			continue
+		}
+		c, ok := counts[key{f.Journey, f.Step}]
+		if !ok || (c[0] == c[1] && c[1] == c[2]) {
+			continue
+		}
+		f.Reason += "; counts B1 " + strconv.Itoa(c[0]) + ", C " + strconv.Itoa(c[1]) + ", B2 " + strconv.Itoa(c[2])
+	}
 }
