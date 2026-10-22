@@ -2,9 +2,9 @@
 
 Operating notes the Downstream flow reads at the start of every run (explicit read, the
 platform does not auto-load this file name). The last section, "Development notes", is for
-agents changing this repository; the flow ignores it at run time. A maintainer edits this file; the agent never
-does. If this file and the flow prompt disagree, the flow prompt's "rules that never bend"
-win.
+agents changing this repository; the flow ignores it at run time. A maintainer edits this
+file; the flow never does. If this file and the flow prompt disagree, the flow prompt's
+"rules that never bend" win.
 
 ## Journeys
 
