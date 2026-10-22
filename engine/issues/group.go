@@ -190,8 +190,10 @@ func mergeSorted(a, b []string) []string {
 	return out
 }
 
-// pickHeadline prefers a failures finding, then the largest percentage change,
-// then the largest absolute change, then the lowest ID.
+// pickHeadline prefers a failures finding, then the largest absolute change
+// (so the title names the step that got slowest in milliseconds, not the one
+// with the biggest ratio on a tiny baseline), then the largest percentage
+// change, then the lowest ID.
 func pickHeadline(steps []model.Finding) model.Finding {
 	best := steps[0]
 	for _, f := range steps[1:] {
@@ -207,10 +209,10 @@ func better(a, b model.Finding) bool {
 	switch {
 	case af != bf:
 		return af
-	case a.DeltaPct != b.DeltaPct:
-		return a.DeltaPct > b.DeltaPct
 	case a.Delta != b.Delta:
 		return a.Delta > b.Delta
+	case a.DeltaPct != b.DeltaPct:
+		return a.DeltaPct > b.DeltaPct
 	}
 	return a.ID < b.ID
 }

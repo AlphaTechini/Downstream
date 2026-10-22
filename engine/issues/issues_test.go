@@ -764,3 +764,27 @@ func TestParseMarkerBareJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestHeadlineIsLargestAbsoluteDelta(t *testing.T) {
+	run := model.Run{Version: 1, Base: baseSHA, Head: headSHA}
+	// "fast" has the bigger ratio on a tiny baseline; "slow" lost more milliseconds.
+	run.Findings = []model.Finding{
+		{ID: "j.fast.p95_ms", Journey: "j", Step: "fast", Metric: model.MetricP95, Unit: "ms",
+			B1: 5, B2: 5, C: 30, Delta: 25, DeltaPct: 500, Class: model.ClassRegression, Reason: "rule"},
+		{ID: "j.slow.p95_ms", Journey: "j", Step: "slow", Metric: model.MetricP95, Unit: "ms",
+			B1: 1000, B2: 1000, C: 1300, Delta: 300, DeltaPct: 30, Class: model.ClassRegression, Reason: "rule"},
+	}
+	plan := PlanIssues(run, nil)
+	if len(plan.Groups) != 1 || plan.Groups[0].Headline.ID != "j.slow.p95_ms" {
+		t.Fatalf("headline = %+v", plan.Groups)
+	}
+	if got := plan.Groups[0].title(run); !strings.Contains(got, "worst j.slow p95 latency up 300.0 ms") {
+		t.Errorf("title = %q", got)
+	}
+	// A failures finding still wins over any latency change.
+	run.Findings = append(run.Findings, model.Finding{ID: "j.other.failures", Journey: "j", Step: "other",
+		Metric: model.MetricFailures, Unit: "count", C: 2, Delta: 2, Class: model.ClassRegression, Reason: "rule"})
+	if got := PlanIssues(run, nil).Groups[0].Headline.ID; got != "j.other.failures" {
+		t.Errorf("failures headline = %q", got)
+	}
+}

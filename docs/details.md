@@ -370,7 +370,7 @@ changed functions (from `scan.json`) on the routes they call, and each key gets 
 Steps whose routes reach no changed function share one more issue ("slower on routes outside
 the diff's call paths"); on the demo that group holds public reads slowed by CPU contention.
 At most 5 issues per run. Each issue has an engine-rendered table of every step in the group,
-and its headline (the title and the marker) is the step with the largest relative change,
+and its headline (the title and the marker) is the step that got slowest in absolute terms,
 with failures always first. The likely cause and fix options come from a `notes.json` the
 model writes, keyed by headline finding ID and validated by the engine: no comment or fence
 markup, no table rows, and no figures with units, so the model cannot add numbers.
