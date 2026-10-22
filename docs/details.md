@@ -120,7 +120,7 @@ Three rules shape everything:
 | Flow | `flows/downstream.draft.yml`, one `AgentComponent`, one mention trigger | Draft, not enabled |
 | Engine | Go program `engine/` with subcommands below. Standard library first. | Not written |
 | k6 | v0.56.0 installed by `setup_script` | Installed and version-checked (day 0); never yet run against an app |
-| Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Not chosen (section 9) |
+| Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Demo target `examples/shelf` and root `downstream.yml` written (section 9) |
 | Agent instructions | `AGENTS.md`, `agentnotes.md` | Written |
 | Report | MR notes (tables + Mermaid), issues; optional Pages page | Not built |
 
@@ -320,29 +320,24 @@ cleanly. The report does not claim an option is correct; it claims what the reru
 
 ---
 
-## 9. Demo target app (open decision)
+## 9. Demo target app
 
-The demo needs an app with a believable regression. Criteria: permissive licence (MIT or
-similar), HTTP JSON API, a store that needs no server (SQLite or in-memory), Go or Node,
-builds in about a minute, and a change that causes a measurable side effect somewhere the
-author did not look.
+Criteria: permissive licence, HTTP JSON API, a store that needs no server, Go or Node, builds
+in about a minute, and a change that causes a measurable side effect somewhere the author did
+not look. Two RealWorld ("Conduit") API implementations were checked on 2026-10-22 and
+rejected: both default to Postgres, one states no licence, and the container has no Postgres
+and no docker.
 
-State on 2026-10-22: **no target chosen.** Two RealWorld ("Conduit") API implementations
-were checked and rejected: one is MIT but defaults to Postgres, the other states no licence
-and also uses Postgres. The container has no Postgres and no docker.
+**Chosen: a purpose-built small API**, `examples/shelf`: a reading-list JSON API, Go standard
+library only, in-memory store, 11 routes registered in `examples/shelf/routes.go`. The root
+`downstream.yml` tells the engine how to build and start it.
 
-Options, with the trade-off stated plainly:
-
-- **A purpose-built small API** in `examples/`, Go, SQLite through a pure-Go driver, with a
-  clearly labelled planted regression. Lowest risk and fully controlled. Weakness: a judge can
-  say the regression was staged. Mitigation: the README labels it as planted and shows the
-  planting commit.
-- **An existing open-source app** with SQLite or an in-memory mode, with the regression
-  found in its real history. More credible; more risk of the build not working inside the
-  sandbox within the time left.
-
-Whichever is picked, the README says which it is and links the commit that introduced the
-regression. The decision is due by end of Friday 2026-10-23.
+The regression is **planted**, not found: `examples/changes/raise-hash-cost.patch` raises the
+PBKDF2 iteration count of the shared `hashSecret` helper. In review it reads as a security
+improvement. The diff does not show that `requireAuth` checks every API token through the same
+helper, so every authenticated route pays the cost, including routes the diff never mentions.
+`examples/changes/clean-change.patch` is the control: a change with no performance effect.
+The weakness is plain: the regression was staged. The README says so.
 
 ---
 
@@ -430,5 +425,5 @@ docs/                  details.md, requirements.md, userflow.md
 evidence/              raw logs and the results table
 scripts/               validate_yaml.py, check_evidence.py
 engine/                (not yet written)
-examples/              (demo target, if we build one)
+examples/              shelf/ (demo target), changes/ (planted and clean patches)
 ```
