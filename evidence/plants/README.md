@@ -39,11 +39,19 @@ What else the runs show:
   not checked here, had bytes written rise about 42 times. That did not happen here: the demo's list grows only to the books the journeys create in one pass, so bytes per
   journey rose by about 58%.
 
-## Check with the final engine
+## Later checks, and why peak RSS is allowed 5%
 
-[`final/`](final/) repeats the four sets, three runs each, with the engine at the commit
-"Read allocations, GC cycles and goroutines through a build overlay". Every
-`raise-hash-cost` and `remove-list-limit` run reports a regression and every clean run
-reports none (`summary-NN.txt` in each set). The runtime counters now also report
-`remove-list-limit`: alloc bytes and GC cycles per journey rise, because `listBooks` reserves
-room for the limit on every call (`final/remove-list-limit-journeys.thorough/table.txt`).
+[`overlay/`](overlay/) repeats the four sets, three runs each, with the engine at the commit
+"Read allocations, GC cycles and goroutines through a build overlay". Every plant run reports
+a regression and every clean run none; the runtime counters also report `remove-list-limit`
+(alloc bytes and GC cycles rise, because `listBooks` reserves room for the limit on every
+call; `overlay/remove-list-limit-journeys.thorough/table.txt`).
+
+[`rss-2pct/`](rss-2pct/) repeats the four sets, three runs each, with the engine at the commit
+"Fix the review findings in the engine, flow and docs", when peak RSS was allowed 2%. Both
+plants were reported in every run, but one clean run was too: `clean-change` with the
+thorough journeys, run 2, peak RSS 12.71 MB against 12.44 and 12.38 MB, +2.17% over the worse
+baseline ([gated.tsv](rss-2pct/clean-change-thorough/gated.tsv), the `run-02` peak RSS line).
+A/A runs never sample this, because base and head are the same binary there; on clean changes
+the candidate's peak RSS ranged from -3.51% to +2.17% of the worse baseline (this file's
+`clean-change-thorough` set and `rss-2pct/clean-change-thorough`). Peak RSS is now allowed 5%.

@@ -53,7 +53,10 @@ import (
 //	cpu per journey     tolerance 20%   largest excess 11.17%   ratio 1.8
 //	bytes written       tolerance 1%    largest excess 0.35%    ratio 2.9
 //	write syscalls      tolerance 4%    largest excess 1.51%    ratio 2.6
-//	peak RSS            tolerance 2%    largest excess 0.93%    ratio 2.2
+//	peak RSS            tolerance 5%    largest excess 0.93% on one binary; on clean
+//	                    changes (two binaries) C was up to 2.17% above the worse baseline
+//	                    (evidence/plants/rss-2pct/clean-change-thorough/gated.tsv, run-02), so
+//	                    the A/A figure alone understates it
 //	open fds            absolute 1      largest excess 0
 //	threads             absolute 2      largest excess 1 thread (11.11% of 9)   ratio 2
 //
@@ -92,7 +95,7 @@ func DefaultThresholds() model.Thresholds {
 			model.MetricOpenFDs:                 {Absolute: 1},
 			model.MetricThreads:                 {Absolute: 2},
 			model.MetricCPUPerJourney:           {Relative: 0.20},
-			model.MetricRSS:                     {Relative: 0.02},
+			model.MetricRSS:                     {Relative: 0.05},
 			model.MetricAllocObjectsPerJourney:  {Relative: 0.10},
 			model.MetricAllocBytesPerJourney:    {Relative: 0.05},
 			model.MetricGCCycles:                {Absolute: 2},

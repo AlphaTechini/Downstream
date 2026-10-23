@@ -398,7 +398,9 @@ The tolerances are `Thresholds.Tolerances` in `run.json` (`settings.thresholds`)
 over the worse baseline on identical code), at between about 1.8 and 2.9 times that excess,
 rounded up; the ratio for each metric is in the comment on `DefaultThresholds`. Small integer
 counts (open file descriptors, threads, goroutines, GC cycles per pass) have an absolute
-tolerance instead, because one thread is a large fraction of ten; GC cycles were 0 in every
+tolerance instead, because one thread is a large fraction of ten. Peak RSS is allowed 5%,
+more than its A/A excess suggests, because A/A runs use one binary and two builds of a clean
+change differed by up to 2.17% (`evidence/plants/README.md`); GC cycles were 0 in every
 A/A pass, so their tolerance of 2 cycles is chosen, not derived. CPU per journey was
 calibrated on whole-process CPU and is now measured over the k6 window; no committed A/A set
 used the window figure before `evidence/aa/final`. No command-line flag changes them.

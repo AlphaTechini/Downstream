@@ -1,0 +1,7 @@
+run	summary
+run-01	regression=0 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+run-02	regression=1 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+run-03	regression=0 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+
+gated findings that are not noise:
+run-02	app.peak_rss_mb	regression	12.4375	12.3789	12.7070	0.2487	0.0586	0.2487	2.17
