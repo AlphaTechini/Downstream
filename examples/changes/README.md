@@ -25,4 +25,5 @@ sed -i 's/^\tmaxListed = 50$/\tmaxListed = 100000/' examples/shelf/handlers.go
 followed by `git diff`. It removes the page size of `GET /books` in effect: the list returns
 every matching book, and `listBooks` also reserves room for the limit on every call. It needs
 journeys that create more books than one page holds, so its CI entry uses
-`examples/shelf/journeys.thorough.json`.
+`examples/shelf/journeys.thorough.json`. What it changes in a run, measured:
+[`evidence/plants/`](../../evidence/plants/).
