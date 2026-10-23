@@ -44,8 +44,9 @@ go-test:
 
 # Runs the engine end to end on the demo app: the pipeline commit is the
 # baseline, and the same commit with one patch from examples/changes applied is
-# the candidate. raise-hash-cost is a planted regression; clean-change is the
-# control and must come out clean.
+# the candidate. raise-hash-cost and remove-list-limit are planted regressions;
+# clean-change is the control and must come out clean. remove-list-limit needs
+# the journeys that list more books than one page holds.
 engine-e2e:
   stage: e2e
   image: golang:1.22
@@ -53,6 +54,9 @@ engine-e2e:
   parallel:
     matrix:
       - CHANGE: [raise-hash-cost, clean-change]
+        JOURNEYS: [examples/shelf/journeys.example.json]
+      - CHANGE: [remove-list-limit]
+        JOURNEYS: [examples/shelf/journeys.thorough.json]
   script:
     - export PATH="$CI_PROJECT_DIR/bin:$PATH"
     - git config user.name "Downstream CI"
@@ -64,8 +68,8 @@ engine-e2e:
     - go build -o bin/downstream ./engine/cmd/downstream
     - mkdir -p out
     - downstream scan --base "$BASE" --head "$HEAD_SHA" --out out/scan.json
-    - downstream validate --journeys examples/shelf/journeys.example.json --scan out/scan.json
-    - downstream run --base "$BASE" --head "$HEAD_SHA" --journeys examples/shelf/journeys.example.json --out out/run.json || echo "run exited non-zero; the report says where it stopped"
+    - downstream validate --journeys "$JOURNEYS" --scan out/scan.json
+    - downstream run --base "$BASE" --head "$HEAD_SHA" --journeys "$JOURNEYS" --out out/run.json || echo "run exited non-zero; the report says where it stopped"
     - downstream report --run out/run.json --scan out/scan.json --out out/report.md
     - downstream issues --run out/run.json --scan out/scan.json --mr 1 --starter downstream-ci --out out/issues.json
     - downstream summary --run out/run.json --scan out/scan.json | tee out/summary.txt
