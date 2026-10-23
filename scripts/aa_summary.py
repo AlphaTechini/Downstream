@@ -2,7 +2,9 @@
 """Summarise A/A runs written by scripts/aa.sh.
 
 Every pass in an A/A run executes the same commit, so every finding classed
-"regression" is a false regression. Prints, per metric: findings, how many were
+"regression" is a false regression. Runs from an engine that splits findings into
+gated and advisory (run.json findings with "gated") count only gated ones as
+regressions; advisory regressions are counted separately. Prints, per metric: findings, how many were
 classed regression, improved, withheld or noise, the per-run rate of at least one
 false regression, the B1/B2 spread (|B1-B2| / min(B1, B2)), and "no floor": how
 many latency or CPU findings the same band and relative rules would call a
@@ -52,6 +54,7 @@ def main():
     spread = defaultdict(list)
     runs_with_regression = defaultdict(int)
     any_regression_runs = 0
+    advisory = defaultdict(int)
     nofloor = defaultdict(int)
     nofloor_runs = 0
     stopped = 0
@@ -89,18 +92,22 @@ def main():
         nofloor_seen = False
         for f in run.get("findings", []):
             m = f["metric"]
-            classes[m][f["class"]] += 1
+            cls = f["class"]
+            if cls == "regression" and f.get("gated") is False:
+                advisory[m] += 1
+                cls = "advisory regression"
+            classes[m][cls] += 1
             lo = min(f["b1"], f["b2"])
             if lo > 0:
                 spread[m].append(abs(f["b1"] - f["b2"]) / lo)
-            if f["class"] == "regression":
+            if cls == "regression":
                 seen.add(m)
             if m != "failures" and f["delta"] > 2 * f["band"] and f["delta_pct"] >= 20:
                 nofloor[m] += 1
                 nofloor_seen = True
             lines.append("\t".join([
                 path.stem, f["id"], m, f"{f['b1']:.4f}", f"{f['c']:.4f}", f"{f['b2']:.4f}",
-                f"{f['band']:.4f}", f"{f['delta_pct']:.2f}", f["class"],
+                f"{f['band']:.4f}", f"{f['delta_pct']:.2f}", cls,
             ]))
         for m in seen:
             runs_with_regression[m] += 1
@@ -116,6 +123,8 @@ def main():
     print(f"runs: {n} (stopped early: {stopped})")
     print(f"runs with at least one false regression (any metric): {any_regression_runs} of {n}")
     print(f"runs with at least one false regression if the absolute floor were removed: {nofloor_runs} of {n}")
+    if advisory:
+        print(f"advisory (not deciding) latency regressions: {sum(advisory.values())}")
     print()
     header = ("metric", "findings", "regression", "rate", "runs>=1", "improved", "withheld",
               "noise", "other", "no floor", "spread p50", "spread p90", "spread max")

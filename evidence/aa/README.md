@@ -71,3 +71,27 @@ only about 0.15 s of CPU, so start-up and scheduling are a large share of it. By
 journey are the steadiest counter, but not exact: the app's responses are likely to differ in
 length between passes because they carry generated tokens and IDs (not checked). A thread count of 9 or 10 moves by one thread, which is
 11%, so threads need an absolute tolerance rather than a relative one.
+
+## Set `after`: the gated rule of `4b84b43`
+
+Same machine and procedure ([after/machine.txt](after/machine.txt)), 20 fresh runs (not the
+runs the tolerances were picked from), nothing else running. Summary:
+[after/summary.txt](after/summary.txt); raw figures: [after/passes.tsv](after/passes.tsv);
+findings that are not noise (all others were noise): [after/findings.tsv](after/findings.tsv). Only gated findings
+can be a regression now; latency is advisory.
+
+| Measured | before (old rule) | after (gated rule) | Source |
+|---|---|---|---|
+| Runs with at least one false regression | 0 of 20 | 0 of 20 | before/summary.txt L2, after/summary.txt L2 |
+| False regressions among gated findings (CPU per journey, bytes and write syscalls per journey, fds, threads, peak RSS, failures; 560 findings) | - | 0 | after/summary.txt L6, L8, L10, L13-L16 |
+| Withheld findings | 0 | 0 | before/summary.txt L6-L11, after/summary.txt L6-L16 |
+| Largest excess of C over the worse baseline, CPU per journey (tolerance 20%) | 11.17% (counters set) | 13.96% | counters/summary.txt L14, after/summary.txt L19 |
+| Largest excess, bytes written per journey (tolerance 1%) | 0.35% (counters set) | 0.48% | counters/summary.txt L15, after/summary.txt L20 |
+| Largest excess, write syscalls per journey (tolerance 4%) | 1.51% (counters set) | 1.51% | counters/summary.txt L16, after/summary.txt L21 |
+| Largest excess, peak RSS (tolerance 2%) | 0.93% (counters set) | 0.81% | counters/summary.txt L19, after/summary.txt L24 |
+
+The old rule's zero came from the 10 ms latency floor (see `before`); the new rule's zero
+comes from tolerances that sit above the largest A/A excess. The margin is smallest for CPU
+per journey (13.96% observed against 20% allowed), so that tolerance is the most likely to
+give a false regression on a noisier machine. Neither set says anything about the GitLab
+runner or the Duo sandbox.

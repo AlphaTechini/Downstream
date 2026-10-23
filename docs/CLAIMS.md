@@ -142,6 +142,21 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-A2. With the gated rule, identical code gave no false regression in 20 fresh runs
+
+- **Files:** `engine/classify/classify.go` (`DefaultThresholds`, gated rule), `scripts/aa.sh`
+- **Proof:** [evidence/aa/after/summary.txt](../evidence/aa/after/summary.txt) line 2 (0 of
+  20 runs) and lines 6-16 (classes per metric); the tolerances were picked from the earlier
+  `counters` set, so these runs are out of sample. `TestReplayAARuns` in
+  `engine/classify` replays the `before` and `counters` sets and requires no gated
+  regression.
+- **Check:** `scripts/aa.sh 20 /tmp/aa && python3 scripts/aa_summary.py /tmp/aa`
+- **Does not show:** behaviour on the GitLab runner or in the Duo sandbox; the margin for CPU
+  per journey is small (largest A/A excess 13.96% against a 20% tolerance,
+  after/summary.txt line 19).
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |

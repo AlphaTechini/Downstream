@@ -177,6 +177,7 @@ row unless stated; details in [evidence/runs.md](evidence/runs.md)):
 | A/A (same commit as base and head), 4-CPU dev machine: runs with a false regression | 0 of 20; 19 of 20 if the 10 ms floor were removed | [evidence/aa/README.md](evidence/aa/README.md), [summary](evidence/aa/before/summary.txt) L2-L3 |
 | A/A: B1/B2 spread of step p95 (median, p90) | 32.5%, 105.8% | [summary](evidence/aa/before/summary.txt) L10 |
 | A/A: largest excess of C over the worse baseline, 20 runs: CPU per journey / bytes written per journey / write syscalls per journey | 11.17% / 0.35% / 1.51% | [summary](evidence/aa/counters/summary.txt) L14-L16 |
+| A/A with the gated rule (latency advisory), 20 fresh runs: runs with a false regression | 0 of 20 (560 gated findings) | [summary](evidence/aa/after/summary.txt) L2, L6-L16 |
 
 The platform, from the logs in `evidence/day0/`:
 
