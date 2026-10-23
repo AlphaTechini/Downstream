@@ -46,3 +46,28 @@ it.
 What it does not show: the noise on the GitLab runner or in the Duo sandbox (the runner's
 clean-change runs are in [../runs.md](../runs.md)), or noise on a slower machine, where the
 laptop runs in [../runs.md](../runs.md) did produce false regressions.
+
+## Set `counters`: the same rule, with the process counters added in `b57fe87`
+
+Same machine and procedure ([counters/machine.txt](counters/machine.txt)), 20 runs, nothing
+else running. Raw figures: [counters/passes.tsv](counters/passes.tsv) ("app" rows hold the
+counters per pass). Summary: [counters/summary.txt](counters/summary.txt). "Excess" is how far
+C lands above the worse of B1 and B2, as a fraction of that baseline; on identical code its
+largest value is the smallest tolerance that would have given no false regression in these
+runs.
+
+| Counter | B1/B2 spread, max | Excess, p90 | Excess, max | Source |
+|---|---|---|---|---|
+| CPU ms per completed journey | 17.46% | 6.85% | 11.17% | summary.txt L14 |
+| Bytes written per completed journey | 0.61% | 0.03% | 0.35% | summary.txt L15 |
+| Write syscalls per completed journey | 3.40% | 0.88% | 1.51% | summary.txt L16 |
+| Open file descriptors | 0.00% | 0.00% | 0.00% | summary.txt L17 |
+| Threads | 11.11% | 1.11% | 11.11% | summary.txt L18 |
+| Peak RSS | 1.33% | 0.36% | 0.93% | summary.txt L19 |
+
+The rule as committed still gave 0 false regressions in 20 runs (summary.txt L2). CPU per
+journey is far noisier here than the tolerance first proposed for it (3 to 4%): each pass uses
+only about 0.15 s of CPU, so start-up and scheduling are a large share of it. Bytes written per
+journey are the steadiest counter, but not exact: the app's responses are likely to differ in
+length between passes because they carry generated tokens and IDs (not checked). A thread count of 9 or 10 moves by one thread, which is
+11%, so threads need an absolute tolerance rather than a relative one.

@@ -8,6 +8,12 @@ false regression, the B1/B2 spread (|B1-B2| / min(B1, B2)), and "no floor": how
 many latency or CPU findings the same band and relative rules would call a
 regression if the absolute floor (10 ms, 0.5 s) were removed.
 
+For the per-pass process counters (CPU per journey, bytes and write syscalls per
+journey, fds, threads, peak RSS, exact CPU) it also prints the B1/B2 spread and the
+"excess": how far C lands above the worse of B1 and B2, as a fraction of that worse
+baseline. On identical code the largest excess is the smallest tolerance that would
+have raised no false regression in these runs.
+
 Writes findings.tsv (one line per finding that is not noise; summary.txt counts every
 class) and passes.tsv (the raw
 per-pass figures: one line per step per pass, plus one "app" line per pass with the
@@ -49,6 +55,10 @@ def main():
     nofloor = defaultdict(int)
     nofloor_runs = 0
     stopped = 0
+    counters = ("cpu_ms_per_journey", "write_bytes_per_journey", "write_syscalls_per_journey",
+                "open_fds", "threads", "peak_rss_mb", "cpu_seconds_exact", "cpu_seconds")
+    cspread = defaultdict(list)
+    cexcess = defaultdict(list)
     lines = ["run\tfinding\tmetric\tb1\tc\tb2\tband\tdelta_pct\tclass"]
     passes = ["run\tpass\tjourney\tstep\tcount\tfailures\tp50_ms\tp95_ms\tmean_ms\tprocess"]
     for path in runs:
@@ -64,6 +74,17 @@ def main():
                 ]))
         if run.get("error"):
             stopped += 1
+        procs = {p["label"]: p.get("process", {}) for p in run.get("passes", [])}
+        if {"B1", "C", "B2"} <= set(procs):
+            for k in counters:
+                b1, c, b2 = (procs[x].get(k) for x in ("B1", "C", "B2"))
+                if b1 is None or c is None or b2 is None:
+                    continue
+                lo, hi = min(b1, b2), max(b1, b2)
+                if lo > 0:
+                    cspread[k].append((hi - lo) / lo)
+                if hi > 0:
+                    cexcess[k].append((c - hi) / hi)
         seen = set()
         nofloor_seen = False
         for f in run.get("findings", []):
@@ -114,6 +135,22 @@ def main():
             f"{100 * pct(s, 0.9):.1f}%" if s else "-",
             f"{100 * max(s):.1f}%" if s else "-",
         ]))
+    if cspread or cexcess:
+        print()
+        print("\t".join(("counter", "runs", "spread p50", "spread max", "excess p50",
+                         "excess p90", "excess max")))
+        for k in counters:
+            sp, ex = cspread.get(k, []), cexcess.get(k, [])
+            if not ex:
+                continue
+            print("\t".join([
+                k, str(len(ex)),
+                f"{100 * statistics.median(sp):.2f}%" if sp else "-",
+                f"{100 * max(sp):.2f}%" if sp else "-",
+                f"{100 * statistics.median(ex):.2f}%",
+                f"{100 * pct(ex, 0.9):.2f}%",
+                f"{100 * max(ex):.2f}%",
+            ]))
     return 0
 
 
