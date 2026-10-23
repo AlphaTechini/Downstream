@@ -157,6 +157,21 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-A3. The gated rule reports both planted regressions and no clean change
+
+- **Files:** `engine/classify/classify.go`, `examples/changes/`, `scripts/plant.sh`
+- **Proof:** [evidence/plants/README.md](../evidence/plants/README.md);
+  `evidence/plants/final/*/summary-NN.txt` with the final engine: `raise-hash-cost` and
+  `remove-list-limit` regression=1 in 3 of 3 runs each, `clean-change` regression=0 in 6 of 6
+  runs over two journey sets. Earlier sets (5 runs each) agree, except one clean run under a
+  2% peak-memory tolerance (`evidence/plants/rss-2pct/`), which is why the tolerance is 5%.
+- **Check:** `scripts/plant.sh remove-list-limit examples/shelf/journeys.thorough.json 3 /tmp/p && cat /tmp/p/summary-*.txt`
+- **Does not show:** anything about real, unplanted changes or how often they would be caught;
+  behaviour on the GitLab runner or in the Duo sandbox (the `engine-e2e` CI job runs these
+  changes, but no log of it under the gated rule is committed).
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |

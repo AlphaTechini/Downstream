@@ -124,3 +124,25 @@ are the committed check of them.
 The margins for CPU per journey and write syscalls per journey are thinner than in the
 `after` set (13.96% and 1.51%). These two tolerances are the ones most likely to give a false
 regression on another machine.
+
+## Set `final`: window CPU and GC cycles per pass
+
+At the commit "Fix the review findings in the engine, flow and docs": CPU per journey is
+measured over the k6 window from `/proc/<pid>/task/*/schedstat`, and GC cycles are judged per
+pass. Same machine and procedure ([final/machine.txt](final/machine.txt)), 20 runs, nothing
+else running. Summary: [final/summary.txt](final/summary.txt). Peak RSS was still allowed 2%
+in these runs; it is allowed 5% since the next commit, which can only remove regressions, not
+add them.
+
+| Measured | Value | Source |
+|---|---|---|
+| Runs with at least one false regression | 0 of 20 | summary.txt L2 |
+| Withheld findings | 0 | summary.txt L6-L20 |
+| Largest excess, CPU per journey over the k6 window (tolerance 20%) | 8.11% | summary.txt L23 |
+| B1/B2 spread, CPU per journey over the k6 window, max | 12.92% | summary.txt L23 |
+| Largest excess, write syscalls per journey (tolerance 4%) | 1.07% | summary.txt L25 |
+| Largest excess, allocations per journey (tolerance 10%) | 4.58% | summary.txt L31 |
+| GC cycles per pass | 0 in every pass (no spread) | summary.txt L11 |
+
+Window CPU is steadier than the whole-process CPU of the `runtime` set (largest excess 16.85%,
+spread 32.96%), because process start-up and shutdown are no longer counted.

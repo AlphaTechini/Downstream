@@ -55,3 +55,10 @@ baseline ([gated.tsv](rss-2pct/clean-change-thorough/gated.tsv), the `run-02` pe
 A/A runs never sample this, because base and head are the same binary there; on clean changes
 the candidate's peak RSS ranged from -3.51% to +2.17% of the worse baseline (this file's
 `clean-change-thorough` set and `rss-2pct/clean-change-thorough`). Peak RSS is now allowed 5%.
+
+[`final/`](final/) repeats the four sets with the 5% tolerance (commit "Allow peak memory 5%
+between two builds"), three runs each. Every plant run reports a regression and every clean
+run none (`summary-NN.txt` in each set): `raise-hash-cost` through CPU per completed journey,
+`remove-list-limit` through bytes written, alloc bytes, GC cycles and peak RSS
+(`final/*/table.txt`). With peak RSS allowed 5%, `raise-hash-cost` no longer raises a
+trade-off question.

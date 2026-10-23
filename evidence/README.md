@@ -15,7 +15,7 @@ Raw material behind the claims in the top-level README. Nothing here is a mock-u
 | [runs/ci-66-engine-noise/](runs/ci-66-engine-noise/) | Pipeline 66 `engine-noise`: 5 job logs, 20 clean-change runs |
 | [runs/local-wsl-clean-change/](runs/local-wsl-clean-change/) | 12 clean-change runs on a WSL2 laptop, kept as evidence of false positives on a noisy machine |
 | [aa/](aa/) | A/A runs (same commit as base and head): false regressions and counter noise on identical code, with the scripts that produce them ([aa/README.md](aa/README.md)) |
-| [plants/](plants/) | Planted regressions and the clean control: five runs each, then three each with later engines (`overlay/`, `rss-2pct/`) ([plants/README.md](plants/README.md)) |
+| [plants/](plants/) | Planted regressions and the clean control: five runs each, then three each with later engines (`overlay/`, `rss-2pct/`, `final/`) ([plants/README.md](plants/README.md)) |
 | [SHA256SUMS](SHA256SUMS) | SHA-256 of each evidence file above; checked by `make verify` |
 
 The runs under `runs/` are engine CLI runs in CI and on a laptop. The logged end-to-end flow
