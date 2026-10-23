@@ -2,8 +2,9 @@
 
 Each set is five runs of `scripts/plant.sh <change> <journeys> 5 <dir>` on one 4-CPU machine
 with Go 1.22.12 and k6 v0.56.0 (`machine.txt` in each set), followed by
-`python3 scripts/plant_summary.py <dir> evidence/plants/<set>`. The baseline is commit
-`5b81f03`; the candidate is the same commit with the patch from `examples/changes/` applied.
+`python3 scripts/plant_summary.py <dir> evidence/plants/<set>`. The baseline is the commit
+"Plant an unbounded book list in the demo and run it in CI" (its SHA at the time is in
+`machine.txt`); the candidate is the same commit with the patch from `examples/changes/` applied.
 Rule in effect: the gated rule of `engine/classify` (latency advisory). Raw output per run:
 `summary-NN.txt` (the `downstream summary` counts) and `gated.tsv` (every app-wide gated finding,
 and any step finding that is not noise, with B1, B2, C, allowed rise, noise band and
@@ -38,3 +39,12 @@ What else the runs show:
 - The "about 42 times more bytes written" expected for an unbounded list did not happen
   here: the demo's list grows only to the books the journeys create in one pass, so bytes per
   journey rose by about 58%.
+
+## Check with the final engine
+
+[`final/`](final/) repeats the four sets, three runs each, with the engine at the commit
+"Read allocations, GC cycles and goroutines through a build overlay". Every
+`raise-hash-cost` and `remove-list-limit` run reports a regression and every clean run
+reports none (`summary-NN.txt` in each set). The runtime counters now also report
+`remove-list-limit`: alloc bytes and GC cycles per journey rise, because `listBooks` reserves
+room for the limit on every call (`final/remove-list-limit-journeys.thorough/table.txt`).

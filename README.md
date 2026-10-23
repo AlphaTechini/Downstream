@@ -180,6 +180,7 @@ row unless stated; details in [evidence/runs.md](evidence/runs.md)):
 | A/A with the gated rule (latency advisory), 20 fresh runs: runs with a false regression | 0 of 20 (560 gated findings) | [summary](evidence/aa/after/summary.txt) L2, L6-L16 |
 | Gated rule, 5 runs each, 4-CPU dev machine: planted `raise-hash-cost` / planted `remove-list-limit` / clean control (two journey sets) | regression in 5 of 5 / 5 of 5 / 0 of 10 | [evidence/plants/README.md](evidence/plants/README.md) |
 | `remove-list-limit` (scripted edit): bytes written per completed journey | +58.10% to +59.80% | [table](evidence/plants/remove-list-limit-thorough/table.txt) |
+| A/A with runtime counters from the build overlay (allocations, alloc bytes, GC cycles per journey, goroutines), 20 runs: runs with a false regression | 0 of 20 | [summary](evidence/aa/runtime/summary.txt) L2, L31-L33 |
 
 The platform, from the logs in `evidence/day0/`:
 

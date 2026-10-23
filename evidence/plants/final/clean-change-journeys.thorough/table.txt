@@ -1,0 +1,6 @@
+run	summary
+run-01	regression=0 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+run-02	regression=0 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+run-03	regression=0 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+
+gated findings that are not noise:

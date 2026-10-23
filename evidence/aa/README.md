@@ -12,7 +12,8 @@ scripts/aa.sh 20 <scratch-dir>                       # 20 runs: downstream run -
 python3 scripts/aa_summary.py <scratch-dir> evidence/aa/<set>
 ```
 
-`run` accepts the same SHA twice; the runner builds it once
+Each set's `machine.txt` records the commit SHA as it was when the runs were made; find the
+commit on this branch by the subject named under each set. `run` accepts the same SHA twice; the runner builds it once
 ([before/run-01.log](before/run-01.log) L4) and still runs three passes (L7-L10).
 
 ## Set `before`: the rule as committed in `0fa756e`
@@ -47,7 +48,9 @@ What it does not show: the noise on the GitLab runner or in the Duo sandbox (the
 clean-change runs are in [../runs.md](../runs.md)), or noise on a slower machine, where the
 laptop runs in [../runs.md](../runs.md) did produce false regressions.
 
-## Set `counters`: the same rule, with the process counters added in `b57fe87`
+## Set `counters`: the same rule, with the process counters
+
+At the commit "Count bytes written, write syscalls, fds, threads and completed journeys".
 
 Same machine and procedure ([counters/machine.txt](counters/machine.txt)), 20 runs, nothing
 else running. Raw figures: [counters/passes.tsv](counters/passes.tsv) ("app" rows hold the
@@ -72,7 +75,10 @@ journey are the steadiest counter, but not exact: the app's responses are likely
 length between passes because they carry generated tokens and IDs (not checked). A thread count of 9 or 10 moves by one thread, which is
 11%, so threads need an absolute tolerance rather than a relative one.
 
-## Set `after`: the gated rule of `4b84b43`
+## Set `after`: the gated rule
+
+At the commit "Rerun the A/A check under the gated rule" (engine as of "Decide regressions
+on process counters and keep latency advisory").
 
 Same machine and procedure ([after/machine.txt](after/machine.txt)), 20 fresh runs (not the
 runs the tolerances were picked from), nothing else running. Summary:
@@ -95,3 +101,26 @@ comes from tolerances that sit above the largest A/A excess. The margin is small
 per journey (13.96% observed against 20% allowed), so that tolerance is the most likely to
 give a false regression on a noisier machine. Neither set says anything about the GitLab
 runner or the Duo sandbox.
+
+## Set `runtime`: the gated rule with the runtime counters from the build overlay
+
+At the commit "Read allocations, GC cycles and goroutines through a build overlay". Same
+machine and procedure ([runtime/machine.txt](runtime/machine.txt)), 20 runs, nothing else
+running. Summary: [runtime/summary.txt](runtime/summary.txt). The tolerances for the four
+runtime counters were first picked from 10 earlier runs that are not committed; these 20 runs
+are the committed check of them.
+
+| Measured | Value | Source |
+|---|---|---|
+| Runs with at least one false regression | 0 of 20 | summary.txt L2 |
+| Largest excess, allocations per journey (tolerance 10%) | 4.18% | summary.txt L31 |
+| Largest excess, alloc bytes per journey (tolerance 5%) | 1.70% | summary.txt L32 |
+| Goroutines (tolerance +1), B1/B2 spread and excess | 0, 0 | summary.txt L33 |
+| GC cycles per journey | 0 in every pass: a pass allocates too little to start a GC cycle, so this counter cannot show anything on the demo | summary.txt L11 (no spread) |
+| Largest excess, CPU per journey (tolerance 20%) | 16.85% | summary.txt L23 |
+| Largest excess, write syscalls per journey (tolerance 4%) | 3.18% | summary.txt L25 |
+| CPU per journey findings withheld or improved on identical code | 2 withheld, 1 improved, of 20 | summary.txt L8 |
+
+The margins for CPU per journey and write syscalls per journey are thinner than in the
+`after` set (13.96% and 1.51%). These two tolerances are the ones most likely to give a false
+regression on another machine.
