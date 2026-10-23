@@ -77,3 +77,38 @@ engine-e2e:
     paths:
       - out/
     expire_in: 90 days
+
+# Measures how often the clean change is wrongly flagged on shared runners: 5
+# jobs, 4 runs each. It records results and does not fail on a false positive.
+# Runs only in a pipeline started with DOWNSTREAM_NOISE=1.
+engine-noise:
+  stage: e2e
+  image: golang:1.22
+  needs: [k6]
+  rules:
+    - if: $DOWNSTREAM_NOISE == "1"
+  parallel: 5
+  script:
+    - export PATH="$CI_PROJECT_DIR/bin:$PATH"
+    - git config user.name "Downstream CI"
+    - git config user.email "downstream-ci@example.invalid"
+    - BASE=$(git rev-parse HEAD)
+    - git apply examples/changes/clean-change.patch
+    - git commit --quiet --all --message "Apply examples/changes/clean-change.patch for the noise job"
+    - HEAD_SHA=$(git rev-parse HEAD)
+    - go build -o bin/downstream ./engine/cmd/downstream
+    - mkdir -p out
+    - downstream scan --base "$BASE" --head "$HEAD_SHA" --out out/scan.json
+    - |
+      for i in 1 2 3 4; do
+        downstream run --base "$BASE" --head "$HEAD_SHA" --journeys examples/shelf/journeys.example.json --out "out/run-$i.json" || echo "run $i exited non-zero"
+        downstream report --run "out/run-$i.json" --scan out/scan.json --out "out/report-$i.md"
+        downstream summary --run "out/run-$i.json" --scan out/scan.json > "out/summary-$i.txt"
+        echo "noise $CI_NODE_INDEX/$CI_NODE_TOTAL run $i: $(tr '\n' ' ' < "out/summary-$i.txt")"
+        grep '| regression |' "out/report-$i.md" || true
+      done
+  artifacts:
+    when: always
+    paths:
+      - out/
+    expire_in: 90 days
