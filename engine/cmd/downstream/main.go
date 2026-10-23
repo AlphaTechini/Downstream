@@ -200,7 +200,8 @@ func cmdReport(args []string) error {
 }
 
 // cmdSummary prints one count per line so the flow and CI can branch on it
-// without reading the report.
+// without reading the report. regression counts the issues that would open;
+// advisory counts latency regressions, which open none.
 func cmdSummary(args []string) error {
 	fs := flag.NewFlagSet("summary", flag.ContinueOnError)
 	rpath := fs.String("run", "", "run.json")
@@ -216,26 +217,34 @@ func cmdSummary(args []string) error {
 	if err != nil {
 		return err
 	}
+	writeSummary(os.Stdout, run, scan)
+	return nil
+}
+
+// writeSummary prints the counts. Only findings that may decide count in all
+// but the advisory line: latency is advisory and has its own line.
+func writeSummary(w io.Writer, run model.Run, scan *model.Scan) {
 	counts := map[string]int{}
+	tradeOffs := map[string]bool{}
 	for _, f := range run.Findings {
+		if !f.Decides() {
+			continue
+		}
 		counts[f.Class]++
-	}
-	tradeJourneys := map[string]bool{}
-	for _, f := range run.Findings {
 		if f.Class == model.ClassTradeOff {
-			tradeJourneys[f.Journey] = true
+			tradeOffs[f.Journey] = true
 		}
 	}
-	fmt.Printf("regression=%d\n", len(issues.Headlines(run, scan)))
-	fmt.Printf("trade-off=%d\n", len(tradeJourneys))
-	fmt.Printf("improved=%d\n", counts[model.ClassImproved])
-	fmt.Printf("withheld=%d\n", counts[model.ClassWithheld])
-	fmt.Printf("discarded=%d\n", len(run.Discarded))
-	fmt.Printf("passes=%d\n", len(run.Passes))
+	fmt.Fprintf(w, "regression=%d\n", len(issues.Headlines(run, scan)))
+	fmt.Fprintf(w, "trade-off=%d\n", len(tradeOffs))
+	fmt.Fprintf(w, "improved=%d\n", counts[model.ClassImproved])
+	fmt.Fprintf(w, "withheld=%d\n", counts[model.ClassWithheld])
+	fmt.Fprintf(w, "advisory=%d\n", len(issues.AdvisoryRegressions(run)))
+	fmt.Fprintf(w, "discarded=%d\n", len(run.Discarded))
+	fmt.Fprintf(w, "passes=%d\n", len(run.Passes))
 	if run.Error != nil {
-		fmt.Printf("stopped=%s\n", run.Error.Stage)
+		fmt.Fprintf(w, "stopped=%s\n", run.Error.Stage)
 	}
-	return nil
 }
 
 type issuesOut struct {

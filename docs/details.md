@@ -317,30 +317,73 @@ answers with a redirect to another host is never followed.
 
 ### 6.3 Classification
 
-Initial defaults (also in `agentnotes.md`), to be tuned against logged runs and then stated
-in the README with the evidence:
+Implemented in `engine/classify`. The A/A runs in `evidence/aa/` (identical code as B1, C and
+B2) showed that the process counters vary far less than latency on the same code: bytes
+written per journey by under 1 percent, CPU per completed journey by up to about a fifth,
+step p95 by several times its own value at worst (`evidence/aa/counters/summary.txt`). So
+metrics are of two kinds:
 
-- **noise**: inside the baseline noise band (the difference between B1 and B2).
-- **regression**: a step that passed in baseline fails in the candidate; or a metric worse
-  than the worse baseline run by more than twice the noise band, and by at least 20 percent,
-  and by at least 10 ms (latency) or 10 MB (memory).
-- **trade-off**: one metric clearly better and another clearly worse on the same journey.
-  Becomes a question on the merge request, never an issue.
+- **Gated** metrics decide whether a run has a regression: the process counters (bytes
+  written and write syscalls per completed journey, open file descriptors, threads), CPU
+  milliseconds per completed journey, peak memory, and step failures.
+- **Advisory** metrics are shown but never decide: p50, p95 and mean latency per step, and the
+  app's total CPU seconds (which depends on how many journeys completed; CPU per completed
+  journey replaces it as the gated CPU metric).
 
-These thresholds are a starting point and are not claimed to be statistically rigorous. A
-three-run design cannot give a confidence interval; the report says so in one line.
+**The gated rule** (counters, CPU per journey, memory). Let `worse = max(B1, B2)`,
+`better = min(B1, B2)` and `band = |B1 - B2|`. Each metric has a tolerance with a relative and
+an absolute part, and `allowed = max(relative x worse, absolute)`. Then:
 
-Implemented in `engine/classify` with these rules plus three more, all stated in the report's
-method paragraph. Rules are applied in this order: regression, then **improved** (the
-opposite of regression: better than the better baseline run by the same margins), then
-**withheld** (the two baseline runs differ by more than 50 percent of the smaller one and by
-at least the absolute floor, so no verdict is given; a clear regression or improvement is
-never withheld), then noise. **not-reached**: a step with no requests in B1, C or B2 (an
-earlier step of its journey failed) has its latencies left uncompared, so a broken endpoint
-cannot make a later step look faster. Every metric counts higher as worse. Absolute floors:
-10 ms latency, 10 MB memory, 0.5 s CPU. A journey with a latency regression and a latency
-improvement has both re-classed as trade-off. Unit tests cover each class with synthetic
-inputs (FR-23).
+- **regression**: `C - worse > allowed` and `C - worse > band`.
+- **improved**: the mirror against `better`.
+- **withheld**: neither of the above, and `band > allowed`: the two baselines of this run
+  disagree by more than the tolerance, so a change of the tolerance's size could not be seen.
+  The reason names both figures.
+- **noise**: otherwise.
+- **not-measured**: a counter listed in a pass's `unmeasured`. Nothing is compared and it is
+  never a regression.
+
+Every finding carries `allowed`, `band` and the **smallest detectable change**,
+`max(allowed, band)`, also as a percentage of the worse baseline. It is the smallest change
+this run could tell apart from noise. A change beyond it is a regression even when the
+baselines are noisy, so a large regression is not hidden by noisy baselines. A change below it
+is not evidence of no change; the report says so beside every figure.
+
+The tolerances are `Thresholds.Tolerances` in `run.json` (`settings.thresholds`), set by
+`DefaultThresholds` in `engine/classify/classify.go`. Each was picked from the A/A runs in
+`evidence/aa/counters/summary.txt` (largest excess of C over the worse baseline on identical
+code) by one rule: about 1.5 to 2 times that largest excess, rounded up; for small integer
+counts (open file descriptors, threads) an absolute tolerance, because one thread is a large
+fraction of ten. No command-line flag changes them.
+
+**Step failures** are gated: a step that passed on both baseline runs and failed on the
+candidate is a regression, whatever its latency. Its smallest detectable change is one
+failure.
+
+**Trade-off**, for gated app metrics only: a regression is re-classed together with an
+improvement when some gated app metric improved by at least as large a fraction of its own
+baseline as the regression rose. A smaller improvement never excuses a regression. It
+becomes a question on the merge request, never an issue. Step failures and latency are not
+re-classed.
+
+**Advisory latency** keeps the older rule so a report can say "slower" or "faster": worse than
+the worse baseline by more than twice the noise band, by at least 20 percent and by at least
+10 ms, with the earlier **withheld** rule (baselines more than 50 percent apart) and
+**not-reached** (a step with no requests in some pass has its latencies left uncompared).
+Its findings have `gated: false`. They are never counted in `regression=`, never open an
+issue and are never the only reason for one. Their smallest detectable change is the largest
+of twice the noise band, the absolute floor and the relative minimum; the report prints it
+too. The `advisory=` line of `downstream summary` counts advisory findings classed as
+regression.
+
+A `run.json` written before findings had a `kind` has no gated or advisory split. The engine
+treats such findings as deciding, as they did then, and the report renders them in the older
+layout.
+
+Unit tests cover each branch with synthetic inputs, and a replay test feeds the A/A runs in
+`evidence/aa/*/passes.tsv` through the classifier and requires zero gated regressions. These
+thresholds are not claimed to be statistically rigorous. A three-run design cannot give a
+confidence interval; the report says so in one line.
 
 ### 6.4 Finding the cause
 
@@ -362,17 +405,21 @@ Two levels, the second only if time allows:
 ### 7.1 Merge request notes
 
 1. **Journeys added** (posted before the run): plain-English summary per journey.
-2. **Report** (posted after): script-rendered tables: per journey and step, baseline range,
-   candidate, change, noise band, verdict; a Mermaid chart comparing p95 per step;
-   discarded journeys; what was not measured; the issues to open (the flow posts the list of
-   issues it opened in a separate note).
+2. **Report** (posted after): script-rendered tables, in this order after the header: the
+   gated findings (metric, B1, B2, C, change, noise band, allowed, smallest detectable,
+   verdict), step failures, latency per journey labelled advisory (with its own smallest
+   detectable column), the raw per-pass process figures, a Mermaid chart comparing p95 per
+   step, the issues to open, discarded journeys, what was not measured, and the method;
+   the flow posts the list of issues it opened in a separate note.
 3. **A final note is always posted**, including on failure. A failed run is reported as
    failed, with the engine's error text and the step it failed at.
 
 Implemented in `engine/report`. Each figure comes from `run.json` and is formatted with
-fixed decimals (ms 1, s 2, MB 1). Besides the tables and chart above, the report has a
-findings line (regressed steps, trade-off journeys, improved and withheld metrics), the list
-of issues to open, the blast radius from `scan.json`, and the method and thresholds in words.
+fixed decimals (ms 1, s 2, MB 1, and per journey: CPU ms 2, bytes 0, write syscalls 2). Every
+finding row prints its noise band and smallest detectable change. Besides the tables and chart
+above, the report has two findings lines (gated, then advisory latency), the blast radius from
+`scan.json`, and the method and the tolerances in effect in words. A `run.json` from before
+findings had a `kind` renders in the older layout.
 The chart is a Mermaid `xychart-beta` block, capped at 20 steps; whether GitLab's Mermaid
 version renders `xychart-beta` in a note is **unverified**. A golden-file test checks the
 output, and a second test checks that every number in it is derived from the input.
@@ -380,7 +427,7 @@ output, and a second test checks that every number in it is derived from the inp
 ### 7.2 Issues (one per cause)
 
 Title: `[Downstream] <journey>: <metric> <direction> <amount>` for a single step, or
-`[Downstream] <N> steps slower via <changed functions>: worst <step> ...` for a group. Body, in
+`[Downstream] <N> steps failing via <changed functions>: worst <step> ...` for a group. Body, in
 order: who started the run (tagged with `@username` so they are notified), the changed
 functions, the figures for every step in the group with the noise band, the repro, a likely
 cause, numbered fix options, how to reply. The last
@@ -390,19 +437,25 @@ line is a hidden marker:
 <!-- downstream:v1 {"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95","step":"..."} -->
 ```
 
-Implemented in `engine/issues`. One change usually slows many steps for one reason, so
-issues are grouped by cause rather than opened per step: regressed steps are keyed by the
-changed functions (from `scan.json`) on the routes they call, and each key gets one issue.
-Steps whose routes reach no changed function share one more issue ("slower on routes outside
-the diff's call paths"); on the demo that group holds public reads slowed by CPU contention.
-At most 5 issues per run. Each issue has an engine-rendered table of every step in the group,
-and its headline (the title and the marker) is the step that got slowest in absolute terms,
-with failures always first. The likely cause and fix options come from a `notes.json` the
-model writes, keyed by headline finding ID and validated by the engine: no comment or fence
-markup, no table rows, and no figures with units, so the model cannot add numbers.
-`ParseMarker` accepts a whole
-issue body or the bare marker JSON. `Questions` writes one merge request question per
-trade-off journey.
+Implemented in `engine/issues`. Only gated regressions open issues. Failing steps are grouped
+by cause rather than opened per step: they are keyed by the changed functions (from
+`scan.json`) on the routes they call, and each key gets one issue. Steps whose routes reach no
+changed function share one more issue ("on routes outside the diff's call paths"). The gated
+app-wide regressions (counters, CPU per completed journey, memory) are measured per process,
+not per journey, so they form one more issue, "app", that lists every one of them with B1, B2,
+C, the allowed rise, the noise band and the smallest detectable change; its headline (the title
+and the marker) is the one with the largest change measured in allowed rises. At most 5 issues
+per run, the app issue included. Latency never opens an issue: advisory regressions are listed
+in a section "Latency on the same run (advisory)", grouped by journey and one figure per step,
+inside the issue that already covers their journey (so a failing step and its latency changes
+are together), and the app issue lists the rest. Each step issue has an engine-rendered table of
+every step in the group, and its headline is the step that got slowest in absolute terms, with
+failures always first. The likely cause and fix options come from a `notes.json` the model
+writes, keyed by headline finding ID and validated by the engine: no comment or fence markup,
+no table rows, and no figures with units, so the model cannot add numbers.
+`ParseMarker` accepts a whole issue body or the bare marker JSON. `Questions` writes one merge
+request question per trade-off: one for the app process, and one per journey for a `run.json`
+from before gating.
 
 The marker embeds the one journey that regressed, so an issue is self-contained: replying
 `fix option 2` needs the issue and nothing else. **UNVERIFIED (T-08, T-09):** whether a

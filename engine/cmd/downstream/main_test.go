@@ -93,3 +93,32 @@ func TestValidatePrintsWarningsAndStillSucceeds(t *testing.T) {
 		t.Errorf("invalid journeys: err %v, output %q", err, out.String())
 	}
 }
+
+func TestSummaryCountsOnlyGatedFindings(t *testing.T) {
+	latency := model.Finding{ID: "j.s.p95_ms", Journey: "j", Step: "s", Metric: model.MetricP95, Unit: "ms",
+		Kind: model.KindLatency, B1: 1, B2: 1, C: 400, Delta: 399, Class: model.ClassRegression}
+	cpu := model.Finding{ID: "app.cpu_seconds", Metric: model.MetricCPU, Unit: "s",
+		Kind: model.KindLatency, B1: 1, B2: 1, C: 40, Delta: 39, Class: model.ClassRegression}
+	quiet := model.Finding{ID: "app.threads", Metric: model.MetricThreads, Unit: "count",
+		Kind: model.KindCounter, Gated: true, B1: 9, B2: 10, C: 10, Class: model.ClassNoise}
+	run := model.Run{Passes: []model.Pass{{Label: "B1"}, {Label: "C"}, {Label: "B2"}},
+		Findings: []model.Finding{latency, cpu, quiet}}
+
+	var out bytes.Buffer
+	writeSummary(&out, run, nil)
+	want := "regression=0\ntrade-off=0\nimproved=0\nwithheld=0\nadvisory=2\ndiscarded=0\npasses=3\n"
+	if out.String() != want {
+		t.Errorf("latency-only run:\n%s\nwant:\n%s", out.String(), want)
+	}
+
+	run.Findings = append(run.Findings,
+		model.Finding{ID: "app.cpu_ms_per_journey", Metric: model.MetricCPUPerJourney, Unit: "ms/journey",
+			Kind: model.KindCPU, Gated: true, B1: 2, B2: 2, C: 240, Delta: 238, Allowed: 0.4, Class: model.ClassRegression},
+		model.Finding{ID: "j.s.failures", Journey: "j", Step: "s", Metric: model.MetricFailures, Unit: "count",
+			Kind: model.KindFailures, Gated: true, C: 3, Delta: 3, Class: model.ClassRegression})
+	out.Reset()
+	writeSummary(&out, run, nil)
+	if !strings.HasPrefix(out.String(), "regression=2\n") || !strings.Contains(out.String(), "advisory=2\n") {
+		t.Errorf("run with gated regressions:\n%s", out.String())
+	}
+}

@@ -1,7 +1,11 @@
 package classify
 
 import (
+	"bufio"
+	"encoding/json"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -74,6 +78,9 @@ func TestClassifyP95(t *testing.T) {
 			if f.Unit != "ms" || f.Journey != "j" || f.Step != "s" || f.Metric != model.MetricP95 {
 				t.Errorf("identity fields wrong: %+v", f)
 			}
+			if f.Kind != model.KindLatency || f.Gated {
+				t.Errorf("latency must be advisory: kind %q gated %v", f.Kind, f.Gated)
+			}
 		})
 	}
 }
@@ -126,31 +133,29 @@ func TestAppMetrics(t *testing.T) {
 	if cpu.Class != model.ClassRegression || cpu.Unit != "s" || cpu.Journey != "" || cpu.Step != "" {
 		t.Errorf("cpu: %+v", cpu)
 	}
+	if cpu.Kind != model.KindLatency || cpu.Gated {
+		t.Errorf("total CPU seconds must be advisory: %+v", cpu)
+	}
 	rss := find(t, fs, "app.peak_rss_mb")
-	if rss.Class != model.ClassRegression || rss.Unit != "MB" {
+	if rss.Class != model.ClassRegression || rss.Unit != "MB" || rss.Kind != model.KindMemory || !rss.Gated {
 		t.Errorf("rss: %+v", rss)
 	}
 }
 
-func TestTradeOff(t *testing.T) {
+func TestLatencyNeverTradesOff(t *testing.T) {
 	mk := func(label string, p95, p50 float64) model.Pass {
 		return model.Pass{Label: label, Steps: []model.StepMetrics{
 			{Journey: "j", Step: "a", Count: 10, P95: p95, P50: 20, Mean: 25},
 			{Journey: "j", Step: "b", Count: 10, P95: 100, P50: p50, Mean: 25},
-			{Journey: "k", Step: "a", Count: 10, P95: 100, P50: 20, Mean: 25},
 		}}
 	}
-	// step a p95 regresses, step b p50 improves, same journey j.
-	ps := []model.Pass{mk("B1", 100, 200), mk("C", 300, 80), mk("B2", 102, 204)}
-	fs := Classify(ps, DefaultThresholds())
-	for _, id := range []string{"j.a.p95_ms", "j.b.p50_ms"} {
-		f := find(t, fs, id)
-		if f.Class != model.ClassTradeOff || f.Reason != "one metric clearly better and another clearly worse on the same journey" {
-			t.Errorf("%s: %q %q", id, f.Class, f.Reason)
-		}
+	// step a p95 regresses, step b p50 improves, same journey: both keep their class.
+	fs := Classify([]model.Pass{mk("B1", 100, 200), mk("C", 300, 80), mk("B2", 102, 204)}, DefaultThresholds())
+	if f := find(t, fs, "j.a.p95_ms"); f.Class != model.ClassRegression || f.Gated {
+		t.Errorf("a: %+v", f)
 	}
-	if f := find(t, fs, "k.a.p95_ms"); f.Class != model.ClassNoise {
-		t.Errorf("other journey changed class: %+v", f)
+	if f := find(t, fs, "j.b.p50_ms"); f.Class != model.ClassImproved || f.Gated {
+		t.Errorf("b: %+v", f)
 	}
 }
 
@@ -216,6 +221,22 @@ func TestDefaults(t *testing.T) {
 	d := DefaultThresholds()
 	if d.BandMultiplier != 2 || d.MinRelative != 0.20 || d.MinLatencyMS != 10 || d.MinMemoryMB != 10 || d.MinCPUSeconds != 0.5 || d.MaxBaselineSpread != 0.5 {
 		t.Errorf("defaults: %+v", d)
+	}
+	want := map[string]model.Tolerance{
+		"write_bytes_per_journey":    {Relative: 0.01},
+		"write_syscalls_per_journey": {Relative: 0.04},
+		"open_fds":                   {Absolute: 1},
+		"threads":                    {Absolute: 2},
+		"cpu_ms_per_journey":         {Relative: 0.20},
+		"peak_rss_mb":                {Relative: 0.02},
+	}
+	if len(d.Tolerances) != len(want) {
+		t.Errorf("tolerances: %+v", d.Tolerances)
+	}
+	for k, v := range want {
+		if d.Tolerances[k] != v {
+			t.Errorf("tolerance %s = %+v, want %+v", k, d.Tolerances[k], v)
+		}
 	}
 }
 
@@ -298,4 +319,385 @@ func TestUnequalCounts(t *testing.T) {
 	if f := find(t, fs, "j.a.p95_ms"); strings.Contains(f.Reason, "counts") {
 		t.Errorf("equal counts mentioned: %q", f.Reason)
 	}
+}
+
+// proc is a process record with every counter set; the tests move one at a time.
+func proc() model.ProcessStats {
+	return model.ProcessStats{
+		CPUSeconds: 1, PeakRSSMB: 50, CPUSecondsExact: 1, CPUSource: model.CPUSourceRusage,
+		WriteBytes: 100000, WriteSyscalls: 400, OpenFDs: 7, Threads: 9, CompletedJourneys: 80,
+		CPUMsPerJourney: 10, WriteBytesPerJourney: 1000, WriteSyscallsPerJourney: 5,
+	}
+}
+
+func setMetric(p *model.ProcessStats, metric string, v float64) {
+	switch metric {
+	case model.MetricCPUPerJourney:
+		p.CPUMsPerJourney = v
+	case model.MetricWriteBytesPerJourney:
+		p.WriteBytesPerJourney = v
+	case model.MetricWriteSyscallsPerJourney:
+		p.WriteSyscallsPerJourney = v
+	case model.MetricOpenFDs:
+		p.OpenFDs = int(v)
+	case model.MetricThreads:
+		p.Threads = int(v)
+	case model.MetricRSS:
+		p.PeakRSSMB = v
+	}
+}
+
+func gatedPasses(metric string, v vals) []model.Pass {
+	ps := passes(vals{100, 100, 100}, vals{})
+	for i, x := range []float64{v.b1, v.c, v.b2} {
+		ps[i].Process = proc()
+		setMetric(&ps[i].Process, metric, x)
+	}
+	return ps
+}
+
+func TestGatedRule(t *testing.T) {
+	cases := []struct {
+		name       string
+		metric     string
+		v          vals
+		class      string
+		allowed    float64
+		detectable float64
+		word       string
+	}{
+		// cpu_ms_per_journey: relative 20% of the worse baseline
+		{"regression", model.MetricCPUPerJourney, vals{10, 20, 10.5}, model.ClassRegression, 2.1, 2.1, "more than the allowed 2.10 ms/journey"},
+		{"regression with noisy baselines", model.MetricCPUPerJourney, vals{10, 30, 15}, model.ClassRegression, 3, 5, "more than the noise band of 5.00 ms/journey"},
+		{"rise within allowed is noise", model.MetricCPUPerJourney, vals{10, 11, 10.5}, model.ClassNoise, 2.1, 2.1, "not more than the allowed"},
+		{"rise equal to allowed is noise", model.MetricCPUPerJourney, vals{10, 12, 10}, model.ClassNoise, 2, 2, "not more than the allowed"},
+		{"inside the baselines", model.MetricCPUPerJourney, vals{10, 10.3, 10.5}, model.ClassNoise, 2.1, 2.1, "inside the range"},
+		{"improved", model.MetricCPUPerJourney, vals{10, 5, 10.2}, model.ClassImproved, 2.04, 2.04, "better than the better baseline by 5.00"},
+		{"small improvement is noise", model.MetricCPUPerJourney, vals{10, 9, 10.2}, model.ClassNoise, 2.04, 2.04, "not more than the allowed"},
+		{"withheld: baselines disagree", model.MetricCPUPerJourney, vals{10, 16, 15}, model.ClassWithheld, 3, 5, "differ by 5.00 ms/journey, more than the allowed 3.00"},
+		{"rise beyond allowed but inside band is withheld", model.MetricCPUPerJourney, vals{10, 17, 15}, model.ClassWithheld, 3, 5, "could not be seen"},
+		{"improvement inside the band is withheld", model.MetricCPUPerJourney, vals{10, 6, 15}, model.ClassWithheld, 3, 5, "smallest change it could detect is 5.00"},
+		// counters with a relative tolerance
+		{"bytes regression", model.MetricWriteBytesPerJourney, vals{1000, 1030, 1004}, model.ClassRegression, 10.04, 10.04, "more than the allowed"},
+		{"bytes noise", model.MetricWriteBytesPerJourney, vals{1000, 1008, 1004}, model.ClassNoise, 10.04, 10.04, "not more than the allowed"},
+		{"syscalls regression", model.MetricWriteSyscallsPerJourney, vals{5, 5.5, 5.1}, model.ClassRegression, 0.204, 0.204, "more than the allowed"},
+		// peak memory
+		{"memory regression", model.MetricRSS, vals{50, 53, 50.2}, model.ClassRegression, 1.004, 1.004, "more than the allowed"},
+		{"memory noise", model.MetricRSS, vals{50, 50.8, 50.2}, model.ClassNoise, 1.004, 1.004, "not more than the allowed"},
+		// small integer counts use an absolute tolerance
+		{"fds: one more is noise", model.MetricOpenFDs, vals{7, 8, 7}, model.ClassNoise, 1, 1, "an absolute tolerance"},
+		{"fds: two more is a regression", model.MetricOpenFDs, vals{7, 9, 7}, model.ClassRegression, 1, 1, "more than the allowed 1"},
+		{"fds: leak", model.MetricOpenFDs, vals{7, 207, 7}, model.ClassRegression, 1, 1, "more than the noise band of 0"},
+		{"threads: 9 vs 10 is noise", model.MetricThreads, vals{9, 10, 10}, model.ClassNoise, 2, 2, "inside the range"},
+		{"threads: two more is noise", model.MetricThreads, vals{9, 12, 10}, model.ClassNoise, 2, 2, "not more than the allowed 2"},
+		{"threads: three more is a regression", model.MetricThreads, vals{9, 13, 10}, model.ClassRegression, 2, 2, "more than the allowed 2"},
+		{"threads: baselines 4 apart are withheld", model.MetricThreads, vals{7, 12, 11}, model.ClassWithheld, 2, 4, "differ by 4"},
+		{"threads: fewer threads is improved", model.MetricThreads, vals{20, 10, 20}, model.ClassImproved, 2, 2, "better than the better baseline by 10"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := Classify(gatedPasses(tc.metric, tc.v), DefaultThresholds())
+			f := find(t, fs, "app."+tc.metric)
+			if f.Class != tc.class {
+				t.Fatalf("class = %q (%s), want %q", f.Class, f.Reason, tc.class)
+			}
+			if !strings.Contains(f.Reason, tc.word) {
+				t.Errorf("reason %q does not contain %q", f.Reason, tc.word)
+			}
+			if !f.Gated || f.Journey != "" || f.Step != "" || f.Metric != tc.metric {
+				t.Errorf("identity: %+v", f)
+			}
+			if !near6(f.Allowed, tc.allowed) || !near6(f.Detectable, tc.detectable) {
+				t.Errorf("allowed %v detectable %v, want %v and %v", f.Allowed, f.Detectable, tc.allowed, tc.detectable)
+			}
+			worse := max(tc.v.b1, tc.v.b2)
+			if !near6(f.Band, absf(tc.v.b1-tc.v.b2)) || !near6(f.Delta, tc.v.c-worse) {
+				t.Errorf("band %v delta %v", f.Band, f.Delta)
+			}
+			if want := 100 * tc.detectable / worse; !near6(f.DetectablePct, want) {
+				t.Errorf("detectable pct %v, want %v", f.DetectablePct, want)
+			}
+		})
+	}
+}
+
+func near6(a, b float64) bool { return absf(a-b) < 1e-6 }
+
+func absf(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func TestGatedKinds(t *testing.T) {
+	fs := Classify(gatedPasses(model.MetricCPUPerJourney, vals{10, 10, 10}), DefaultThresholds())
+	want := map[string]string{
+		"app.cpu_ms_per_journey":         model.KindCPU,
+		"app.write_bytes_per_journey":    model.KindCounter,
+		"app.write_syscalls_per_journey": model.KindCounter,
+		"app.open_fds":                   model.KindCounter,
+		"app.threads":                    model.KindCounter,
+		"app.peak_rss_mb":                model.KindMemory,
+		"j.s.failures":                   model.KindFailures,
+		"app.cpu_seconds":                model.KindLatency,
+		"j.s.p95_ms":                     model.KindLatency,
+		"j.s.p50_ms":                     model.KindLatency,
+		"j.s.mean_ms":                    model.KindLatency,
+	}
+	if len(fs) != len(want) {
+		t.Errorf("got %d findings, want %d", len(fs), len(want))
+	}
+	for id, kind := range want {
+		f := find(t, fs, id)
+		if f.Kind != kind || f.Gated != (kind != model.KindLatency) {
+			t.Errorf("%s: kind %q gated %v, want kind %q", id, f.Kind, f.Gated, kind)
+		}
+	}
+}
+
+func TestGatedSteadyRunHasNoRegression(t *testing.T) {
+	for _, f := range Classify(gatedPasses(model.MetricCPUPerJourney, vals{10, 10, 10}), DefaultThresholds()) {
+		if f.Class != model.ClassNoise {
+			t.Errorf("%s: %q on identical passes", f.ID, f.Class)
+		}
+	}
+}
+
+func TestNotMeasured(t *testing.T) {
+	ps := gatedPasses(model.MetricOpenFDs, vals{7, 700, 7})
+	ps[1].Process.Unmeasured = []string{model.UnmeasuredOpenFDs, model.UnmeasuredWriteBytesPerJourney}
+	fs := Classify(ps, DefaultThresholds())
+	f := find(t, fs, "app.open_fds")
+	if f.Class != model.ClassNotMeasured || !strings.Contains(f.Reason, "pass C") {
+		t.Errorf("open_fds: %q / %q", f.Class, f.Reason)
+	}
+	if !f.Gated || f.Kind != model.KindCounter {
+		t.Errorf("not-measured keeps its kind: %+v", f)
+	}
+	if g := find(t, fs, "app.write_bytes_per_journey"); g.Class != model.ClassNotMeasured {
+		t.Errorf("write bytes: %q", g.Class)
+	}
+	if g := find(t, fs, "app.threads"); g.Class != model.ClassNoise {
+		t.Errorf("a measured counter was affected: %q", g.Class)
+	}
+	// two passes unread: both named
+	ps[0].Process.Unmeasured = []string{model.UnmeasuredOpenFDs}
+	f = find(t, Classify(ps, DefaultThresholds()), "app.open_fds")
+	if !strings.Contains(f.Reason, "passes B1, C") {
+		t.Errorf("reason = %q", f.Reason)
+	}
+}
+
+func TestNeverRegressionWhenNotJudged(t *testing.T) {
+	// A step that was never reached and a counter that was never read can
+	// have any figures; neither may be a regression.
+	ps := twoSteps([3]int{50, 0, 50}, [3]float64{200, 9000, 204})
+	for i := range ps {
+		ps[i].Process = proc()
+	}
+	ps[1].Process.Unmeasured = []string{model.UnmeasuredCPUPerJourney}
+	ps[1].Process.CPUMsPerJourney = 5000
+	for _, f := range Classify(ps, DefaultThresholds()) {
+		if f.ID == "j.b.p95_ms" && f.Class != model.ClassNotReached {
+			t.Errorf("%s: %q", f.ID, f.Class)
+		}
+		if f.ID == "app.cpu_ms_per_journey" && f.Class != model.ClassNotMeasured {
+			t.Errorf("%s: %q", f.ID, f.Class)
+		}
+	}
+}
+
+func TestGatedTradeOff(t *testing.T) {
+	ps := gatedPasses(model.MetricCPUPerJourney, vals{10, 13, 10.2})
+	for i, th := range []int{30, 10, 30} {
+		ps[i].Process.Threads = th
+	}
+	// CPU per journey is 27% above the worse baseline; threads are 67% below the better one.
+	fs := Classify(ps, DefaultThresholds())
+	for _, id := range []string{"app.cpu_ms_per_journey", "app.threads"} {
+		f := find(t, fs, id)
+		if f.Class != model.ClassTradeOff || !strings.Contains(f.Reason, "clearly better and another clearly worse") {
+			t.Errorf("%s: %q %q", id, f.Class, f.Reason)
+		}
+	}
+	if f := find(t, fs, "app.peak_rss_mb"); f.Class != model.ClassNoise {
+		t.Errorf("unrelated metric re-classed: %q", f.Class)
+	}
+}
+
+// A small improvement must not hide a large regression.
+func TestSmallImprovementDoesNotExcuseLargeRegression(t *testing.T) {
+	ps := gatedPasses(model.MetricCPUPerJourney, vals{10, 100, 10.2})
+	for i, v := range []float64{5, 4.5, 5} { // syscalls improve by 10%
+		ps[i].Process.WriteSyscallsPerJourney = v
+	}
+	fs := Classify(ps, DefaultThresholds())
+	if f := find(t, fs, "app.write_syscalls_per_journey"); f.Class != model.ClassImproved {
+		t.Errorf("syscalls: %q (%s)", f.Class, f.Reason)
+	}
+	if f := find(t, fs, "app.cpu_ms_per_journey"); f.Class != model.ClassRegression {
+		t.Errorf("cpu: %q (%s)", f.Class, f.Reason)
+	}
+	// a regression from a zero baseline has no finite size and is never excused
+	ps = gatedPasses(model.MetricOpenFDs, vals{0, 5, 0})
+	for i, th := range []int{30, 10, 30} {
+		ps[i].Process.Threads = th
+	}
+	if f := find(t, Classify(ps, DefaultThresholds()), "app.open_fds"); f.Class != model.ClassRegression {
+		t.Errorf("fds from zero: %q", f.Class)
+	}
+}
+
+func TestLegacyPassesHaveNoCounterFindings(t *testing.T) {
+	ps := passes(vals{100, 100, 100}, vals{}) // no CPU source: a run before the counters
+	for _, f := range Classify(ps, DefaultThresholds()) {
+		switch f.Metric {
+		case model.MetricCPUPerJourney, model.MetricWriteBytesPerJourney, model.MetricWriteSyscallsPerJourney, model.MetricOpenFDs, model.MetricThreads:
+			t.Errorf("counter finding %s for passes that never recorded counters", f.ID)
+		}
+	}
+}
+
+func TestTolerancesFallBackToDefaults(t *testing.T) {
+	th := DefaultThresholds()
+	th.Tolerances = nil
+	f := find(t, Classify(gatedPasses(model.MetricOpenFDs, vals{7, 9, 7}), th), "app.open_fds")
+	if f.Class != model.ClassRegression {
+		t.Errorf("class = %q", f.Class)
+	}
+	// a configured tolerance wins
+	th.Tolerances = map[string]model.Tolerance{model.MetricOpenFDs: {Absolute: 5}}
+	f = find(t, Classify(gatedPasses(model.MetricOpenFDs, vals{7, 9, 7}), th), "app.open_fds")
+	if f.Class != model.ClassNoise || f.Allowed != 5 {
+		t.Errorf("class = %q allowed %v", f.Class, f.Allowed)
+	}
+}
+
+func TestLatencyDetectable(t *testing.T) {
+	cases := []struct {
+		name string
+		p95  vals
+		want float64
+		pct  float64
+	}{
+		{"floor", vals{100, 100, 100}, 20, 20}, // 20% of 100 exceeds the floor of 10 ms and twice the band
+		{"twice the band", vals{100, 100, 130}, 60, 60.0 / 130 * 100},
+		{"absolute floor", vals{2, 2, 2.2}, 10, 10 / 2.2 * 100},
+	}
+	for _, tc := range cases {
+		f := find(t, Classify(passes(tc.p95, vals{}), DefaultThresholds()), "j.s.p95_ms")
+		if !near6(f.Detectable, tc.want) || !near6(f.DetectablePct, tc.pct) {
+			t.Errorf("%s: detectable %v (%v%%), want %v (%v%%)", tc.name, f.Detectable, f.DetectablePct, tc.want, tc.pct)
+		}
+	}
+	// failures: one failure is detectable when both baselines were clean
+	fs := Classify(passes(vals{100, 100, 100}, vals{}), DefaultThresholds())
+	if f := find(t, fs, "j.s.failures"); f.Detectable != 1 || !f.Gated {
+		t.Errorf("failures: %+v", f)
+	}
+	fs = Classify(passes(vals{100, 100, 100}, vals{0, 3, 2}), DefaultThresholds())
+	if f := find(t, fs, "j.s.failures"); f.Detectable != 0 {
+		t.Errorf("failures with a failing baseline: %+v", f)
+	}
+}
+
+// Identical code in B1, C and B2 must never give a gated regression. The A/A
+// runs in evidence/aa are replayed through the classifier as committed.
+func TestReplayAARuns(t *testing.T) {
+	for _, set := range []string{"before", "counters"} {
+		t.Run(set, func(t *testing.T) {
+			runs := readPasses(t, "../../evidence/aa/"+set+"/passes.tsv")
+			if len(runs) == 0 {
+				t.Fatal("no runs read")
+			}
+			names := make([]string, 0, len(runs))
+			for n := range runs {
+				names = append(names, n)
+			}
+			sort.Strings(names)
+			gatedFindings := 0
+			for _, n := range names {
+				ps := runs[n]
+				if len(ps) != 3 {
+					t.Fatalf("%s: %d passes", n, len(ps))
+				}
+				for _, f := range Classify(ps, DefaultThresholds()) {
+					if f.Gated {
+						gatedFindings++
+					}
+					if f.Gated && f.Class == model.ClassRegression {
+						t.Errorf("%s: gated regression %s: B1 %v C %v B2 %v (%s)", n, f.ID, f.B1, f.C, f.B2, f.Reason)
+					}
+				}
+			}
+			if gatedFindings == 0 {
+				t.Errorf("no gated finding was produced")
+			}
+			t.Logf("%s: %d runs replayed", set, len(names))
+		})
+	}
+}
+
+// readPasses rebuilds the passes of every run in a passes.tsv written by
+// scripts/aa_summary.py, keyed by run name.
+func readPasses(t *testing.T, path string) map[string][]model.Pass {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	byRun := map[string]map[string]*model.Pass{}
+	order := map[string][]string{}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	first := true
+	for sc.Scan() {
+		if first {
+			first = false
+			continue
+		}
+		cols := strings.Split(sc.Text(), "\t")
+		if len(cols) != 10 {
+			t.Fatalf("%s: %d columns in %q", path, len(cols), sc.Text())
+		}
+		run, label, journey, step := cols[0], cols[1], cols[2], cols[3]
+		if byRun[run] == nil {
+			byRun[run] = map[string]*model.Pass{}
+		}
+		p := byRun[run][label]
+		if p == nil {
+			p = &model.Pass{Label: label}
+			byRun[run][label] = p
+			order[run] = append(order[run], label)
+		}
+		if journey == "app" {
+			if err := json.Unmarshal([]byte(cols[9]), &p.Process); err != nil {
+				t.Fatalf("%s %s %s: %v", path, run, label, err)
+			}
+			continue
+		}
+		num := func(s string) float64 {
+			v, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				t.Fatalf("%s: %q: %v", path, s, err)
+			}
+			return v
+		}
+		p.Steps = append(p.Steps, model.StepMetrics{
+			Journey: journey, Step: step, Count: int(num(cols[4])), Failures: int(num(cols[5])),
+			P50: num(cols[6]), P95: num(cols[7]), Mean: num(cols[8]),
+		})
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string][]model.Pass{}
+	for run, labels := range order {
+		for _, l := range labels {
+			out[run] = append(out[run], *byRun[run][l])
+		}
+	}
+	return out
 }

@@ -128,6 +128,18 @@ type Thresholds struct {
 	MinMemoryMB       float64 `json:"min_memory_mb"`       // and delta >= this for memory
 	MinCPUSeconds     float64 `json:"min_cpu_seconds"`     // and delta >= this for CPU time
 	MaxBaselineSpread float64 `json:"max_baseline_spread"` // verdict withheld when |B1-B2| / min(B1,B2) exceeds this
+
+	// Tolerances are the gated metrics' allowed changes, keyed by metric name.
+	// The fields above judge the advisory latency metrics. A run.json written
+	// before gated metrics existed has no Tolerances.
+	Tolerances map[string]Tolerance `json:"tolerances"`
+}
+
+// Tolerance is how far a gated metric may rise above the worse baseline before
+// a rise counts: the larger of Relative times the worse baseline and Absolute.
+type Tolerance struct {
+	Relative float64 `json:"relative"` // fraction of the worse baseline, 0.01 is 1%
+	Absolute float64 `json:"absolute"` // in the metric's unit
 }
 
 // Discard is a journey dropped because it failed on the baseline.
@@ -214,6 +226,19 @@ const (
 	// ClassNotReached marks a latency figure for a step that recorded no
 	// requests in at least one pass, so there is nothing to compare.
 	ClassNotReached = "not-reached"
+	// ClassNotMeasured marks a gated counter that could not be read in at least
+	// one pass, so there is nothing to compare.
+	ClassNotMeasured = "not-measured"
+)
+
+// Kinds of metric. Counter, CPU, memory and failures are gated: they decide
+// whether a run has a regression. Latency is advisory.
+const (
+	KindCounter  = "counter"
+	KindCPU      = "cpu"
+	KindMemory   = "memory"
+	KindFailures = "failures"
+	KindLatency  = "latency"
 )
 
 // Metric names used in findings.
@@ -247,7 +272,26 @@ type Finding struct {
 	DeltaPct float64 `json:"delta_pct"` // Delta as a percentage of the worse baseline
 	Class    string  `json:"class"`
 	Reason   string  `json:"reason"` // which rule decided the class, in words
+
+	// Kind says what sort of metric this is (the Kind constants). Gated findings
+	// can open issues; the others are advisory. A run.json written before gating
+	// existed has neither field: see Decides.
+	Kind  string `json:"kind"`
+	Gated bool   `json:"gated"`
+
+	// Allowed is the tolerance in effect for a gated metric (zero for the rest).
+	// Detectable is the smallest change this run could have told apart from
+	// noise: the larger of Allowed and Band for a gated metric. DetectablePct
+	// is Detectable as a percentage of the worse baseline.
+	Allowed       float64 `json:"allowed"`
+	Detectable    float64 `json:"detectable"`
+	DetectablePct float64 `json:"detectable_pct"`
 }
+
+// Decides reports whether the finding may count toward a verdict or an issue.
+// A finding from a run.json that predates Kind is treated as deciding, as it
+// did then.
+func (f Finding) Decides() bool { return f.Gated || f.Kind == "" }
 
 // RunError says where a run stopped and why.
 type RunError struct {

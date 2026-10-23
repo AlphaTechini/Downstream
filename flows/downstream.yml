@@ -134,7 +134,8 @@ prompts:
             A non-zero exit still writes run.json; continue to R9 either way.
         R9. run_command: downstream report --run /tmp/ds/run.json --scan /tmp/ds/scan.json --out /tmp/ds/report.md && cat /tmp/ds/report.md && downstream summary --run /tmp/ds/run.json --scan /tmp/ds/scan.json
         R10. create_merge_request_note with the report text exactly as printed.
-        R11. If summary shows regression=0 and trade-off=0, stop. Otherwise run_command:
+        R11. If summary shows regression=0 and trade-off=0, stop; "advisory=" counts latency
+            changes that open no issue and are already in the report. Otherwise run_command:
             downstream issues --run /tmp/ds/run.json --scan /tmp/ds/scan.json --mr <iid> --starter <starter> --out /tmp/ds/draft.json && cat /tmp/ds/draft.json
             For each finding ID in "needs_notes", read that issue's draft body (its changed
             functions, steps and figures) and the hunks in scan.json, and write notes JSON:

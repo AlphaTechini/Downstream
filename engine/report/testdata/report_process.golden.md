@@ -69,6 +69,7 @@ Bars: worse of the two baseline runs. Line: candidate.
 
 - `shelf.add_book.p95_ms`
 - `signin.login.failures`
+- `app.peak_rss_mb`
 
 2 regressed steps are grouped into 2 by the changed functions on the routes they call; one issue per group.
 

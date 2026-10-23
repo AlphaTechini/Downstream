@@ -15,31 +15,36 @@ const maxIssues = 5
 // maxTitle is the longest title Build produces, in characters.
 const maxTitle = 199
 
-// headlineOrder and appOrder say which metric speaks for a step or the app.
+// headlineOrder says which metric speaks for a step. appOrder is the fallback
+// order for app-wide findings that carry no tolerance (a run.json written
+// before gating).
 var (
 	headlineOrder = []string{model.MetricFailures, model.MetricP95, model.MetricMean, model.MetricP50}
 	appOrder      = []string{model.MetricRSS, model.MetricCPU}
 )
 
-// Group is the set of regressed steps that one issue covers because the same
-// changed functions sit on the routes they call.
+// Group is what one issue covers: either the failing steps that share changed
+// functions on the routes they call, or the app-wide gated regressions.
 type Group struct {
 	Key      []string        // changed functions shared by the steps, sorted; empty for the "outside" group
 	Scoped   bool            // a scan was available, so Key is meaningful
 	Headline model.Finding   // names the issue; notes are keyed by its ID
 	Steps    []model.Finding // each regressed step's headline finding, ordered by ID
-	App      []model.Finding // app process regressions listed in this issue
+	App      []model.Finding // the app issue's gated regressions, largest change against its tolerance first
+	Advisory []model.Finding // advisory regressions listed in this issue, by journey, step and metric
+	AppIssue bool            // the one issue for app-wide gated regressions
 
 	routes map[string][]string // changed function -> routes (METHOD path) that carry it
 }
 
 // Plan says which issues Build opens and how the regressed steps were grouped.
 type Plan struct {
-	Groups         []Group // at most maxIssues, the groups with the most steps first
+	Groups         []Group // step groups with the most steps first, then the app issue; at most maxIssues
 	RegressedSteps int
 	TotalGroups    int // groups of regressed steps before the cap
 	LeftOutGroups  int
 	LeftOutSteps   int
+	AppRegressions int // gated app-wide regressions, all listed in the app issue
 }
 
 // Headlines returns the headline finding of every issue Build would open, in
@@ -53,24 +58,47 @@ func Headlines(run model.Run, scan *model.Scan) []model.Finding {
 	return out
 }
 
+// AdvisoryRegressions returns the regression-class findings that may not open
+// an issue (latency), ordered by ID.
+func AdvisoryRegressions(run model.Run) []model.Finding {
+	var out []model.Finding
+	for _, f := range run.Findings {
+		if f.Class == model.ClassRegression && !f.Decides() {
+			out = append(out, f)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
 // PlanIssues groups the regressed steps. A step's cause key is the sorted,
 // de-duplicated list of changed functions (scan.Changed) on the routes it
-// calls. Without a scan every step is in one group. App process regressions
-// join the largest group, or form their own issue when no step regressed.
+// calls. Without a scan every step is in one group. Only gated findings open
+// issues. The gated app-wide regressions (counters, CPU per journey, memory)
+// are measured per process, not per journey, so they form one more issue
+// instead of joining a step group. Advisory regressions open nothing; they are
+// listed in the issue that already covers their journey, or in the app issue.
 func PlanIssues(run model.Run, scan *model.Scan) Plan {
 	type skey struct{ journey, step string }
 	byStep := map[skey][]model.Finding{}
 	var app []model.Finding
+	advisoryByJourney := map[string][]model.Finding{}
+	var advisoryApp []model.Finding
 	for _, f := range run.Findings {
 		if f.Class != model.ClassRegression {
 			continue
 		}
-		if f.Journey == "" {
+		switch {
+		case !f.Decides() && f.Journey == "":
+			advisoryApp = append(advisoryApp, f)
+		case !f.Decides():
+			advisoryByJourney[f.Journey] = append(advisoryByJourney[f.Journey], f)
+		case f.Journey == "":
 			app = append(app, f)
-			continue
+		default:
+			k := skey{f.Journey, f.Step}
+			byStep[k] = append(byStep[k], f)
 		}
-		k := skey{f.Journey, f.Step}
-		byStep[k] = append(byStep[k], f)
 	}
 
 	stepDefs := map[skey]model.Step{}
@@ -118,22 +146,40 @@ func PlanIssues(run model.Run, scan *model.Scan) Plan {
 		return all[i].Headline.ID < all[j].Headline.ID
 	})
 
-	plan := Plan{RegressedSteps: len(byStep), TotalGroups: len(all)}
-	if len(all) > maxIssues {
-		for _, g := range all[maxIssues:] {
+	plan := Plan{RegressedSteps: len(byStep), TotalGroups: len(all), AppRegressions: len(app)}
+	room := maxIssues
+	if len(app) > 0 {
+		room--
+	}
+	if len(all) > room {
+		for _, g := range all[room:] {
 			plan.LeftOutGroups++
 			plan.LeftOutSteps += len(g.Steps)
 		}
-		all = all[:maxIssues]
+		all = all[:room]
+	}
+
+	// A journey's advisory regressions go in the first issue that has one of
+	// its steps; the app issue takes the rest.
+	shown := map[string]bool{}
+	for i := range all {
+		var journeys []string
+		for _, s := range all[i].Steps {
+			if !shown[s.Journey] && len(advisoryByJourney[s.Journey]) > 0 {
+				shown[s.Journey] = true
+				journeys = append(journeys, s.Journey)
+			}
+		}
+		sort.Strings(journeys)
+		for _, j := range journeys {
+			all[i].Advisory = append(all[i].Advisory, advisoryByJourney[j]...)
+		}
 	}
 	plan.Groups = all
 
-	app = rank(app, appOrder)
-	switch {
-	case len(plan.Groups) > 0:
-		plan.Groups[0].App = app
-	case len(app) > 0:
-		g := Group{Scoped: scan != nil, Headline: app[0], App: app, routes: map[string][]string{}}
+	if len(app) > 0 {
+		sort.SliceStable(app, func(i, j int) bool { return appBefore(app[i], app[j]) })
+		g := Group{Scoped: scan != nil, Headline: app[0], App: app, AppIssue: true, routes: map[string][]string{}}
 		if scan != nil {
 			var steps []model.Step
 			for _, j := range run.Journeys {
@@ -141,9 +187,54 @@ func PlanIssues(run model.Run, scan *model.Scan) Plan {
 			}
 			g.Key, g.routes = changedOn(scan, steps)
 		}
-		plan.Groups = []Group{g}
+		var rest []string
+		for j := range advisoryByJourney {
+			if !shown[j] {
+				rest = append(rest, j)
+			}
+		}
+		sort.Strings(rest)
+		for _, j := range rest {
+			g.Advisory = append(g.Advisory, advisoryByJourney[j]...)
+		}
+		g.Advisory = append(g.Advisory, advisoryApp...)
+		plan.Groups = append(plan.Groups, g)
+	}
+	for i := range plan.Groups {
+		a := plan.Groups[i].Advisory
+		sort.SliceStable(a, func(x, y int) bool {
+			if a[x].Journey != a[y].Journey {
+				return a[x].Journey < a[y].Journey
+			}
+			return a[x].ID < a[y].ID
+		})
 	}
 	return plan
+}
+
+// appBefore orders app-wide regressions: the largest change against its own
+// tolerance first. Findings without a tolerance (from before gating) follow
+// the fixed metric order instead.
+func appBefore(a, b model.Finding) bool {
+	if a.Allowed > 0 && b.Allowed > 0 {
+		ra, rb := a.Delta/a.Allowed, b.Delta/b.Allowed
+		if ra != rb {
+			return ra > rb
+		}
+		return a.ID < b.ID
+	}
+	pos := func(m string) int {
+		for i, o := range appOrder {
+			if o == m {
+				return i
+			}
+		}
+		return len(appOrder)
+	}
+	if pa, pb := pos(a.Metric), pos(b.Metric); pa != pb {
+		return pa < pb
+	}
+	return a.ID < b.ID
 }
 
 // changedOn returns the changed functions (sorted, unique) on the scan's changed
@@ -283,7 +374,7 @@ func (g Group) title(run model.Run) string {
 		}
 		return fitTitle("[Downstream] "+label+": "+metricWords(f.Metric)+" "+amountWords(f), nil)
 	}
-	head := "[Downstream] " + strconv.Itoa(n) + " steps slower"
+	head := "[Downstream] " + strconv.Itoa(n) + " steps " + g.stepVerb()
 	tail := ": worst " + f.Journey + "." + f.Step + " " + metricWords(f.Metric) + " " + amountWords(f)
 	switch {
 	case !g.Scoped:
@@ -303,6 +394,17 @@ func (g Group) title(run model.Run) string {
 		}
 		return prefix + g.Key[0] + tail
 	})
+}
+
+// stepVerb is "failing" when every step in the group regressed on failures,
+// and "slower" for the latency regressions of a run.json from before gating.
+func (g Group) stepVerb() string {
+	for _, s := range g.Steps {
+		if s.Metric != model.MetricFailures {
+			return "slower"
+		}
+	}
+	return "failing"
 }
 
 // fitTitle returns s, or what build makes of it, cut to maxTitle characters.
