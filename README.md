@@ -7,11 +7,12 @@ cause, and files a fix.** It is a GitLab Duo Agent Platform flow. *Merged is not
 For: maintainers and reviewers of web/API services on GitLab, especially small teams with no
 staging environment that replays real user behaviour.
 
-> **Status, 2026-10-22: platform tests are done and logged; the engine is built but has no
-> logged run yet.** The engine (`engine/`) scans a diff, runs journeys on two builds with k6
-> and renders the report and issues; its unit and integration tests pass with `make test`.
-> No run of it is committed under `evidence/`, so nothing about it is marked Verified. The
-> claims table says exactly what has been shown.
+> **Status, 2026-10-23: platform tests are done and logged; the engine runs end to end in
+> GitLab CI; the product flow has not run yet.** The engine (`engine/`) scans a diff, runs
+> journeys on two builds with k6 and renders the report and issues. In CI it flags the planted
+> regression in the demo app and passes the clean control in 22 of 22 runs
+> ([evidence/runs.md](evidence/runs.md)). It has not yet run inside the Duo flow. The claims
+> table says exactly what has been shown.
 
 ## Built for GitLab Transcend: Life After Code
 
@@ -22,7 +23,7 @@ have not been re-read against the live page since and are to be re-checked befor
 |---|---|---|
 | Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/probe.yml`](flows/probe.yml) ran as a real flow; [`flows/downstream.yml`](flows/downstream.yml) is the product flow | Probe verified. Product flow written, not yet run on the platform |
 | Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public per the GitLab API on 2026-10-22 ([record](evidence/gitlab-project-2026-10-22.json)). MIT `LICENSE` committed |
-| Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/). [`.gitlab-ci.yml`](.gitlab-ci.yml) runs `make verify`, the Go tests, and `engine-e2e`, which runs the engine end to end on the demo app for the planted and the clean change | 3 probe sessions, 0 engine runs; no `engine-e2e` log committed yet |
+| Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/). [`.gitlab-ci.yml`](.gitlab-ci.yml) runs `make verify`, the Go tests, and `engine-e2e`, which runs the engine end to end on the demo app for the planted and the clean change; `engine-noise` repeats the clean change on the `measure-noise` branch | 3 probe sessions; engine CI runs from pipelines 63 and 66 copied to [`evidence/runs/`](evidence/runs/); 0 flow runs of the engine |
 | Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
 | One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option and merges ([`docs/userflow.md`](docs/userflow.md)) | Design only |
 | Path A (new project) | first commit 2026-10-22 (`git log`) | Intended path |
@@ -47,10 +48,10 @@ to routes the author never opened. That gap is what Downstream targets.
 | Step | What happens | Status |
 |---|---|---|
 | 1 | One mention on a merge request starts the flow | Verified (probe) |
-| 2 | It maps changed routes and routes that depend on them (blast radius) | Built: `downstream scan` ([`engine/scan`](engine/scan/)), Go `net/http` only; no logged run |
+| 2 | It maps changed routes and routes that depend on them (blast radius) | Built: `downstream scan` ([`engine/scan`](engine/scan/)), Go `net/http` only; ran in CI on the demo app ([evidence](evidence/runs.md)) |
 | 3 | It writes 3 to 6 user journeys and shows them to the reviewer in plain English first | Engine side built: schema and validation ([`engine/journey`](engine/journey/)); the model writing them is in the flow prompt, not run |
-| 4 | k6 runs them on the old build twice and the new build once, so noise is measured | Built: `downstream run` ([`engine/runner`](engine/runner/), [`engine/k6gen`](engine/k6gen/)); no logged run |
-| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Engine side built: [`engine/classify`](engine/classify/), [`engine/report`](engine/report/), [`engine/issues`](engine/issues/); creating issues from the flow untested (T-08) |
+| 4 | k6 runs them on the old build twice and the new build once, so noise is measured | Built: `downstream run` ([`engine/runner`](engine/runner/), [`engine/k6gen`](engine/k6gen/)); ran in CI with hand-written example journeys ([evidence](evidence/runs.md)) |
+| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Engine side built: [`engine/classify`](engine/classify/), [`engine/report`](engine/report/), [`engine/issues`](engine/issues/); report and issue bodies produced in CI; the planted change gives 2 issues for 1 cause; creating issues from the flow untested (T-08) |
 | 6 | `@handle fix option N` applies an option and reruns that journey; `verify` reruns after merge | Engine side built: marker parsing and `fixcheck`; committing a fix from the flow untested (T-10), so a fix is posted as a diff for a human |
 
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
@@ -83,16 +84,20 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | A server on 127.0.0.1 inside the sandbox answers | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L545-550 |
 | A 150 s command completes | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L561-586 |
 | This GitLab project is public | Verified | GitLab project settings | [API record](evidence/gitlab-project-2026-10-22.json) |
-| The engine finds regressions between two builds | Built, not verified: no run committed | `engine/` | none |
-| Journeys are generated from the diff and run by k6 against an app | Engine side built, not verified; the model writing journeys has not run | `engine/journey`, `engine/k6gen` | none |
-| One issue per cause, starter tagged | Issue bodies built, not verified; issue creation from a flow untested | `engine/issues` | none |
+| The engine finds a planted regression between two builds and traces it to the changed function | Verified in GitLab CI on the demo app; not yet run inside the flow | `engine/` | [CI job log](evidence/runs/ci-63-engine-e2e/raise-hash-cost-job-log.txt) L77; [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5, L12, L53, L90-96 |
+| A clean change comes out clean on the GitLab runner | Verified, 22 of 22 runs on `saas-linux-small-amd64`; 6 of 12 local WSL2 runs were false positives; the Duo sandbox is not measured | `engine/classify` | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) 20 runs; [summary](evidence/runs.md) |
+| Journeys are generated from the diff and run by k6 against an app | k6 runs verified in CI with hand-written example journeys; the model writing journeys has not run | `engine/journey`, `engine/k6gen` | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) |
+| One issue per cause, starter tagged | Issue bodies produced in CI; the planted change gives 2 issues for 1 cause; issue creation from a flow untested | `engine/issues` | [issues.json](evidence/runs/ci-63-engine-e2e/raise-hash-cost/issues.json) L5, L31 |
 | `fix option N` applies a change; `verify` reruns after merge | Not built in the flow; engine checks the option number only; committing from a flow untested | `engine/issues` | none |
 | Cost in credits of one run | Not measured | none | none |
 
 ## What is mocked or not built
 
-- **The engine has no logged run.** It is built and tested (`make test`), but no `run.json` or
-  report from it is committed, so its claims are not Verified.
+- **The engine has run only in CI and locally, not in the flow.** Its committed runs use the
+  demo app and the hand-written journeys in `examples/shelf/journeys.example.json`.
+- **False positives on noisy machines.** Each step's p95 comes from 20 samples, so a short
+  stall can pass the 10 ms floor. The clean control was flagged in 6 of 12 local WSL2 runs and
+  in 0 of 22 runner runs; the Duo sandbox's noise is not measured ([evidence/runs.md](evidence/runs.md)).
 - **The product flow has not run.** [`flows/downstream.yml`](flows/downstream.yml) uses tools
   not yet exercised from a custom flow (`create_issue`, `get_issue`, `create_issue_note`;
   T-08, T-09), and the engine has not yet been built inside the sandbox.
@@ -146,7 +151,8 @@ mention on an MR
  -> flows/downstream.yml              one AgentComponent, one prompt (written, not yet run)
      reads agentnotes.md              from the base commit: journey style, issue format
      calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
-                                      summary, issues, marker, fixcheck (built, no logged run)
+                                      summary, issues, marker, fixcheck (built; CI runs in
+                                      evidence/runs.md, not yet run from the flow)
        builds base and head from git, runs the app on 127.0.0.1
        k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
        Go 1.22.12                     already in the sandbox image (verified), nothing to install
@@ -158,8 +164,18 @@ engine's interface: [`docs/details.md`](docs/details.md) sections 3 to 8.
 
 ## Measured results
 
-No engine measurements exist yet; the first will go in `evidence/runs/`. What has been measured
-is the platform, from the logs in `evidence/day0/`:
+Engine runs in GitLab CI on the demo app, from [`evidence/runs/`](evidence/runs/) (one run per
+row unless stated; details in [evidence/runs.md](evidence/runs.md)):
+
+| Measurement | Value | Source |
+|---|---|---|
+| Planted change: regressed steps | 22 of 22, in 2 issue groups | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5 |
+| Planted change: `log_in` p95, B1 / B2 / candidate | 2.8 / 1.6 / 537.9 ms | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L12 |
+| Planted change: app CPU time, B1 / candidate / B2 | 0.16 / 27.10 / 0.16 s | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L53 |
+| Clean change: runs flagged as regression | 0 of 22 (pipelines 63 and 66) | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) |
+| Clean change: largest step p95 increase over 20 runs | 4.6 ms (regression floor 10 ms) | `evidence/runs/ci-66-engine-noise/noise-*/report-*.md` |
+
+The platform, from the logs in `evidence/day0/`:
 
 | Measurement | Value | Source |
 |---|---|---|
@@ -200,8 +216,8 @@ shell inside a quoted heredoc, and the engine is built from the merge request's 
 
 ## Roadmap
 
-Done: demo target chosen (planted regression, labelled), engine built. Next: the engine's
-first logged run, then T-07 to T-10 with the product flow. Sun 25: at least five logged end-to-end runs; if there are fewer, submit the smaller version
+Done: demo target chosen (planted regression, labelled), engine built, engine runs logged in
+CI. Next: T-07 to T-10 with the product flow, and the engine's noise inside the sandbox. Sun 25: at least five logged end-to-end runs; if there are fewer, submit the smaller version
 (report in the MR only) and say so. Mon 26: video. Tue 27: submit before 13:00 UTC.
 
 ## Docs

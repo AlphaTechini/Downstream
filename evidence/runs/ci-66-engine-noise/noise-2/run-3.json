@@ -1,0 +1,2322 @@
+{
+  "version": 1,
+  "base": "baacc58fc4d80ae874bfe42df08e1995ebd36e0a",
+  "head": "105e79459e81f78507af7ab0796c1e23a67fd9c3",
+  "started_at": "2026-10-23T03:50:41Z",
+  "ended_at": "2026-10-23T03:50:44Z",
+  "settings": {
+    "vus": 2,
+    "iterations": 10,
+    "duration_seconds": 60,
+    "k6_version": "k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)",
+    "thresholds": {
+      "band_multiplier": 2,
+      "min_relative": 0.2,
+      "min_latency_ms": 10,
+      "min_memory_mb": 10,
+      "min_cpu_seconds": 0.5,
+      "max_baseline_spread": 0.5
+    }
+  },
+  "journeys": [
+    {
+      "id": "new_reader_builds_shelf",
+      "goal": "A new reader signs up, logs in, adds a book and puts it on their shelf",
+      "why_included": "Covers the sign-up and login routes and the authenticated routes that check the token on every request",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Authorization": "Bearer {{token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "title": "The Long Way Round",
+            "author": "A. Writer",
+            "tags": [
+              "travel",
+              "memoir"
+            ]
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "shelf_add",
+          "method": "PUT",
+          "path": "/me/shelf/{{book_id}}",
+          "headers": {
+            "Authorization": "Bearer {{token}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "shelf_list",
+          "method": "GET",
+          "path": "/me/shelf",
+          "headers": {
+            "Authorization": "Bearer {{token}}"
+          },
+          "expect_status": 200
+        }
+      ]
+    },
+    {
+      "id": "reader_reviews_book",
+      "goal": "A reader logs in, reviews a book and reads the reviews",
+      "why_included": "Authenticated write followed by a public read of the same data",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Authorization": "Bearer {{token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "title": "Notes on Quiet Mornings",
+            "author": "A. Writer",
+            "tags": [
+              "essays"
+            ]
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "post_review",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Authorization": "Bearer {{token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "rating": 4,
+            "text": "Short and well written."
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "read_reviews",
+          "method": "GET",
+          "path": "/books/{{book_id}}/reviews",
+          "expect_status": 200
+        }
+      ]
+    },
+    {
+      "id": "visitor_browses_by_tag",
+      "goal": "A visitor browses books by tag and opens one",
+      "why_included": "Public routes only; they share the store with the changed code but never check a token",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Authorization": "Bearer {{token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "title": "Maps of Small Towns",
+            "author": "A. Writer",
+            "tags": [
+              "maps"
+            ]
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "browse_tag",
+          "method": "GET",
+          "path": "/books?tag=maps",
+          "expect_status": 200
+        },
+        {
+          "name": "open_book",
+          "method": "GET",
+          "path": "/books/{{book_id}}",
+          "expect_status": 200
+        }
+      ]
+    },
+    {
+      "id": "reader_tidies_shelf",
+      "goal": "A reader views their shelf and removes a book",
+      "why_included": "Authenticated list and delete routes on the shelf",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "reader_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Authorization": "Bearer {{token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "title": "A Field Guide to Moss",
+            "author": "A. Writer",
+            "tags": [
+              "nature"
+            ]
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "shelf_add",
+          "method": "PUT",
+          "path": "/me/shelf/{{book_id}}",
+          "headers": {
+            "Authorization": "Bearer {{token}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "shelf_list",
+          "method": "GET",
+          "path": "/me/shelf",
+          "headers": {
+            "Authorization": "Bearer {{token}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "shelf_remove",
+          "method": "DELETE",
+          "path": "/me/shelf/{{book_id}}",
+          "headers": {
+            "Authorization": "Bearer {{token}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "shelf_list_again",
+          "method": "GET",
+          "path": "/me/shelf",
+          "headers": {
+            "Authorization": "Bearer {{token}}"
+          },
+          "expect_status": 200
+        }
+      ]
+    }
+  ],
+  "discarded": [],
+  "passes": [
+    {
+      "label": "B1",
+      "commit": "baacc58fc4d80ae874bfe42df08e1995ebd36e0a",
+      "started_at": "2026-10-23T03:50:42Z",
+      "ended_at": "2026-10-23T03:50:43Z",
+      "process": {
+        "cpu_seconds": 0.18,
+        "peak_rss_mb": 8.88671875
+      },
+      "steps": [
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.7974675,
+          "p95_ms": 4.8831327,
+          "mean_ms": 1.2569070500000001
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 1.1380085,
+          "p95_ms": 3.1540939500000027,
+          "mean_ms": 1.61149375
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.9374834999999999,
+          "p95_ms": 3.199513250000001,
+          "mean_ms": 1.3151789999999999
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "shelf_add",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.9235865000000001,
+          "p95_ms": 2.78849515,
+          "mean_ms": 1.1677973499999996
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "shelf_list",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.7788215,
+          "p95_ms": 2.3962362500000025,
+          "mean_ms": 1.1584870999999999
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.6586535,
+          "p95_ms": 5.4405206,
+          "mean_ms": 1.18187215
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.929639,
+          "p95_ms": 4.075781500000001,
+          "mean_ms": 1.322684
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 1.0152130000000001,
+          "p95_ms": 3.0155168,
+          "mean_ms": 1.3217745
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "post_review",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.9787490000000001,
+          "p95_ms": 2.8360368000000005,
+          "mean_ms": 1.2163989
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "read_reviews",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.3795015,
+          "p95_ms": 2.34967625,
+          "mean_ms": 0.7599073
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5967715,
+          "p95_ms": 5.00160855,
+          "mean_ms": 1.1615017500000002
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.747467,
+          "p95_ms": 4.840896450000008,
+          "mean_ms": 1.9057184499999995
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.481646,
+          "p95_ms": 1.632239500000003,
+          "mean_ms": 0.8317494
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "browse_tag",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.175168,
+          "p95_ms": 1.5036796000000026,
+          "mean_ms": 0.5731028
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "open_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.132103,
+          "p95_ms": 0.7165078500000002,
+          "mean_ms": 0.26105064999999994
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.8923585,
+          "p95_ms": 5.8433991,
+          "mean_ms": 1.7581434499999997
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.946375,
+          "p95_ms": 2.9324266000000008,
+          "mean_ms": 1.3436295999999999
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5386825,
+          "p95_ms": 3.3304863,
+          "mean_ms": 1.1858624999999996
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_add",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.45665999999999995,
+          "p95_ms": 2.8691215000000003,
+          "mean_ms": 0.8902930000000001
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_list",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.489877,
+          "p95_ms": 2.3267665500000003,
+          "mean_ms": 0.8260293000000001
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_remove",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.516724,
+          "p95_ms": 1.0578748000000002,
+          "mean_ms": 0.5715579500000001
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_list_again",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4380595,
+          "p95_ms": 0.8838577000000001,
+          "mean_ms": 0.5094960500000001
+        }
+      ]
+    },
+    {
+      "label": "C",
+      "commit": "105e79459e81f78507af7ab0796c1e23a67fd9c3",
+      "started_at": "2026-10-23T03:50:43Z",
+      "ended_at": "2026-10-23T03:50:44Z",
+      "process": {
+        "cpu_seconds": 0.18,
+        "peak_rss_mb": 8.91796875
+      },
+      "steps": [
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.6431645,
+          "p95_ms": 1.7428540000000043,
+          "mean_ms": 1.0592446500000001
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.7938769999999999,
+          "p95_ms": 1.5135229000000003,
+          "mean_ms": 0.94067685
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.542124,
+          "p95_ms": 1.64960955,
+          "mean_ms": 0.7923366
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "shelf_add",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4920095,
+          "p95_ms": 1.0582537,
+          "mean_ms": 0.6006971000000001
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "shelf_list",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.463488,
+          "p95_ms": 1.5185740500000013,
+          "mean_ms": 0.69658965
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.504582,
+          "p95_ms": 1.5021723000000007,
+          "mean_ms": 0.6977999500000001
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.7897084999999999,
+          "p95_ms": 6.708436900000001,
+          "mean_ms": 1.6589079499999997
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4562305,
+          "p95_ms": 0.8590859500000003,
+          "mean_ms": 0.5460158500000001
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "post_review",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.55638,
+          "p95_ms": 2.684837150000002,
+          "mean_ms": 0.98975125
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "read_reviews",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.3036955,
+          "p95_ms": 1.1866400500000027,
+          "mean_ms": 0.5698782999999998
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.599719,
+          "p95_ms": 1.029430850000002,
+          "mean_ms": 0.7687737499999999
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.793139,
+          "p95_ms": 1.0136818,
+          "mean_ms": 0.8181146999999998
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4726055,
+          "p95_ms": 0.943122750000002,
+          "mean_ms": 0.6827005
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "browse_tag",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.1861565,
+          "p95_ms": 0.7411728000000002,
+          "mean_ms": 0.26069770000000003
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "open_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.121227,
+          "p95_ms": 0.36075830000000053,
+          "mean_ms": 0.18748499999999998
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.543179,
+          "p95_ms": 4.383582350000001,
+          "mean_ms": 1.1501012999999998
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.8292155,
+          "p95_ms": 3.697313800000003,
+          "mean_ms": 1.4006033
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5236149999999999,
+          "p95_ms": 3.141327750000001,
+          "mean_ms": 0.93773335
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_add",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4483655,
+          "p95_ms": 1.4733384500000002,
+          "mean_ms": 0.6106566500000001
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_list",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5589245,
+          "p95_ms": 1.225293500000001,
+          "mean_ms": 0.65720275
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_remove",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.524294,
+          "p95_ms": 0.9408616000000002,
+          "mean_ms": 0.5719973
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_list_again",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.442805,
+          "p95_ms": 0.7805119500000001,
+          "mean_ms": 0.5094704999999999
+        }
+      ]
+    },
+    {
+      "label": "B2",
+      "commit": "baacc58fc4d80ae874bfe42df08e1995ebd36e0a",
+      "started_at": "2026-10-23T03:50:44Z",
+      "ended_at": "2026-10-23T03:50:44Z",
+      "process": {
+        "cpu_seconds": 0.18,
+        "peak_rss_mb": 8.828125
+      },
+      "steps": [
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.6306480000000001,
+          "p95_ms": 4.3554996500000005,
+          "mean_ms": 1.3794222999999999
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.7514595,
+          "p95_ms": 2.5537816000000033,
+          "mean_ms": 1.3039817999999999
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5422165,
+          "p95_ms": 1.3876360000000003,
+          "mean_ms": 0.72776675
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "shelf_add",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4443295,
+          "p95_ms": 1.6621512000000025,
+          "mean_ms": 0.8005346
+        },
+        {
+          "journey": "new_reader_builds_shelf",
+          "step": "shelf_list",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.4428295,
+          "p95_ms": 2.9377677500000003,
+          "mean_ms": 0.9358541499999999
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.756683,
+          "p95_ms": 3.254970550000007,
+          "mean_ms": 1.6229576000000001
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 1.1215975,
+          "p95_ms": 7.424430800000001,
+          "mean_ms": 1.84269405
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.669678,
+          "p95_ms": 1.7770715500000007,
+          "mean_ms": 0.8791577499999998
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "post_review",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5421484999999999,
+          "p95_ms": 1.136909700000001,
+          "mean_ms": 0.6936143
+        },
+        {
+          "journey": "reader_reviews_book",
+          "step": "read_reviews",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.1888805,
+          "p95_ms": 0.6246188500000012,
+          "mean_ms": 0.32638364999999997
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.679316,
+          "p95_ms": 2.951863000000003,
+          "mean_ms": 1.1516848
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 1.3633380000000002,
+          "p95_ms": 11.456346500000002,
+          "mean_ms": 2.6214954999999995
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.7153875,
+          "p95_ms": 1.6060634500000002,
+          "mean_ms": 0.86750175
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "browse_tag",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.38343099999999997,
+          "p95_ms": 2.0919799,
+          "mean_ms": 0.5746441499999999
+        },
+        {
+          "journey": "visitor_browses_by_tag",
+          "step": "open_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.3233735,
+          "p95_ms": 0.9580802000000002,
+          "mean_ms": 0.36550665000000004
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "sign_up",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.6904539999999999,
+          "p95_ms": 2.6056000000000004,
+          "mean_ms": 1.0342798500000001
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "log_in",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.9324574999999999,
+          "p95_ms": 1.8802367500000001,
+          "mean_ms": 1.034856
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "add_book",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.695662,
+          "p95_ms": 2.8851734500000026,
+          "mean_ms": 1.22379265
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_add",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.5979975,
+          "p95_ms": 1.623503850000001,
+          "mean_ms": 0.8043422
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_list",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.645427,
+          "p95_ms": 2.35499215,
+          "mean_ms": 0.8896569999999999
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_remove",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.55616,
+          "p95_ms": 1.1443304,
+          "mean_ms": 0.6625302500000001
+        },
+        {
+          "journey": "reader_tidies_shelf",
+          "step": "shelf_list_again",
+          "count": 20,
+          "failures": 0,
+          "p50_ms": 0.46443999999999996,
+          "p95_ms": 2.662567700000002,
+          "mean_ms": 0.9122743999999997
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "app.cpu_seconds",
+      "journey": "",
+      "step": "",
+      "metric": "cpu_seconds",
+      "unit": "s",
+      "b1": 0.18,
+      "c": 0.18,
+      "b2": 0.18,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.18 s to 0.18 s)"
+    },
+    {
+      "id": "app.peak_rss_mb",
+      "journey": "",
+      "step": "",
+      "metric": "peak_rss_mb",
+      "unit": "MB",
+      "b1": 8.88671875,
+      "c": 8.91796875,
+      "b2": 8.828125,
+      "band": 0.05859375,
+      "delta": 0.03125,
+      "delta_pct": 0.3516483516483517,
+      "class": "noise",
+      "reason": "worse than the worse baseline by 0.0 MB, which is not more than 2 times the noise band of 0.1 MB"
+    },
+    {
+      "id": "new_reader_builds_shelf.add_book.failures",
+      "journey": "new_reader_builds_shelf",
+      "step": "add_book",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "new_reader_builds_shelf.add_book.mean_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "add_book",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.3151789999999999,
+      "c": 0.7923366,
+      "b2": 0.72776675,
+      "band": 0.5874122499999999,
+      "delta": -0.5228423999999999,
+      "delta_pct": -39.75446688245478,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.7 ms to 1.3 ms)"
+    },
+    {
+      "id": "new_reader_builds_shelf.add_book.p50_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "add_book",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.9374834999999999,
+      "c": 0.542124,
+      "b2": 0.5422165,
+      "band": 0.3952669999999999,
+      "delta": -0.39535949999999986,
+      "delta_pct": -42.17242223463132,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.0 ms, which is not more than 2 times the noise band of 0.4 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.add_book.p95_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "add_book",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 3.199513250000001,
+      "c": 1.64960955,
+      "b2": 1.3876360000000003,
+      "band": 1.8118772500000009,
+      "delta": -1.549903700000001,
+      "delta_pct": -48.44185908590941,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (1.4 ms to 3.2 ms)"
+    },
+    {
+      "id": "new_reader_builds_shelf.log_in.failures",
+      "journey": "new_reader_builds_shelf",
+      "step": "log_in",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "new_reader_builds_shelf.log_in.mean_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "log_in",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.61149375,
+      "c": 0.94067685,
+      "b2": 1.3039817999999999,
+      "band": 0.3075119500000001,
+      "delta": -0.6708168999999999,
+      "delta_pct": -41.627024616136424,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.4 ms, which is not more than 2 times the noise band of 0.3 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.log_in.p50_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "log_in",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 1.1380085,
+      "c": 0.7938769999999999,
+      "b2": 0.7514595,
+      "band": 0.38654900000000003,
+      "delta": -0.34413150000000003,
+      "delta_pct": -30.23980049358155,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.8 ms to 1.1 ms)"
+    },
+    {
+      "id": "new_reader_builds_shelf.log_in.p95_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "log_in",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 3.1540939500000027,
+      "c": 1.5135229000000003,
+      "b2": 2.5537816000000033,
+      "band": 0.6003123499999994,
+      "delta": -1.6405710500000024,
+      "delta_pct": -52.014019747255816,
+      "class": "noise",
+      "reason": "better than the better baseline by 1.0 ms, which is not more than 2 times the noise band of 0.6 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_add.failures",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_add",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_add.mean_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_add",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.1677973499999996,
+      "c": 0.6006971000000001,
+      "b2": 0.8005346,
+      "band": 0.36726274999999964,
+      "delta": -0.5671002499999995,
+      "delta_pct": -48.56152910434329,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, which is not more than 2 times the noise band of 0.4 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_add.p50_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_add",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.9235865000000001,
+      "c": 0.4920095,
+      "b2": 0.4443295,
+      "band": 0.4792570000000001,
+      "delta": -0.4315770000000001,
+      "delta_pct": -46.72837898778296,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.4 ms to 0.9 ms)"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_add.p95_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_add",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.78849515,
+      "c": 1.0582537,
+      "b2": 1.6621512000000025,
+      "band": 1.1263439499999977,
+      "delta": -1.73024145,
+      "delta_pct": -62.04929027758933,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.6 ms, which is not more than 2 times the noise band of 1.1 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_list.failures",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_list",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_list.mean_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_list",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.1584870999999999,
+      "c": 0.69658965,
+      "b2": 0.9358541499999999,
+      "band": 0.22263294999999994,
+      "delta": -0.46189744999999993,
+      "delta_pct": -39.87074607908884,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_list.p50_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_list",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.7788215,
+      "c": 0.463488,
+      "b2": 0.4428295,
+      "band": 0.33599200000000007,
+      "delta": -0.31533350000000004,
+      "delta_pct": -40.48854583495705,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.4 ms to 0.8 ms)"
+    },
+    {
+      "id": "new_reader_builds_shelf.shelf_list.p95_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "shelf_list",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.3962362500000025,
+      "c": 1.5185740500000013,
+      "b2": 2.9377677500000003,
+      "band": 0.5415314999999978,
+      "delta": -1.419193699999999,
+      "delta_pct": -48.308573746171696,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.9 ms, which is not more than 2 times the noise band of 0.5 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.sign_up.failures",
+      "journey": "new_reader_builds_shelf",
+      "step": "sign_up",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "new_reader_builds_shelf.sign_up.mean_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "sign_up",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.2569070500000001,
+      "c": 1.0592446500000001,
+      "b2": 1.3794222999999999,
+      "band": 0.12251524999999974,
+      "delta": -0.32017764999999976,
+      "delta_pct": -23.210995646510845,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, which is not more than 2 times the noise band of 0.1 ms"
+    },
+    {
+      "id": "new_reader_builds_shelf.sign_up.p50_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "sign_up",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.7974675,
+      "c": 0.6431645,
+      "b2": 0.6306480000000001,
+      "band": 0.1668194999999999,
+      "delta": -0.15430299999999997,
+      "delta_pct": -19.349127080413933,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.6 ms to 0.8 ms)"
+    },
+    {
+      "id": "new_reader_builds_shelf.sign_up.p95_ms",
+      "journey": "new_reader_builds_shelf",
+      "step": "sign_up",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 4.8831327,
+      "c": 1.7428540000000043,
+      "b2": 4.3554996500000005,
+      "band": 0.5276330499999995,
+      "delta": -3.1402786999999956,
+      "delta_pct": -64.30869060756828,
+      "class": "noise",
+      "reason": "better than the better baseline by 2.6 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "reader_reviews_book.add_book.failures",
+      "journey": "reader_reviews_book",
+      "step": "add_book",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_reviews_book.add_book.mean_ms",
+      "journey": "reader_reviews_book",
+      "step": "add_book",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.3217745,
+      "c": 0.5460158500000001,
+      "b2": 0.8791577499999998,
+      "band": 0.4426167500000002,
+      "delta": -0.77575865,
+      "delta_pct": -58.69069572759952,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.3 ms, which is not more than 2 times the noise band of 0.4 ms"
+    },
+    {
+      "id": "reader_reviews_book.add_book.p50_ms",
+      "journey": "reader_reviews_book",
+      "step": "add_book",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 1.0152130000000001,
+      "c": 0.4562305,
+      "b2": 0.669678,
+      "band": 0.34553500000000015,
+      "delta": -0.5589825000000002,
+      "delta_pct": -55.06061289601296,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, which is not more than 2 times the noise band of 0.3 ms"
+    },
+    {
+      "id": "reader_reviews_book.add_book.p95_ms",
+      "journey": "reader_reviews_book",
+      "step": "add_book",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 3.0155168,
+      "c": 0.8590859500000003,
+      "b2": 1.7770715500000007,
+      "band": 1.2384452499999992,
+      "delta": -2.1564308499999996,
+      "delta_pct": -71.5111535773901,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.9 ms, which is not more than 2 times the noise band of 1.2 ms"
+    },
+    {
+      "id": "reader_reviews_book.log_in.failures",
+      "journey": "reader_reviews_book",
+      "step": "log_in",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_reviews_book.log_in.mean_ms",
+      "journey": "reader_reviews_book",
+      "step": "log_in",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.322684,
+      "c": 1.6589079499999997,
+      "b2": 1.84269405,
+      "band": 0.52001005,
+      "delta": -0.18378610000000029,
+      "delta_pct": -9.973771826093447,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (1.3 ms to 1.8 ms)"
+    },
+    {
+      "id": "reader_reviews_book.log_in.p50_ms",
+      "journey": "reader_reviews_book",
+      "step": "log_in",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.929639,
+      "c": 0.7897084999999999,
+      "b2": 1.1215975,
+      "band": 0.19195850000000003,
+      "delta": -0.3318890000000001,
+      "delta_pct": -29.590739993625174,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "reader_reviews_book.log_in.p95_ms",
+      "journey": "reader_reviews_book",
+      "step": "log_in",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 4.075781500000001,
+      "c": 6.708436900000001,
+      "b2": 7.424430800000001,
+      "band": 3.348649300000001,
+      "delta": -0.7159939000000008,
+      "delta_pct": -9.643754777807354,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (4.1 ms to 7.4 ms)"
+    },
+    {
+      "id": "reader_reviews_book.post_review.failures",
+      "journey": "reader_reviews_book",
+      "step": "post_review",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_reviews_book.post_review.mean_ms",
+      "journey": "reader_reviews_book",
+      "step": "post_review",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.2163989,
+      "c": 0.98975125,
+      "b2": 0.6936143,
+      "band": 0.5227845999999999,
+      "delta": -0.22664764999999998,
+      "delta_pct": -18.6326746924878,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.7 ms to 1.2 ms)"
+    },
+    {
+      "id": "reader_reviews_book.post_review.p50_ms",
+      "journey": "reader_reviews_book",
+      "step": "post_review",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.9787490000000001,
+      "c": 0.55638,
+      "b2": 0.5421484999999999,
+      "band": 0.43660050000000017,
+      "delta": -0.4223690000000001,
+      "delta_pct": -43.15396490826556,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.5 ms to 1.0 ms)"
+    },
+    {
+      "id": "reader_reviews_book.post_review.p95_ms",
+      "journey": "reader_reviews_book",
+      "step": "post_review",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.8360368000000005,
+      "c": 2.684837150000002,
+      "b2": 1.136909700000001,
+      "band": 1.6991270999999994,
+      "delta": -0.15119964999999835,
+      "delta_pct": -5.331371229033358,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (1.1 ms to 2.8 ms)"
+    },
+    {
+      "id": "reader_reviews_book.read_reviews.failures",
+      "journey": "reader_reviews_book",
+      "step": "read_reviews",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_reviews_book.read_reviews.mean_ms",
+      "journey": "reader_reviews_book",
+      "step": "read_reviews",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.7599073,
+      "c": 0.5698782999999998,
+      "b2": 0.32638364999999997,
+      "band": 0.43352365,
+      "delta": -0.19002900000000011,
+      "delta_pct": -25.006865969046505,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.3 ms to 0.8 ms)"
+    },
+    {
+      "id": "reader_reviews_book.read_reviews.p50_ms",
+      "journey": "reader_reviews_book",
+      "step": "read_reviews",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.3795015,
+      "c": 0.3036955,
+      "b2": 0.1888805,
+      "band": 0.19062099999999998,
+      "delta": -0.07580599999999998,
+      "delta_pct": -19.975151613366478,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.2 ms to 0.4 ms)"
+    },
+    {
+      "id": "reader_reviews_book.read_reviews.p95_ms",
+      "journey": "reader_reviews_book",
+      "step": "read_reviews",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.34967625,
+      "c": 1.1866400500000027,
+      "b2": 0.6246188500000012,
+      "band": 1.7250573999999987,
+      "delta": -1.1630361999999972,
+      "delta_pct": -49.49772122861595,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.6 ms to 2.3 ms)"
+    },
+    {
+      "id": "reader_reviews_book.sign_up.failures",
+      "journey": "reader_reviews_book",
+      "step": "sign_up",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_reviews_book.sign_up.mean_ms",
+      "journey": "reader_reviews_book",
+      "step": "sign_up",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.18187215,
+      "c": 0.6977999500000001,
+      "b2": 1.6229576000000001,
+      "band": 0.4410854500000001,
+      "delta": -0.92515765,
+      "delta_pct": -57.004425131007736,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.5 ms, which is not more than 2 times the noise band of 0.4 ms"
+    },
+    {
+      "id": "reader_reviews_book.sign_up.p50_ms",
+      "journey": "reader_reviews_book",
+      "step": "sign_up",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.6586535,
+      "c": 0.504582,
+      "b2": 0.756683,
+      "band": 0.09802949999999999,
+      "delta": -0.252101,
+      "delta_pct": -33.316593606569725,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, which is not more than 2 times the noise band of 0.1 ms"
+    },
+    {
+      "id": "reader_reviews_book.sign_up.p95_ms",
+      "journey": "reader_reviews_book",
+      "step": "sign_up",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 5.4405206,
+      "c": 1.5021723000000007,
+      "b2": 3.254970550000007,
+      "band": 2.185550049999993,
+      "delta": -3.9383482999999995,
+      "delta_pct": -72.3891809177232,
+      "class": "noise",
+      "reason": "better than the better baseline by 1.8 ms, which is not more than 2 times the noise band of 2.2 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.add_book.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "add_book",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.add_book.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "add_book",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.1858624999999996,
+      "c": 0.93773335,
+      "b2": 1.22379265,
+      "band": 0.03793015000000044,
+      "delta": -0.2860593,
+      "delta_pct": -23.37481762126942,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.add_book.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "add_book",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.5386825,
+      "c": 0.5236149999999999,
+      "b2": 0.695662,
+      "band": 0.15697950000000005,
+      "delta": -0.17204700000000006,
+      "delta_pct": -24.73140691887728,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.0 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.add_book.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "add_book",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 3.3304863,
+      "c": 3.141327750000001,
+      "b2": 2.8851734500000026,
+      "band": 0.44531284999999743,
+      "delta": -0.18915854999999882,
+      "delta_pct": -5.679607509569963,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (2.9 ms to 3.3 ms)"
+    },
+    {
+      "id": "reader_tidies_shelf.log_in.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "log_in",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.log_in.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "log_in",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.3436295999999999,
+      "c": 1.4006033,
+      "b2": 1.034856,
+      "band": 0.30877359999999987,
+      "delta": 0.05697370000000013,
+      "delta_pct": 4.240283185187356,
+      "class": "noise",
+      "reason": "worse than the worse baseline by 0.1 ms, which is not more than 2 times the noise band of 0.3 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.log_in.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "log_in",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.946375,
+      "c": 0.8292155,
+      "b2": 0.9324574999999999,
+      "band": 0.013917500000000027,
+      "delta": -0.11715949999999997,
+      "delta_pct": -12.379817725531632,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, below the minimum of 20%"
+    },
+    {
+      "id": "reader_tidies_shelf.log_in.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "log_in",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.9324266000000008,
+      "c": 3.697313800000003,
+      "b2": 1.8802367500000001,
+      "band": 1.0521898500000006,
+      "delta": 0.7648872000000022,
+      "delta_pct": 26.08376284678369,
+      "class": "noise",
+      "reason": "worse than the worse baseline by 0.8 ms, which is not more than 2 times the noise band of 1.1 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_add.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_add",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_add.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_add",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.8902930000000001,
+      "c": 0.6106566500000001,
+      "b2": 0.8043422,
+      "band": 0.0859508000000001,
+      "delta": -0.27963635,
+      "delta_pct": -31.40947418434155,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_add.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_add",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.45665999999999995,
+      "c": 0.4483655,
+      "b2": 0.5979975,
+      "band": 0.1413375,
+      "delta": -0.149632,
+      "delta_pct": -25.022178186363654,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.0 ms, which is not more than 2 times the noise band of 0.1 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_add.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_add",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.8691215000000003,
+      "c": 1.4733384500000002,
+      "b2": 1.623503850000001,
+      "band": 1.2456176499999994,
+      "delta": -1.3957830500000001,
+      "delta_pct": -48.6484469200764,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, which is not more than 2 times the noise band of 1.2 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.8260293000000001,
+      "c": 0.65720275,
+      "b2": 0.8896569999999999,
+      "band": 0.06362769999999984,
+      "delta": -0.23245424999999997,
+      "delta_pct": -26.128524813495538,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.2 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.489877,
+      "c": 0.5589245,
+      "b2": 0.645427,
+      "band": 0.15554999999999997,
+      "delta": -0.08650249999999993,
+      "delta_pct": -13.402367734848392,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.5 ms to 0.6 ms)"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 2.3267665500000003,
+      "c": 1.225293500000001,
+      "b2": 2.35499215,
+      "band": 0.02822559999999985,
+      "delta": -1.1296986499999992,
+      "delta_pct": -47.97037858491372,
+      "class": "noise",
+      "reason": "better than the better baseline by 1.1 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list_again.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list_again",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list_again.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list_again",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.5094960500000001,
+      "c": 0.5094704999999999,
+      "b2": 0.9122743999999997,
+      "band": 0.4027783499999996,
+      "delta": -0.40280389999999977,
+      "delta_pct": -44.153809424006624,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.0 ms, which is not more than 2 times the noise band of 0.4 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list_again.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list_again",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.4380595,
+      "c": 0.442805,
+      "b2": 0.46443999999999996,
+      "band": 0.026380499999999973,
+      "delta": -0.02163499999999996,
+      "delta_pct": -4.658298165532676,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.4 ms to 0.5 ms)"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_list_again.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_list_again",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 0.8838577000000001,
+      "c": 0.7805119500000001,
+      "b2": 2.662567700000002,
+      "band": 1.778710000000002,
+      "delta": -1.882055750000002,
+      "delta_pct": -70.68574256346609,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, which is not more than 2 times the noise band of 1.8 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_remove.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_remove",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_remove.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_remove",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.5715579500000001,
+      "c": 0.5719973,
+      "b2": 0.6625302500000001,
+      "band": 0.0909723,
+      "delta": -0.09053295000000006,
+      "delta_pct": -13.664727006804602,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.6 ms to 0.7 ms)"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_remove.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_remove",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.516724,
+      "c": 0.524294,
+      "b2": 0.55616,
+      "band": 0.03943600000000003,
+      "delta": -0.03186599999999995,
+      "delta_pct": -5.729646144994238,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.5 ms to 0.6 ms)"
+    },
+    {
+      "id": "reader_tidies_shelf.shelf_remove.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "shelf_remove",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 1.0578748000000002,
+      "c": 0.9408616000000002,
+      "b2": 1.1443304,
+      "band": 0.08645559999999985,
+      "delta": -0.2034687999999999,
+      "delta_pct": -17.780599029790686,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, which is not more than 2 times the noise band of 0.1 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.sign_up.failures",
+      "journey": "reader_tidies_shelf",
+      "step": "sign_up",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "reader_tidies_shelf.sign_up.mean_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "sign_up",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.7581434499999997,
+      "c": 1.1501012999999998,
+      "b2": 1.0342798500000001,
+      "band": 0.7238635999999996,
+      "delta": -0.60804215,
+      "delta_pct": -34.584330988464,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (1.0 ms to 1.8 ms)"
+    },
+    {
+      "id": "reader_tidies_shelf.sign_up.p50_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "sign_up",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.8923585,
+      "c": 0.543179,
+      "b2": 0.6904539999999999,
+      "band": 0.20190450000000015,
+      "delta": -0.3491795000000001,
+      "delta_pct": -39.12995729855211,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "reader_tidies_shelf.sign_up.p95_ms",
+      "journey": "reader_tidies_shelf",
+      "step": "sign_up",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 5.8433991,
+      "c": 4.383582350000001,
+      "b2": 2.6056000000000004,
+      "band": 3.2377990999999997,
+      "delta": -1.459816749999999,
+      "delta_pct": -24.982321505303293,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (2.6 ms to 5.8 ms)"
+    },
+    {
+      "id": "visitor_browses_by_tag.add_book.failures",
+      "journey": "visitor_browses_by_tag",
+      "step": "add_book",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "visitor_browses_by_tag.add_book.mean_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "add_book",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.8317494,
+      "c": 0.6827005,
+      "b2": 0.86750175,
+      "band": 0.03575234999999999,
+      "delta": -0.18480124999999992,
+      "delta_pct": -21.302694778425508,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, below the minimum of 20%"
+    },
+    {
+      "id": "visitor_browses_by_tag.add_book.p50_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "add_book",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.481646,
+      "c": 0.4726055,
+      "b2": 0.7153875,
+      "band": 0.23374149999999994,
+      "delta": -0.24278199999999994,
+      "delta_pct": -33.93713197393021,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.0 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.add_book.p95_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "add_book",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 1.632239500000003,
+      "c": 0.943122750000002,
+      "b2": 1.6060634500000002,
+      "band": 0.026176050000002782,
+      "delta": -0.6891167500000009,
+      "delta_pct": -42.21909529820836,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.7 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.browse_tag.failures",
+      "journey": "visitor_browses_by_tag",
+      "step": "browse_tag",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "visitor_browses_by_tag.browse_tag.mean_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "browse_tag",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.5731028,
+      "c": 0.26069770000000003,
+      "b2": 0.5746441499999999,
+      "band": 0.0015413499999998859,
+      "delta": -0.3139464499999999,
+      "delta_pct": -54.6331934293597,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.3 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.browse_tag.p50_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "browse_tag",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.175168,
+      "c": 0.1861565,
+      "b2": 0.38343099999999997,
+      "band": 0.20826299999999998,
+      "delta": -0.19727449999999996,
+      "delta_pct": -51.449804528063716,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.2 ms to 0.4 ms)"
+    },
+    {
+      "id": "visitor_browses_by_tag.browse_tag.p95_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "browse_tag",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 1.5036796000000026,
+      "c": 0.7411728000000002,
+      "b2": 2.0919799,
+      "band": 0.5883002999999976,
+      "delta": -1.3508071,
+      "delta_pct": -64.57074946083372,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.8 ms, which is not more than 2 times the noise band of 0.6 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.log_in.failures",
+      "journey": "visitor_browses_by_tag",
+      "step": "log_in",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "visitor_browses_by_tag.log_in.mean_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "log_in",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.9057184499999995,
+      "c": 0.8181146999999998,
+      "b2": 2.6214954999999995,
+      "band": 0.71577705,
+      "delta": -1.8033807999999998,
+      "delta_pct": -68.7920616304701,
+      "class": "noise",
+      "reason": "better than the better baseline by 1.1 ms, which is not more than 2 times the noise band of 0.7 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.log_in.p50_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "log_in",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.747467,
+      "c": 0.793139,
+      "b2": 1.3633380000000002,
+      "band": 0.6158710000000002,
+      "delta": -0.5701990000000001,
+      "delta_pct": -41.82374436860119,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.7 ms to 1.4 ms)"
+    },
+    {
+      "id": "visitor_browses_by_tag.log_in.p95_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "log_in",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 4.840896450000008,
+      "c": 1.0136818,
+      "b2": 11.456346500000002,
+      "band": 6.615450049999994,
+      "delta": -10.442664700000002,
+      "delta_pct": -91.1517882249808,
+      "class": "noise",
+      "reason": "better than the better baseline by 3.8 ms, which is not more than 2 times the noise band of 6.6 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.open_book.failures",
+      "journey": "visitor_browses_by_tag",
+      "step": "open_book",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "visitor_browses_by_tag.open_book.mean_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "open_book",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 0.26105064999999994,
+      "c": 0.18748499999999998,
+      "b2": 0.36550665000000004,
+      "band": 0.1044560000000001,
+      "delta": -0.17802165000000006,
+      "delta_pct": -48.70544763002261,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.1 ms, which is not more than 2 times the noise band of 0.1 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.open_book.p50_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "open_book",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.132103,
+      "c": 0.121227,
+      "b2": 0.3233735,
+      "band": 0.19127049999999998,
+      "delta": -0.20214649999999998,
+      "delta_pct": -62.51177044501173,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.0 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.open_book.p95_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "open_book",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 0.7165078500000002,
+      "c": 0.36075830000000053,
+      "b2": 0.9580802000000002,
+      "band": 0.24157235,
+      "delta": -0.5973218999999996,
+      "delta_pct": -62.345709680671774,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.4 ms, which is not more than 2 times the noise band of 0.2 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.sign_up.failures",
+      "journey": "visitor_browses_by_tag",
+      "step": "sign_up",
+      "metric": "failures",
+      "unit": "count",
+      "b1": 0,
+      "c": 0,
+      "b2": 0,
+      "band": 0,
+      "delta": 0,
+      "delta_pct": 0,
+      "class": "noise",
+      "reason": "no failures on the baseline runs or the candidate"
+    },
+    {
+      "id": "visitor_browses_by_tag.sign_up.mean_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "sign_up",
+      "metric": "mean_ms",
+      "unit": "ms",
+      "b1": 1.1615017500000002,
+      "c": 0.7687737499999999,
+      "b2": 1.1516848,
+      "band": 0.009816950000000269,
+      "delta": -0.3927280000000003,
+      "delta_pct": -33.81208853107628,
+      "class": "noise",
+      "reason": "better than the better baseline by 0.4 ms, below the minimum of 10.0 ms"
+    },
+    {
+      "id": "visitor_browses_by_tag.sign_up.p50_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "sign_up",
+      "metric": "p50_ms",
+      "unit": "ms",
+      "b1": 0.5967715,
+      "c": 0.599719,
+      "b2": 0.679316,
+      "band": 0.08254450000000002,
+      "delta": -0.07959700000000003,
+      "delta_pct": -11.717227328665897,
+      "class": "noise",
+      "reason": "inside the range of the two baseline runs (0.6 ms to 0.7 ms)"
+    },
+    {
+      "id": "visitor_browses_by_tag.sign_up.p95_ms",
+      "journey": "visitor_browses_by_tag",
+      "step": "sign_up",
+      "metric": "p95_ms",
+      "unit": "ms",
+      "b1": 5.00160855,
+      "c": 1.029430850000002,
+      "b2": 2.951863000000003,
+      "band": 2.0497455499999973,
+      "delta": -3.9721776999999983,
+      "delta_pct": -79.41800443379356,
+      "class": "noise",
+      "reason": "better than the better baseline by 1.9 ms, which is not more than 2 times the noise band of 2.0 ms"
+    }
+  ],
+  "not_measured": [
+    "DB time: not measured; the target exposes no database timing."
+  ]
+}

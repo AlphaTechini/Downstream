@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "base": "baacc58fc4d80ae874bfe42df08e1995ebd36e0a",
+  "head": "aadf1e2ef63b657cd1cf61595de363522c4c6cbf",
+  "root": "examples/shelf",
+  "method": "static analysis with go/ast, calls resolved by name, depth 2 from handlers and middleware, a function reached by more than half of all routes is ignored when looking for shared functions; misses dynamic registration, reflection, interface dispatch by other names, and cross-service calls",
+  "changed_files": [
+    {
+      "path": "examples/shelf/handlers.go",
+      "hunks": [
+        {
+          "old_start": 21,
+          "old_lines": 1,
+          "new_start": 21,
+          "new_lines": 1,
+          "text": "-\twriteJSON(w, http.StatusOK, map[string]any{\"ok\": true})\n+\twriteJSON(w, http.StatusOK, map[string]any{\"ok\": true, \"service\": \"shelf\"})"
+        }
+      ]
+    }
+  ],
+  "changed_funcs": [
+    "(Server).handleHealth"
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "handler": "(Server).handleHealth",
+      "file": "examples/shelf/routes.go",
+      "line": 8
+    },
+    {
+      "method": "POST",
+      "path": "/users",
+      "handler": "(Server).handleCreateUser",
+      "file": "examples/shelf/routes.go",
+      "line": 9
+    },
+    {
+      "method": "POST",
+      "path": "/login",
+      "handler": "(Server).handleLogin",
+      "file": "examples/shelf/routes.go",
+      "line": 10
+    },
+    {
+      "method": "GET",
+      "path": "/books",
+      "handler": "(Server).handleListBooks",
+      "file": "examples/shelf/routes.go",
+      "line": 11
+    },
+    {
+      "method": "GET",
+      "path": "/books/{id}",
+      "handler": "(Server).handleGetBook",
+      "file": "examples/shelf/routes.go",
+      "line": 12
+    },
+    {
+      "method": "POST",
+      "path": "/books",
+      "handler": "(Server).handleCreateBook",
+      "middleware": [
+        "(Server).requireAuth"
+      ],
+      "file": "examples/shelf/routes.go",
+      "line": 13
+    },
+    {
+      "method": "POST",
+      "path": "/books/{id}/reviews",
+      "handler": "(Server).handleCreateReview",
+      "middleware": [
+        "(Server).requireAuth"
+      ],
+      "file": "examples/shelf/routes.go",
+      "line": 14
+    },
+    {
+      "method": "GET",
+      "path": "/books/{id}/reviews",
+      "handler": "(Server).handleListReviews",
+      "file": "examples/shelf/routes.go",
+      "line": 15
+    },
+    {
+      "method": "PUT",
+      "path": "/me/shelf/{id}",
+      "handler": "(Server).handleShelfAdd",
+      "middleware": [
+        "(Server).requireAuth"
+      ],
+      "file": "examples/shelf/routes.go",
+      "line": 16
+    },
+    {
+      "method": "GET",
+      "path": "/me/shelf",
+      "handler": "(Server).handleShelfList",
+      "middleware": [
+        "(Server).requireAuth"
+      ],
+      "file": "examples/shelf/routes.go",
+      "line": 17
+    },
+    {
+      "method": "DELETE",
+      "path": "/me/shelf/{id}",
+      "handler": "(Server).handleShelfRemove",
+      "middleware": [
+        "(Server).requireAuth"
+      ],
+      "file": "examples/shelf/routes.go",
+      "line": 18
+    }
+  ],
+  "changed": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "handler": "(Server).handleHealth",
+      "file": "examples/shelf/routes.go",
+      "line": 8,
+      "reasons": [
+        "handler (Server).handleHealth itself changed"
+      ],
+      "changed_funcs": [
+        "(Server).handleHealth"
+      ]
+    }
+  ],
+  "affected": []
+}

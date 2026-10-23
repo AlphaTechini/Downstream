@@ -1,0 +1,197 @@
+2026-10-22T23:29:18.385225Z 00O [0KRunning with gitlab-runner 19.6.0~pre.2364.gcc7d9535 (cc7d9535)[0;m
+2026-10-22T23:29:18.385252Z 00O [0K  on k8s.saas-linux-small-amd64.runners-manager.gitlab.com/default nezyxEJex, system ID: r_pk1evWYLbmZb[0;m
+2026-10-22T23:29:18.385255Z 00O [0K  UUID: 019fd6c6-56c4-78a2-8961-bbb53e204387[0;m
+2026-10-22T23:29:18.385265Z 00O [0K  feature flags: FF_USE_GIT_PROACTIVE_AUTH:true, FF_HASH_CACHE_KEYS:true, FF_USE_JOB_ROUTER:true, FF_MACHINE_OPTIONS_EXPAND_ENV:true, FF_DOCKER_MACHINE_JSON_OUTPUT:true[0;m
+2026-10-22T23:29:18.385304Z 00O [0K[36;1mResolving secrets[0;m[0;m
+2026-10-22T23:29:18.385540Z 00O section_start:1792711758:prepare_executor[0K
+2026-10-22T23:29:18.385544Z 00O+[0K[36;1mPreparing the "docker+machine" executor[0;m[0;m
+2026-10-22T23:29:18.475189Z 00O [0KUsing Docker executor with image golang:1.22 ...[0;m
+2026-10-22T23:29:18.475238Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-22T23:29:18.475249Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-22T23:29:18.475887Z 00O [0KPulling docker image us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 ...[0;m
+2026-10-22T23:29:20.284703Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-22T23:29:22.100507Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-22T23:29:22.100524Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-22T23:29:22.102098Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-22T23:29:22.102114Z 00O [0KUsing effective pull policy of [always] for container golang:1.22[0;m
+2026-10-22T23:29:22.106533Z 00O [0KPulling docker image golang:1.22 ...[0;m
+2026-10-22T23:29:36.655278Z 00O [0KUsing docker image sha256:2fce09cfad57c6de112654eeb6f6da1851f3ced1cff7ac0002378642c2c7ca84 for golang:1.22 with digest golang@sha256:1cf6c45ba39db9fd6db16922041d074a63c935556a05c5ccb62d181034df7f02 ...[0;m
+2026-10-22T23:29:36.655426Z 00O section_end:1792711776:prepare_executor[0K
+2026-10-22T23:29:36.655586Z 00O+section_start:1792711776:prepare_script[0K
+2026-10-22T23:29:36.655592Z 00O+[0K[36;1mPreparing environment[0;m[0;m
+2026-10-22T23:29:36.655630Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-22T23:29:36.655641Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-22T23:29:36.656645Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-22T23:29:36.656659Z 00O [0KUsing effective pull policy of [always] for container sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20[0;m
+2026-10-22T23:29:39.011095Z 01O Running on runner-nezyxejex-project-87948026-concurrent-0 via runner-nezyxejex-s-l-s-amd64-1792711704-97e29db3...
+2026-10-22T23:29:39.014036Z 01O Running on CPU: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz (avx, avx2, avx512f)
+2026-10-22T23:29:39.173112Z 00O section_end:1792711779:prepare_script[0K
+2026-10-22T23:29:39.174049Z 00O+section_start:1792711779:get_sources[0K
+2026-10-22T23:29:39.174058Z 00O+[0K[36;1mGetting source from Git repository[0;m[0;m
+2026-10-22T23:29:39.552738Z 01O [32;1mGitaly correlation ID: 3d0407b077ba46acb6e8c3c5b44a1c6a[0;m
+2026-10-22T23:29:39.558395Z 01O [32;1mFetching changes with git depth set to 20...[0;m
+2026-10-22T23:29:39.561398Z 01O Initialized empty Git repository in /builds/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/.git/
+2026-10-22T23:29:39.563198Z 01O [32;1mCreated fresh repository.[0;m
+2026-10-22T23:29:40.230009Z 01O [32;1mChecking out 0fa756eb as detached HEAD (ref is main)...[0;m
+2026-10-22T23:29:40.274572Z 01O 
+2026-10-22T23:29:40.274578Z 01O [32;1mSkipping Git submodules setup[0;m
+2026-10-22T23:29:40.274580Z 01O [32;1m$ git remote set-url origin "${CI_REPOSITORY_URL}" || echo 'Not a git repository; skipping'[0;m
+2026-10-22T23:29:40.440591Z 00O section_end:1792711780:get_sources[0K
+2026-10-22T23:29:40.441763Z 00O+section_start:1792711780:download_artifacts[0K
+2026-10-22T23:29:40.441773Z 00O+[0K[36;1mDownloading artifacts[0;m[0;m
+2026-10-22T23:29:40.834923Z 01O [32;1mDownloading artifacts for k6 (17399801708)...[0;m
+2026-10-22T23:29:41.008692Z 01E Direct download from storage.googleapis.com       [0;m  correlation_id[0;m=eae5bf5772814769ae48e6044eb0d336 id[0;m=17399801708 status[0;m=302 token[0;m=eyJraWQiO
+2026-10-22T23:29:41.330095Z 01E Downloading artifacts from coordinator... ok      [0;m  correlation_id[0;m=eae5bf5772814769ae48e6044eb0d336 id[0;m=17399801708 status[0;m=302 token[0;m=eyJraWQiO
+2026-10-22T23:29:42.105809Z 00O section_end:1792711782:download_artifacts[0K
+2026-10-22T23:29:42.106357Z 00O+section_start:1792711782:step_script[0K
+2026-10-22T23:29:42.106366Z 00O+[0K[36;1mExecuting "step_script" stage of the job script[0;m[0;m
+2026-10-22T23:29:42.106378Z 00O [0KUsing effective pull policy of [always] for container golang:1.22[0;m
+2026-10-22T23:29:42.107445Z 00O [0KUsing docker image sha256:2fce09cfad57c6de112654eeb6f6da1851f3ced1cff7ac0002378642c2c7ca84 for golang:1.22 with digest golang@sha256:1cf6c45ba39db9fd6db16922041d074a63c935556a05c5ccb62d181034df7f02 ...[0;m
+2026-10-22T23:29:42.471964Z 01O [32;1m$ export PATH="$CI_PROJECT_DIR/bin:$PATH"[0;m
+2026-10-22T23:29:42.472005Z 01O [32;1m$ git config user.name "Downstream CI"[0;m
+2026-10-22T23:29:42.473690Z 01O [32;1m$ git config user.email "<redacted-email>"[0;m
+2026-10-22T23:29:42.475129Z 01O [32;1m$ BASE=$(git rev-parse HEAD)[0;m
+2026-10-22T23:29:42.476554Z 01O [32;1m$ git apply "examples/changes/$CHANGE.patch"[0;m
+2026-10-22T23:29:42.477944Z 01O [32;1m$ git commit --quiet --all --message "Apply examples/changes/$CHANGE.patch for the end-to-end job"[0;m
+2026-10-22T23:29:42.485034Z 01O [32;1m$ HEAD_SHA=$(git rev-parse HEAD)[0;m
+2026-10-22T23:29:42.486541Z 01O [32;1m$ go build -o bin/downstream ./engine/cmd/downstream[0;m
+2026-10-22T23:30:03.016331Z 01O [32;1m$ mkdir -p out[0;m
+2026-10-22T23:30:03.017100Z 01O [32;1m$ downstream scan --base "$BASE" --head "$HEAD_SHA" --out out/scan.json[0;m
+2026-10-22T23:30:03.041076Z 01O [32;1m$ downstream validate --journeys examples/shelf/journeys.example.json --scan out/scan.json[0;m
+2026-10-22T23:30:03.045909Z 01O ok: 4 journeys, 22 steps
+2026-10-22T23:30:03.046680Z 01O [32;1m$ downstream run --base "$BASE" --head "$HEAD_SHA" --journeys examples/shelf/journeys.example.json --out out/run.json || echo "run exited non-zero; the report says where it stopped"[0;m
+2026-10-22T23:30:03.084432Z 01E downstream: base 0fa756eb1ea7, head cd550e39f26a, k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+2026-10-22T23:30:03.086243Z 01E downstream: build (base): extracting 0fa756eb1ea7
+2026-10-22T23:30:03.100036Z 01E downstream: build (base): go build -o '/tmp/downstream-run-2158784849/bin/base-app' ./examples/shelf/cmd/shelf
+2026-10-22T23:30:03.639017Z 01E downstream: build (head): extracting cd550e39f26a
+2026-10-22T23:30:03.653216Z 01E downstream: build (head): go build -o '/tmp/downstream-run-2158784849/bin/head-app' ./examples/shelf/cmd/shelf
+2026-10-22T23:30:04.152541Z 01E downstream: validate journeys
+2026-10-22T23:30:04.154563Z 01E downstream: baseline check: one iteration of each journey on base
+2026-10-22T23:30:04.357266Z 01E downstream: pass B1: base 0fa756eb1ea7
+2026-10-22T23:30:05.106234Z 01E downstream: pass C: head cd550e39f26a
+2026-10-22T23:30:05.849122Z 01E downstream: pass B2: base 0fa756eb1ea7
+2026-10-22T23:30:06.585488Z 01E downstream: done: 3 passes
+2026-10-22T23:30:06.595312Z 01O [32;1m$ downstream report --run out/run.json --scan out/scan.json --out out/report.md[0;m
+2026-10-22T23:30:06.601755Z 01O [32;1m$ downstream issues --run out/run.json --scan out/scan.json --mr 1 --starter downstream-ci --out out/issues.json[0;m
+2026-10-22T23:30:06.607111Z 01O [32;1m$ downstream summary --run out/run.json --scan out/scan.json | tee out/summary.txt[0;m
+2026-10-22T23:30:06.612244Z 01O regression=0
+2026-10-22T23:30:06.612253Z 01O trade-off=0
+2026-10-22T23:30:06.612254Z 01O improved=0
+2026-10-22T23:30:06.612254Z 01O withheld=0
+2026-10-22T23:30:06.612255Z 01O discarded=0
+2026-10-22T23:30:06.612255Z 01O passes=3
+2026-10-22T23:30:06.612766Z 01O [32;1m$ cat out/report.md[0;m
+2026-10-22T23:30:06.613679Z 01O ### Downstream report
+2026-10-22T23:30:06.613681Z 01O 
+2026-10-22T23:30:06.613682Z 01O Candidate `cd550e39` against baseline `0fa756eb`. Run started 2026-10-22T23:30:03Z, ended 2026-10-22T23:30:06Z. 2 VUs, 10 iterations per VU per pass (cap 60 s), k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64).
+2026-10-22T23:30:06.613683Z 01O 
+2026-10-22T23:30:06.613684Z 01O **Findings:** regressed steps 0, trade-off journeys 0, improved metrics 0, withheld metrics 0.
+2026-10-22T23:30:06.613684Z 01O 
+2026-10-22T23:30:06.613685Z 01O #### A new reader signs up, logs in, adds a book and puts it on their shelf
+2026-10-22T23:30:06.613685Z 01O 
+2026-10-22T23:30:06.613686Z 01O | Step | Baseline p95 (B1 / B2) | Candidate p95 | Change | Noise band | Verdict |
+2026-10-22T23:30:06.613686Z 01O |---|---|---|---|---|---|
+2026-10-22T23:30:06.613687Z 01O | `sign_up` | 4.7 / 3.1 ms | 4.8 ms | +0.1 ms (+2%) | 1.6 ms | noise |
+2026-10-22T23:30:06.613687Z 01O | `log_in` | 3.0 / 2.6 ms | 4.0 ms | +1.0 ms (+33%) | 0.4 ms | noise |
+2026-10-22T23:30:06.613688Z 01O | `add_book` | 3.6 / 1.6 ms | 3.7 ms | +0.0 ms (+1%) | 2.1 ms | noise |
+2026-10-22T23:30:06.613688Z 01O | `shelf_add` | 2.7 / 2.2 ms | 2.3 ms | -0.4 ms (-15%) | 0.5 ms | noise |
+2026-10-22T23:30:06.613689Z 01O | `shelf_list` | 2.6 / 4.0 ms | 1.6 ms | -2.4 ms (-60%) | 1.4 ms | noise |
+2026-10-22T23:30:06.613689Z 01O 
+2026-10-22T23:30:06.613690Z 01O #### A reader logs in, reviews a book and reads the reviews
+2026-10-22T23:30:06.613690Z 01O 
+2026-10-22T23:30:06.613691Z 01O | Step | Baseline p95 (B1 / B2) | Candidate p95 | Change | Noise band | Verdict |
+2026-10-22T23:30:06.613691Z 01O |---|---|---|---|---|---|
+2026-10-22T23:30:06.613691Z 01O | `sign_up` | 5.6 / 1.3 ms | 1.3 ms | -4.2 ms (-76%) | 4.2 ms | noise |
+2026-10-22T23:30:06.613692Z 01O | `log_in` | 3.2 / 4.3 ms | 3.8 ms | -0.5 ms (-11%) | 1.1 ms | noise |
+2026-10-22T23:30:06.613693Z 01O | `add_book` | 2.8 / 1.5 ms | 4.4 ms | +1.6 ms (+59%) | 1.3 ms | noise |
+2026-10-22T23:30:06.613693Z 01O | `post_review` | 4.0 / 3.4 ms | 2.1 ms | -1.9 ms (-46%) | 0.6 ms | noise |
+2026-10-22T23:30:06.613694Z 01O | `read_reviews` | 3.2 / 1.6 ms | 1.1 ms | -2.2 ms (-67%) | 1.7 ms | noise |
+2026-10-22T23:30:06.613694Z 01O 
+2026-10-22T23:30:06.613694Z 01O #### A visitor browses books by tag and opens one
+2026-10-22T23:30:06.613695Z 01O 
+2026-10-22T23:30:06.613695Z 01O | Step | Baseline p95 (B1 / B2) | Candidate p95 | Change | Noise band | Verdict |
+2026-10-22T23:30:06.613696Z 01O |---|---|---|---|---|---|
+2026-10-22T23:30:06.613696Z 01O | `sign_up` | 6.2 / 2.5 ms | 4.1 ms | -2.0 ms (-33%) | 3.7 ms | noise |
+2026-10-22T23:30:06.613697Z 01O | `log_in` | 3.8 / 1.8 ms | 5.1 ms | +1.3 ms (+34%) | 2.1 ms | noise |
+2026-10-22T23:30:06.613697Z 01O | `add_book` | 4.0 / 4.5 ms | 2.1 ms | -2.4 ms (-53%) | 0.5 ms | noise |
+2026-10-22T23:30:06.613698Z 01O | `browse_tag` | 2.9 / 0.9 ms | 1.6 ms | -1.2 ms (-43%) | 2.0 ms | noise |
+2026-10-22T23:30:06.613698Z 01O | `open_book` | 1.6 / 1.4 ms | 2.3 ms | +0.7 ms (+40%) | 0.2 ms | noise |
+2026-10-22T23:30:06.613699Z 01O 
+2026-10-22T23:30:06.613699Z 01O #### A reader views their shelf and removes a book
+2026-10-22T23:30:06.613700Z 01O 
+2026-10-22T23:30:06.613700Z 01O | Step | Baseline p95 (B1 / B2) | Candidate p95 | Change | Noise band | Verdict |
+2026-10-22T23:30:06.613700Z 01O |---|---|---|---|---|---|
+2026-10-22T23:30:06.613702Z 01O | `sign_up` | 3.4 / 4.9 ms | 4.9 ms | +0.0 ms (+0%) | 1.6 ms | noise |
+2026-10-22T23:30:06.613702Z 01O | `log_in` | 3.9 / 3.6 ms | 2.4 ms | -1.5 ms (-39%) | 0.3 ms | noise |
+2026-10-22T23:30:06.613703Z 01O | `add_book` | 3.8 / 1.5 ms | 2.0 ms | -1.8 ms (-47%) | 2.4 ms | noise |
+2026-10-22T23:30:06.613704Z 01O | `shelf_add` | 2.8 / 1.5 ms | 2.3 ms | -0.5 ms (-18%) | 1.3 ms | noise |
+2026-10-22T23:30:06.613705Z 01O | `shelf_list` | 1.8 / 1.2 ms | 3.2 ms | +1.3 ms (+72%) | 0.6 ms | noise |
+2026-10-22T23:30:06.613705Z 01O | `shelf_remove` | 0.9 / 1.0 ms | 1.2 ms | +0.1 ms (+11%) | 0.2 ms | noise |
+2026-10-22T23:30:06.613706Z 01O | `shelf_list_again` | 1.9 / 0.5 ms | 1.0 ms | -0.9 ms (-46%) | 1.4 ms | noise |
+2026-10-22T23:30:06.613734Z 01O 
+2026-10-22T23:30:06.613735Z 01O **App process**
+2026-10-22T23:30:06.613735Z 01O 
+2026-10-22T23:30:06.613735Z 01O | Metric | B1 | C | B2 | Change | Noise band | Verdict |
+2026-10-22T23:30:06.613736Z 01O |---|---|---|---|---|---|---|
+2026-10-22T23:30:06.613737Z 01O | CPU time | 0.16 s | 0.16 s | 0.16 s | +0.00 s (+0%) | 0.00 s | noise |
+2026-10-22T23:30:06.613738Z 01O | Peak RSS | 9.0 MB | 8.8 MB | 8.7 MB | -0.2 MB (-2%) | 0.2 MB | noise |
+2026-10-22T23:30:06.613738Z 01O 
+2026-10-22T23:30:06.613739Z 01O **p95 per step**
+2026-10-22T23:30:06.613739Z 01O 
+2026-10-22T23:30:06.613739Z 01O ```mermaid
+2026-10-22T23:30:06.613740Z 01O xychart-beta
+2026-10-22T23:30:06.613740Z 01O     title "p95 per step: candidate against the worse baseline run"
+2026-10-22T23:30:06.613741Z 01O     x-axis ["j1.sign_up", "j1.log_in", "j1.add_book", "j1.shelf_add", "j2.log_in", "j2.add_book", "j2.post_review", "j2.read_reviews", "j3.sign_up", "j3.log_in", "j3.add_book", "j3.browse_tag", "j3.open_book", "j4.sign_up", "j4.log_in", "j4.add_book", "j4.shelf_add", "j4.shelf_list", "j4.shelf_remove", "j4.shelf_list_again"]
+2026-10-22T23:30:06.613742Z 01O     y-axis "p95 (ms)"
+2026-10-22T23:30:06.613742Z 01O     bar [4.7, 3.0, 3.6, 2.7, 4.3, 2.8, 4.0, 3.2, 6.2, 3.8, 4.5, 2.9, 1.6, 4.9, 3.9, 3.8, 2.8, 1.8, 1.0, 1.9]
+2026-10-22T23:30:06.613743Z 01O     line [4.8, 4.0, 3.7, 2.3, 3.8, 4.4, 2.1, 1.1, 4.1, 5.1, 2.1, 1.6, 2.3, 4.9, 2.4, 2.0, 2.3, 3.2, 1.2, 1.0]
+2026-10-22T23:30:06.613744Z 01O ```
+2026-10-22T23:30:06.613745Z 01O 
+2026-10-22T23:30:06.613745Z 01O Bars: worse of the two baseline runs. Line: candidate.
+2026-10-22T23:30:06.613746Z 01O The chart shows the 20 steps with the largest change, out of 22.
+2026-10-22T23:30:06.613747Z 01O 
+2026-10-22T23:30:06.613747Z 01O - j1: A new reader signs up, logs in, adds a book and puts it on their shelf
+2026-10-22T23:30:06.613748Z 01O - j2: A reader logs in, reviews a book and reads the reviews
+2026-10-22T23:30:06.613748Z 01O - j3: A visitor browses books by tag and opens one
+2026-10-22T23:30:06.613749Z 01O - j4: A reader views their shelf and removes a book
+2026-10-22T23:30:06.613749Z 01O 
+2026-10-22T23:30:06.613750Z 01O **Issues to open**
+2026-10-22T23:30:06.613750Z 01O 
+2026-10-22T23:30:06.613750Z 01O none
+2026-10-22T23:30:06.613751Z 01O 
+2026-10-22T23:30:06.613751Z 01O **Discarded journeys**
+2026-10-22T23:30:06.613751Z 01O 
+2026-10-22T23:30:06.613752Z 01O none
+2026-10-22T23:30:06.613752Z 01O 
+2026-10-22T23:30:06.613752Z 01O **Blast radius**
+2026-10-22T23:30:06.613753Z 01O 
+2026-10-22T23:30:06.613753Z 01O Changed routes:
+2026-10-22T23:30:06.613753Z 01O 
+2026-10-22T23:30:06.613754Z 01O - `GET /health`: handler (Server).handleHealth itself changed
+2026-10-22T23:30:06.613754Z 01O 
+2026-10-22T23:30:06.613754Z 01O Affected routes:
+2026-10-22T23:30:06.613755Z 01O 
+2026-10-22T23:30:06.613755Z 01O - none
+2026-10-22T23:30:06.613755Z 01O 
+2026-10-22T23:30:06.613756Z 01O *static analysis with go/ast, calls resolved by name, depth 2 from handlers and middleware, a function reached by more than half of all routes is ignored when looking for shared functions; misses dynamic registration, reflection, interface dispatch by other names, and cross-service calls*
+2026-10-22T23:30:06.613757Z 01O 
+2026-10-22T23:30:06.613757Z 01O **Not measured**
+2026-10-22T23:30:06.613758Z 01O 
+2026-10-22T23:30:06.613758Z 01O - DB time: not measured; the target exposes no database timing.
+2026-10-22T23:30:06.613758Z 01O 
+2026-10-22T23:30:06.613759Z 01O **Method.** Baseline run twice (B1, B2) and candidate once (C), in the order B1, C, B2, sequentially on one machine. Three runs give no confidence interval; treat verdicts near the thresholds as uncertain.
+2026-10-22T23:30:06.613760Z 01O 
+2026-10-22T23:30:06.613760Z 01O Thresholds in effect: a metric is a regression when the candidate is worse than the worse baseline run by more than 2 times the noise band (the difference between B1 and B2), by at least 20%, and by at least 10 ms (latency), 10 MB (memory) or 0.5 s (CPU). A step that passed on both baseline runs and failed on the candidate is a regression. The verdict is withheld when the baseline runs differ by more than 50% of the smaller one and by at least the same minimum, unless the candidate is clearly worse or better than both. A journey with a latency regression and a latency improvement is reported as a trade-off.
+2026-10-22T23:30:06.614021Z 01O [32;1m$ grep -qx 'passes=3' out/summary.txt[0;m
+2026-10-22T23:30:06.615056Z 01O [32;1m$ if [ "$CHANGE" = clean-change ]; then grep -qx 'regression=0' out/summary.txt; else grep -q '^regression=[1-9]' out/summary.txt; fi[0;m
+2026-10-22T23:30:07.203444Z 00O section_end:1792711807:step_script[0K
+2026-10-22T23:30:07.204587Z 00O+section_start:1792711807:upload_artifacts_on_success[0K
+2026-10-22T23:30:07.204594Z 00O+[0K[36;1mUploading artifacts for successful job[0;m[0;m
+2026-10-22T23:30:07.617805Z 01O [32;1mUploading artifacts...[0;m
+2026-10-22T23:30:07.668720Z 01E out/: found 6 matching artifact files and directories[0;m 
+2026-10-22T23:30:08.451655Z 01E Uploading artifacts as "archive" to coordinator... 201 Created[0;m  correlation_id[0;m=9ecd1b0cb70a44658b6140abaf147d4d id[0;m=17399801711 status[0;m=201 token[0;m=eyJraWQiO
+2026-10-22T23:30:08.612149Z 00O section_end:1792711808:upload_artifacts_on_success[0K
+2026-10-22T23:30:08.612682Z 00O+section_start:1792711808:cleanup_file_variables[0K
+2026-10-22T23:30:08.612689Z 00O+[0K[36;1mCleaning up project directory and file based variables[0;m[0;m
+2026-10-22T23:30:09.148158Z 00O section_end:1792711809:cleanup_file_variables[0K
+2026-10-22T23:30:09.206172Z 00O [32;1mJob succeeded[0;m

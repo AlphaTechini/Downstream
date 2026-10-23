@@ -1,0 +1,119 @@
+2026-10-23T03:49:42.431150Z 00O [0KRunning with gitlab-runner 19.6.0~pre.2364.gcc7d9535 (cc7d9535)[0;m
+2026-10-23T03:49:42.431175Z 00O [0K  on k8s.saas-linux-small-amd64.runners-manager.gitlab.com/default nezyxEJex, system ID: r_VS69fQQT54iN[0;m
+2026-10-23T03:49:42.431178Z 00O [0K  UUID: 019fd6c6-56c4-78a2-8961-bbb53e204387[0;m
+2026-10-23T03:49:42.431186Z 00O [0K  feature flags: FF_USE_GIT_PROACTIVE_AUTH:true, FF_HASH_CACHE_KEYS:true, FF_USE_JOB_ROUTER:true, FF_MACHINE_OPTIONS_EXPAND_ENV:true, FF_DOCKER_MACHINE_JSON_OUTPUT:true[0;m
+2026-10-23T03:49:42.431216Z 00O [0K[36;1mResolving secrets[0;m[0;m
+2026-10-23T03:49:42.431402Z 00O section_start:1792727382:prepare_executor[0K
+2026-10-23T03:49:42.431407Z 00O+[0K[36;1mPreparing the "docker+machine" executor[0;m[0;m
+2026-10-23T03:49:42.521068Z 00O [0KUsing Docker executor with image golang:1.22 ...[0;m
+2026-10-23T03:49:42.521117Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-23T03:49:42.521127Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-23T03:49:42.521844Z 00O [0KPulling docker image us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 ...[0;m
+2026-10-23T03:49:44.316151Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-23T03:49:46.081329Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-23T03:49:46.081348Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-23T03:49:46.082426Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-23T03:49:46.082446Z 00O [0KUsing effective pull policy of [always] for container golang:1.22[0;m
+2026-10-23T03:49:46.083168Z 00O [0KPulling docker image golang:1.22 ...[0;m
+2026-10-23T03:50:00.660473Z 00O [0KUsing docker image sha256:2fce09cfad57c6de112654eeb6f6da1851f3ced1cff7ac0002378642c2c7ca84 for golang:1.22 with digest golang@sha256:1cf6c45ba39db9fd6db16922041d074a63c935556a05c5ccb62d181034df7f02 ...[0;m
+2026-10-23T03:50:00.660578Z 00O section_end:1792727400:prepare_executor[0K
+2026-10-23T03:50:00.660737Z 00O+section_start:1792727400:prepare_script[0K
+2026-10-23T03:50:00.660742Z 00O+[0K[36;1mPreparing environment[0;m[0;m
+2026-10-23T03:50:00.660777Z 00O [0KUsing helper image:  us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.6.0 )[0;m
+2026-10-23T03:50:00.660792Z 00O [0KUsing effective pull policy of [always] for container us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535[0;m
+2026-10-23T03:50:00.661982Z 00O [0KUsing docker image sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20 for us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper:cc7d9535 with digest us-east1-docker.pkg.dev/gitlab-com-artifact-registry/containers-public/gitlab-runner-helper@sha256:594cc89134ef76aa73685eba2879d66e742c61917fb7fb0921f3f939e61d4e2d ...[0;m
+2026-10-23T03:50:00.662008Z 00O [0KUsing effective pull policy of [always] for container sha256:e516a5247b58c0dc65b851e6182e8e82adb95c17e9e1c7296766587e65d20e20[0;m
+2026-10-23T03:50:02.922500Z 01O Running on runner-nezyxejex-project-87948026-concurrent-0 via runner-nezyxejex-s-l-s-amd64-1792727294-4440edd8...
+2026-10-23T03:50:02.924892Z 01O Running on CPU: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz (avx, avx2, avx512f)
+2026-10-23T03:50:03.088642Z 00O section_end:1792727403:prepare_script[0K
+2026-10-23T03:50:03.089271Z 00O+section_start:1792727403:get_sources[0K
+2026-10-23T03:50:03.089277Z 00O+[0K[36;1mGetting source from Git repository[0;m[0;m
+2026-10-23T03:50:03.434703Z 01O [32;1mGitaly correlation ID: defbaa24a7844df891c2908ce12b4e5a[0;m
+2026-10-23T03:50:03.440313Z 01O [32;1mFetching changes with git depth set to 20...[0;m
+2026-10-23T03:50:03.443490Z 01O Initialized empty Git repository in /builds/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/.git/
+2026-10-23T03:50:03.445495Z 01O [32;1mCreated fresh repository.[0;m
+2026-10-23T03:50:03.967239Z 01O [32;1mChecking out baacc58f as detached HEAD (ref is measure-noise)...[0;m
+2026-10-23T03:50:04.010616Z 01O 
+2026-10-23T03:50:04.010656Z 01O [32;1mSkipping Git submodules setup[0;m
+2026-10-23T03:50:04.010731Z 01O [32;1m$ git remote set-url origin "${CI_REPOSITORY_URL}" || echo 'Not a git repository; skipping'[0;m
+2026-10-23T03:50:04.167135Z 00O section_end:1792727404:get_sources[0K
+2026-10-23T03:50:04.167848Z 00O+section_start:1792727404:download_artifacts[0K
+2026-10-23T03:50:04.167854Z 00O+[0K[36;1mDownloading artifacts[0;m[0;m
+2026-10-23T03:50:04.545518Z 01O [32;1mDownloading artifacts for k6 (17403427631)...[0;m
+2026-10-23T03:50:04.747055Z 01E Direct download from storage.googleapis.com       [0;m  correlation_id[0;m=994d2fcc0d7349ce9dda07f2d2da8296 id[0;m=17403427631 status[0;m=302 token[0;m=eyJraWQiO
+2026-10-23T03:50:05.047727Z 01E Downloading artifacts from coordinator... ok      [0;m  correlation_id[0;m=994d2fcc0d7349ce9dda07f2d2da8296 id[0;m=17403427631 status[0;m=302 token[0;m=eyJraWQiO
+2026-10-23T03:50:05.812855Z 00O section_end:1792727405:download_artifacts[0K
+2026-10-23T03:50:05.813410Z 00O+section_start:1792727405:step_script[0K
+2026-10-23T03:50:05.813420Z 00O+[0K[36;1mExecuting "step_script" stage of the job script[0;m[0;m
+2026-10-23T03:50:05.813436Z 00O [0KUsing effective pull policy of [always] for container golang:1.22[0;m
+2026-10-23T03:50:05.814540Z 00O [0KUsing docker image sha256:2fce09cfad57c6de112654eeb6f6da1851f3ced1cff7ac0002378642c2c7ca84 for golang:1.22 with digest golang@sha256:1cf6c45ba39db9fd6db16922041d074a63c935556a05c5ccb62d181034df7f02 ...[0;m
+2026-10-23T03:50:06.175068Z 01O [32;1m$ export PATH="$CI_PROJECT_DIR/bin:$PATH"[0;m
+2026-10-23T03:50:06.175108Z 01O [32;1m$ git config user.name "Downstream CI"[0;m
+2026-10-23T03:50:06.176660Z 01O [32;1m$ git config user.email "<redacted-email>"[0;m
+2026-10-23T03:50:06.178048Z 01O [32;1m$ BASE=$(git rev-parse HEAD)[0;m
+2026-10-23T03:50:06.179536Z 01O [32;1m$ git apply examples/changes/clean-change.patch[0;m
+2026-10-23T03:50:06.180901Z 01O [32;1m$ git commit --quiet --all --message "Apply examples/changes/clean-change.patch for the noise job"[0;m
+2026-10-23T03:50:06.187708Z 01O [32;1m$ HEAD_SHA=$(git rev-parse HEAD)[0;m
+2026-10-23T03:50:06.189068Z 01O [32;1m$ go build -o bin/downstream ./engine/cmd/downstream[0;m
+2026-10-23T03:50:26.171114Z 01O [32;1m$ mkdir -p out[0;m
+2026-10-23T03:50:26.171118Z 01O [32;1m$ downstream scan --base "$BASE" --head "$HEAD_SHA" --out out/scan.json[0;m
+2026-10-23T03:50:26.193465Z 01O [32;1m$ for i in 1 2 3 4; do # collapsed multi-line command[0;m
+2026-10-23T03:50:26.233081Z 01E downstream: base baacc58fc4d8, head cddbd5586602, k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+2026-10-23T03:50:26.234681Z 01E downstream: build (base): extracting baacc58fc4d8
+2026-10-23T03:50:26.243387Z 01E downstream: build (base): go build -o '/tmp/downstream-run-799797542/bin/base-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:26.740786Z 01E downstream: build (head): extracting cddbd5586602
+2026-10-23T03:50:26.753092Z 01E downstream: build (head): go build -o '/tmp/downstream-run-799797542/bin/head-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:27.252049Z 01E downstream: validate journeys
+2026-10-23T03:50:27.253906Z 01E downstream: baseline check: one iteration of each journey on base
+2026-10-23T03:50:27.455553Z 01E downstream: pass B1: base baacc58fc4d8
+2026-10-23T03:50:28.182599Z 01E downstream: pass C: head cddbd5586602
+2026-10-23T03:50:28.933099Z 01E downstream: pass B2: base baacc58fc4d8
+2026-10-23T03:50:29.676804Z 01E downstream: done: 3 passes
+2026-10-23T03:50:29.698699Z 01O noise 1/5 run 1: regression=0 trade-off=0 improved=0 withheld=0 discarded=0 passes=3 
+2026-10-23T03:50:29.733223Z 01E downstream: base baacc58fc4d8, head cddbd5586602, k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+2026-10-23T03:50:29.735058Z 01E downstream: build (base): extracting baacc58fc4d8
+2026-10-23T03:50:29.743304Z 01E downstream: build (base): go build -o '/tmp/downstream-run-1995721130/bin/base-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:30.227012Z 01E downstream: build (head): extracting cddbd5586602
+2026-10-23T03:50:30.238878Z 01E downstream: build (head): go build -o '/tmp/downstream-run-1995721130/bin/head-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:30.721720Z 01E downstream: validate journeys
+2026-10-23T03:50:30.723703Z 01E downstream: baseline check: one iteration of each journey on base
+2026-10-23T03:50:30.925098Z 01E downstream: pass B1: base baacc58fc4d8
+2026-10-23T03:50:31.655669Z 01E downstream: pass C: head cddbd5586602
+2026-10-23T03:50:32.385103Z 01E downstream: pass B2: base baacc58fc4d8
+2026-10-23T03:50:33.127919Z 01E downstream: done: 3 passes
+2026-10-23T03:50:33.150906Z 01O noise 1/5 run 2: regression=0 trade-off=0 improved=0 withheld=0 discarded=0 passes=3 
+2026-10-23T03:50:33.184919Z 01E downstream: base baacc58fc4d8, head cddbd5586602, k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+2026-10-23T03:50:33.186544Z 01E downstream: build (base): extracting baacc58fc4d8
+2026-10-23T03:50:33.195077Z 01E downstream: build (base): go build -o '/tmp/downstream-run-3996508841/bin/base-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:33.671090Z 01E downstream: build (head): extracting cddbd5586602
+2026-10-23T03:50:33.683597Z 01E downstream: build (head): go build -o '/tmp/downstream-run-3996508841/bin/head-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:34.159533Z 01E downstream: validate journeys
+2026-10-23T03:50:34.161722Z 01E downstream: baseline check: one iteration of each journey on base
+2026-10-23T03:50:34.365599Z 01E downstream: pass B1: base baacc58fc4d8
+2026-10-23T03:50:35.106976Z 01E downstream: pass C: head cddbd5586602
+2026-10-23T03:50:35.835285Z 01E downstream: pass B2: base baacc58fc4d8
+2026-10-23T03:50:36.583517Z 01E downstream: done: 3 passes
+2026-10-23T03:50:36.605375Z 01O noise 1/5 run 3: regression=0 trade-off=0 improved=0 withheld=0 discarded=0 passes=3 
+2026-10-23T03:50:36.639916Z 01E downstream: base baacc58fc4d8, head cddbd5586602, k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+2026-10-23T03:50:36.641653Z 01E downstream: build (base): extracting baacc58fc4d8
+2026-10-23T03:50:36.649901Z 01E downstream: build (base): go build -o '/tmp/downstream-run-497949044/bin/base-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:37.133577Z 01E downstream: build (head): extracting cddbd5586602
+2026-10-23T03:50:37.142410Z 01E downstream: build (head): go build -o '/tmp/downstream-run-497949044/bin/head-app' ./examples/shelf/cmd/shelf
+2026-10-23T03:50:37.620852Z 01E downstream: validate journeys
+2026-10-23T03:50:37.622737Z 01E downstream: baseline check: one iteration of each journey on base
+2026-10-23T03:50:37.824723Z 01E downstream: pass B1: base baacc58fc4d8
+2026-10-23T03:50:38.551712Z 01E downstream: pass C: head cddbd5586602
+2026-10-23T03:50:39.289066Z 01E downstream: pass B2: base baacc58fc4d8
+2026-10-23T03:50:40.017379Z 01E downstream: done: 3 passes
+2026-10-23T03:50:40.039577Z 01O noise 1/5 run 4: regression=0 trade-off=0 improved=0 withheld=0 discarded=0 passes=3 
+2026-10-23T03:50:40.636851Z 00O section_end:1792727440:step_script[0K
+2026-10-23T03:50:40.637749Z 00O+section_start:1792727440:upload_artifacts_on_success[0K
+2026-10-23T03:50:40.637757Z 00O+[0K[36;1mUploading artifacts for successful job[0;m[0;m
+2026-10-23T03:50:41.025825Z 01O [32;1mUploading artifacts...[0;m
+2026-10-23T03:50:41.077673Z 01E out/: found 14 matching artifact files and directories[0;m 
+2026-10-23T03:50:41.858686Z 01E Uploading artifacts as "archive" to coordinator... 201 Created[0;m  correlation_id[0;m=65daf86a10c545399fe940fffd914ec9 id[0;m=17403427635 status[0;m=201 token[0;m=eyJraWQiO
+2026-10-23T03:50:42.014789Z 00O section_end:1792727442:upload_artifacts_on_success[0K
+2026-10-23T03:50:42.015400Z 00O+section_start:1792727442:cleanup_file_variables[0K
+2026-10-23T03:50:42.015407Z 00O+[0K[36;1mCleaning up project directory and file based variables[0;m[0;m
+2026-10-23T03:50:42.513420Z 00O section_end:1792727442:cleanup_file_variables[0K
+2026-10-23T03:50:42.576997Z 00O [32;1mJob succeeded[0;m

@@ -4,7 +4,7 @@ Long form of the claims table in the [README](../README.md). One entry per claim
 claimed, the exact proof, how to check it, and what the proof does **not** show. Entries
 marked "Not built" or "Not measured" have no proof and make no claim.
 
-Line numbers refer to the files in `evidence/day0/` as committed. Test IDs (T-xx) are in
+Line numbers refer to the files in `evidence/` as committed. Test IDs (T-xx) are in
 [requirements.md](requirements.md).
 
 Run-to-session map: run1 = session 9880588 (probe v1), run2 = session 9881417 (probe v2),
@@ -96,21 +96,52 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-10. The engine finds a planted regression between two builds and traces it to the changed function
+
+- **File:** `engine/` (CLI in `engine/cmd/downstream`), run by the `engine-e2e` job in
+  `.gitlab-ci.yml`
+- **Proof:** pipeline 63 (commit `0fa756e`), copied to `evidence/runs/ci-63-engine-e2e/`.
+  [Job log](../evidence/runs/ci-63-engine-e2e/raise-hash-cost-job-log.txt) line 77
+  (`regression=2`) and line 206 (`Job succeeded`).
+  [report.md](../evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) line 5 (22 regressed
+  steps), line 12 (`log_in` p95 2.8 / 1.6 ms to 537.9 ms), line 53 (app CPU time 0.16 s to
+  27.10 s), lines 90-96 (the 7 routes that reach `hashSecret`).
+- **Check:** `grep -n "regressed steps\|CPU time" evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md`
+- **Does not show:** a run inside the Duo flow; a regression that was not planted; journeys
+  written by the model (the run uses `examples/shelf/journeys.example.json`); "one issue per
+  cause" (this change gives two issue groups, see
+  [evidence/runs.md](../evidence/runs.md)).
+
+## C-11. A clean change comes out clean on the GitLab runner
+
+- **File:** `engine/classify`, run by `engine-e2e` and `engine-noise` in `.gitlab-ci.yml`
+- **Proof:** 22 of 22 runs with `regression=0` on `saas-linux-small-amd64`: pipeline 63
+  [job log](../evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) line 77, and pipeline 66
+  (commit `baacc58`, branch `measure-noise`), lines 72, 84, 96 and 108 of each
+  `noise-<k>-job-log.txt` in [ci-66-engine-noise](../evidence/runs/ci-66-engine-noise/). The
+  largest step p95 increase across pipeline 66's 20 runs is 4.6 ms; the regression floor is
+  10 ms.
+- **Check:** `grep -h "noise ./5 run" evidence/runs/ci-66-engine-noise/*-job-log.txt | grep -v echo`
+- **Does not show:** the Duo sandbox's noise (not measured). On a slower machine the same
+  thresholds give false positives: 6 of 12 local WSL2 runs flagged the clean change
+  ([evidence/runs.md](../evidence/runs.md), "Local WSL2 runs").
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |
 |---|---|---|---|
-| N-1 | The engine finds regressions between two builds | `engine/` (built) | none; needs a committed run |
-| N-2 | Journeys are generated from the diff and run by k6 against an app | `engine/journey`, `engine/k6gen`, `engine/runner` (built); the model step is in the flow prompt | T-07 |
-| N-3 | One issue per cause, starter tagged | `engine/issues` (bodies built); `flows/downstream.yml` | T-08 |
+| N-1 | The engine finds regressions inside a flow run | `engine/` (CI runs: C-10, C-11); `flows/downstream.yml` | T-07 |
+| N-2 | Journeys are generated from the diff by the model | the model step is in the flow prompt; k6 running hand-written journeys is shown in C-10 | T-07 |
+| N-3 | One issue per cause, starter tagged | `engine/issues` (bodies produced in CI; the planted change gives 2 groups for 1 cause); `flows/downstream.yml` | T-08 |
 | N-4 | `fix option N` applies a change and reruns the journey | `engine/issues` checks the option number only; applying is not built | T-09, T-10 |
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
 | N-7 | The GitLab project shows an MIT licence in its sidebar | `LICENSE` | T-12 (the file is committed; GitLab's detection not yet checked) |
 
-What exists for N-1 to N-3 today is code with unit and integration tests (`make test`); a
-passing test on a developer machine is not committed evidence, so these stay unverified until
-a run's output is committed under `evidence/`.
+The engine's CI runs (C-10, C-11) are runs of the CLI, not of the flow, so N-1 to N-3 stay
+unverified until a flow run's output is committed under `evidence/`.
 
 When one of these gets proof, move it to a numbered claim above, add the evidence file under
 `evidence/`, and flip its README row to Verified in the same commit.

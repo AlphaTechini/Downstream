@@ -89,11 +89,13 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 
 ---
 
-### 2.7 Engine status (2026-10-22)
+### 2.7 Engine status (2026-10-23)
 
 The engine side of these requirements is built and covered by tests in `engine/` (`make
 test`). A passing test is not the "Check" above: each requirement is done only when its check
-has been run in a logged run with the output committed under `evidence/`. None has been.
+has been run in a logged run with the output committed under `evidence/`. The engine CLI has
+logged CI runs on the demo app ([evidence/runs.md](../evidence/runs.md)); no flow run exists,
+so no requirement whose check needs the flow is done.
 
 | Requirement | Engine code | Test |
 |---|---|---|
