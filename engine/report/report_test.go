@@ -51,6 +51,67 @@ func TestGoldenFull(t *testing.T) {
 	golden(t, "report_basic.golden.md", Render(run, &scan))
 }
 
+func TestGoldenProcessCounters(t *testing.T) {
+	run := load[model.Run](t, "run_process.json")
+	scan := load[model.Scan](t, "scan_basic.json")
+	out := Render(run, &scan)
+	golden(t, "report_process.golden.md", out)
+	for _, want := range []string{"CPU time (exact)", "CPU per completed journey", "Bytes written per journey", "Write syscalls per journey", "Open fds", "Threads", "Completed journeys"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing row %q", want)
+		}
+	}
+}
+
+// A run.json from before the counters existed renders without their rows.
+func TestOldRunHasNoCounterRows(t *testing.T) {
+	out := Render(load[model.Run](t, "run_basic.json"), nil)
+	for _, bad := range []string{"(exact)", "per completed journey", "per journey", "Open fds", "Threads", "Completed journeys"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("old run rendered %q", bad)
+		}
+	}
+}
+
+func TestCounterRowsUnmeasuredAndFallback(t *testing.T) {
+	run := load[model.Run](t, "run_process.json")
+	b2 := &run.Passes[2].Process
+	b2.CPUSource = model.CPUSourceProcStat
+	b2.Unmeasured = []string{model.UnmeasuredOpenFDs, model.UnmeasuredWriteBytesPerJourney}
+	b2.OpenFDs, b2.WriteBytesPerJourney = 0, 0
+	out := Render(run, nil)
+	if !strings.Contains(out, "| Open fds | 9 | 9 | not measured |") {
+		t.Errorf("unmeasured fds not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "| Bytes written per journey | 5104 B | 5554 B | not measured |") {
+		t.Errorf("unmeasured bytes not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "10 ms /proc tick count") {
+		t.Errorf("tick fallback not explained")
+	}
+	if strings.Contains(out, "| Open fds | 9 | 9 | 0 |") {
+		t.Errorf("an unread counter was shown as 0")
+	}
+}
+
+// Findings for the new metrics, once the classifier emits them, fill the
+// Change, Noise band and Verdict cells; without one they read "-".
+func TestCounterRowsUseFindingsWhenPresent(t *testing.T) {
+	run := load[model.Run](t, "run_process.json")
+	out := Render(run, nil)
+	if !strings.Contains(out, "| Threads | 7 | 8 | 7 | - | - | - |") {
+		t.Errorf("row without a finding should show dashes:\n%s", out)
+	}
+	run.Findings = append(run.Findings, model.Finding{
+		ID: "app." + model.MetricThreads, Metric: model.MetricThreads, Unit: "count",
+		B1: 7, C: 8, B2: 7, Band: 0, Delta: 1, DeltaPct: 14.3, Class: model.ClassNoise,
+	})
+	out = Render(run, nil)
+	if !strings.Contains(out, "| Threads | 7 | 8 | 7 | +1 (+14%) | 0 | noise |") {
+		t.Errorf("finding not used:\n%s", out)
+	}
+}
+
 func TestGoldenNoScan(t *testing.T) {
 	run := load[model.Run](t, "run_basic.json")
 	out := Render(run, nil)
@@ -76,7 +137,12 @@ func TestGoldenError(t *testing.T) {
 // Every figure in the fixture must appear in the output formatted with the
 // documented decimals, so a number cannot be dropped or reformatted silently.
 func TestFiguresAppear(t *testing.T) {
-	run := load[model.Run](t, "run_basic.json")
+	for _, name := range []string{"run_basic.json", "run_process.json"} {
+		t.Run(name, func(t *testing.T) { figuresAppear(t, load[model.Run](t, name)) })
+	}
+}
+
+func figuresAppear(t *testing.T, run model.Run) {
 	out := Render(run, nil)
 	for _, f := range run.Findings {
 		if f.Metric != model.MetricP95 && f.Class == model.ClassNoise {
@@ -102,13 +168,21 @@ func TestFiguresAppear(t *testing.T) {
 		}
 	}
 	for _, p := range run.Passes {
-		for _, s := range []string{val(p.Process.CPUSeconds, "s"), val(p.Process.PeakRSSMB, "MB")} {
+		want := []string{val(p.Process.CPUSeconds, "s"), val(p.Process.PeakRSSMB, "MB")}
+		if p.Process.CPUSource != "" {
+			want = append(want, fixedDec(p.Process.CPUSecondsExact, 3), fixedDec(p.Process.CPUMsPerJourney, 2),
+				fixedDec(p.Process.WriteBytesPerJourney, 0), fixedDec(p.Process.WriteSyscallsPerJourney, 2),
+				strconv.Itoa(p.Process.OpenFDs), strconv.Itoa(p.Process.Threads), strconv.Itoa(p.Process.CompletedJourneys))
+		}
+		for _, s := range want {
 			if !strings.Contains(out, s) {
 				t.Errorf("pass %s: %q not in output", p.Label, s)
 			}
 		}
 	}
 }
+
+func fixedDec(v float64, n int) string { return strconv.FormatFloat(v, 'f', n, 64) }
 
 func decimals(unit string) int {
 	switch unit {
@@ -124,7 +198,12 @@ func decimals(unit string) int {
 // every number token in the output and require it in an allowed set built from
 // the fixture.
 func TestNoUnexplainedNumbers(t *testing.T) {
-	run := load[model.Run](t, "run_basic.json")
+	for _, name := range []string{"run_basic.json", "run_process.json"} {
+		t.Run(name, func(t *testing.T) { noUnexplainedNumbers(t, load[model.Run](t, name)) })
+	}
+}
+
+func noUnexplainedNumbers(t *testing.T, run model.Run) {
 	out := Render(run, nil)
 	allowed := map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "95": true, "20": true, "50": true, "10": true}
 	for _, f := range run.Findings {
@@ -138,6 +217,13 @@ func TestNoUnexplainedNumbers(t *testing.T) {
 	for _, p := range run.Passes {
 		allowed[val(p.Process.CPUSeconds, "s")] = true
 		allowed[val(p.Process.PeakRSSMB, "MB")] = true
+		if p.Process.CPUSource != "" {
+			for _, v := range []string{fixedDec(p.Process.CPUSecondsExact, 3), fixedDec(p.Process.CPUMsPerJourney, 2),
+				fixedDec(p.Process.WriteBytesPerJourney, 0), fixedDec(p.Process.WriteSyscallsPerJourney, 2),
+				strconv.Itoa(p.Process.OpenFDs), strconv.Itoa(p.Process.Threads), strconv.Itoa(p.Process.CompletedJourneys)} {
+				allowed[v] = true
+			}
+		}
 	}
 	allowed[strconv.Itoa(run.Settings.VUs)] = true
 	allowed[strconv.Itoa(run.Settings.DurationSeconds)] = true

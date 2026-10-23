@@ -147,11 +147,51 @@ type Pass struct {
 	Steps     []StepMetrics `json:"steps"`
 }
 
-// ProcessStats are read from /proc for the app process during the k6 run.
+// ProcessStats are read from /proc (and from the kernel's resource usage for
+// the exited process) for the app process in one pass. Fields after PeakRSSMB
+// were added later; run.json files without them still parse, and a zero
+// CPUSource marks such a file.
 type ProcessStats struct {
-	CPUSeconds float64 `json:"cpu_seconds"` // user+system time consumed while k6 ran
+	CPUSeconds float64 `json:"cpu_seconds"` // user+system time consumed while k6 ran, in 10 ms ticks
 	PeakRSSMB  float64 `json:"peak_rss_mb"` // VmHWM at the end of the pass
+
+	// CPUSecondsExact is user+system time over the whole process lifetime at
+	// microsecond resolution when CPUSource is "rusage"; with "proc-stat" it is
+	// the tick value above.
+	CPUSecondsExact float64 `json:"cpu_seconds_exact"`
+	CPUSource       string  `json:"cpu_source"` // "rusage" or "proc-stat"
+
+	WriteBytes    float64 `json:"write_bytes"`    // wchar delta over the k6 run
+	WriteSyscalls float64 `json:"write_syscalls"` // syscw delta over the k6 run
+	OpenFDs       int     `json:"open_fds"`       // after k6 exited and idle connections drained
+	Threads       int     `json:"threads"`        // same moment as OpenFDs
+
+	CompletedJourneys       int     `json:"completed_journeys"` // iterations that finished every step without a failure
+	CPUMsPerJourney         float64 `json:"cpu_ms_per_journey"`
+	WriteBytesPerJourney    float64 `json:"write_bytes_per_journey"`
+	WriteSyscallsPerJourney float64 `json:"write_syscalls_per_journey"`
+
+	// Unmeasured names each counter above that could not be read in this pass
+	// (its value is then 0 and means nothing).
+	Unmeasured []string `json:"unmeasured,omitempty"`
 }
+
+// CPUSource values.
+const (
+	CPUSourceRusage   = "rusage"
+	CPUSourceProcStat = "proc-stat"
+)
+
+// Names used in ProcessStats.Unmeasured.
+const (
+	UnmeasuredWriteBytes              = "write_bytes"
+	UnmeasuredWriteSyscalls           = "write_syscalls"
+	UnmeasuredOpenFDs                 = "open_fds"
+	UnmeasuredThreads                 = "threads"
+	UnmeasuredCPUPerJourney           = "cpu_ms_per_journey"
+	UnmeasuredWriteBytesPerJourney    = "write_bytes_per_journey"
+	UnmeasuredWriteSyscallsPerJourney = "write_syscalls_per_journey"
+)
 
 // StepMetrics are k6 figures for one step in one pass. Latencies are in ms.
 type StepMetrics struct {
@@ -184,6 +224,12 @@ const (
 	MetricFailures = "failures"
 	MetricCPU      = "cpu_seconds"
 	MetricRSS      = "peak_rss_mb"
+
+	MetricCPUPerJourney           = "cpu_ms_per_journey"
+	MetricWriteBytesPerJourney    = "write_bytes_per_journey"
+	MetricWriteSyscallsPerJourney = "write_syscalls_per_journey"
+	MetricOpenFDs                 = "open_fds"
+	MetricThreads                 = "threads"
 )
 
 // Finding compares one metric across B1, C and B2.

@@ -4,6 +4,7 @@
 package report
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -312,7 +313,63 @@ func (r *renderer) appTable() {
 		}
 		r.line("| " + m.name + cells(m.get, m.unit) + " | " + chg + " | " + band + " | " + verdict + " |")
 	}
+	r.counterRows(pass)
 	r.blank()
+}
+
+// counterRows adds the exact process counters. A run.json written before they
+// existed has no CPU source in any pass, and gets none of these rows.
+func (r *renderer) counterRows(pass map[string]model.Pass) {
+	has := false
+	for _, p := range pass {
+		if p.Process.CPUSource != "" {
+			has = true
+		}
+	}
+	if !has {
+		return
+	}
+	dec := func(n int) func(float64) string {
+		return func(v float64) string { return strconv.FormatFloat(v, 'f', n, 64) }
+	}
+	for _, m := range []struct {
+		name, metric, unmeasured, unit string
+		format                         func(float64) string
+		get                            func(model.ProcessStats) float64
+	}{
+		{"CPU time (exact)", "", "", " s", dec(3), func(p model.ProcessStats) float64 { return p.CPUSecondsExact }},
+		{"CPU per completed journey", model.MetricCPUPerJourney, model.UnmeasuredCPUPerJourney, " ms", dec(2), func(p model.ProcessStats) float64 { return p.CPUMsPerJourney }},
+		{"Bytes written per journey", model.MetricWriteBytesPerJourney, model.UnmeasuredWriteBytesPerJourney, " B", dec(0), func(p model.ProcessStats) float64 { return p.WriteBytesPerJourney }},
+		{"Write syscalls per journey", model.MetricWriteSyscallsPerJourney, model.UnmeasuredWriteSyscallsPerJourney, "", dec(2), func(p model.ProcessStats) float64 { return p.WriteSyscallsPerJourney }},
+		{"Open fds", model.MetricOpenFDs, model.UnmeasuredOpenFDs, "", dec(0), func(p model.ProcessStats) float64 { return float64(p.OpenFDs) }},
+		{"Threads", model.MetricThreads, model.UnmeasuredThreads, "", dec(0), func(p model.ProcessStats) float64 { return float64(p.Threads) }},
+		{"Completed journeys", "", "", "", dec(0), func(p model.ProcessStats) float64 { return float64(p.CompletedJourneys) }},
+	} {
+		line := "| " + m.name
+		for _, l := range []string{"B1", "C", "B2"} {
+			p, ok := pass[l]
+			switch {
+			case !ok:
+				line += " | not run"
+			case m.unmeasured != "" && slices.Contains(p.Process.Unmeasured, m.unmeasured):
+				line += " | not measured"
+			default:
+				line += " | " + m.format(m.get(p.Process)) + m.unit
+			}
+		}
+		chg, band, verdict := "-", "-", "-"
+		if f, ok := r.byID["app."+m.metric]; m.metric != "" && ok {
+			chg, band, verdict = change(f), val(f.Band, f.Unit)+unitSuffix(f.Unit), cell(f.Class)
+		}
+		r.line(line + " | " + chg + " | " + band + " | " + verdict + " |")
+	}
+	for _, l := range []string{"B1", "C", "B2"} {
+		if pass[l].Process.CPUSource == model.CPUSourceProcStat {
+			r.blank()
+			r.line("CPU time (exact) is the 10 ms /proc tick count in at least one pass, because the kernel gave no resource usage for the exited process.")
+			break
+		}
+	}
 }
 
 type point struct {

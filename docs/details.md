@@ -295,8 +295,22 @@ answers with a redirect to another host is never followed.
 - Per step: request count, failure count, p50, p95, mean latency (from k6 trends the
   generated script defines per step).
 - Per pass: CPU seconds the app used while k6 ran (user plus system time from
-  `/proc/<pid>/stat`, read before and after) and its peak RSS (`VmHWM` from
+  `/proc/<pid>/stat`, read before and after, in 10 ms ticks) and its peak RSS (`VmHWM` from
   `/proc/<pid>/status` after k6 exits).
+- Per pass, process counters (`engine/runner/proc.go`, `stats.go`):
+  - exact CPU seconds: user plus system time from the app's rusage when it exits, in
+    microseconds. It covers the whole life of the process (start, readiness checks, the k6
+    window, shutdown); every pass starts a fresh process the same way. `cpu_source` says
+    whether rusage or the tick counter was used;
+  - bytes written and write syscalls (`wchar`, `syscw` from `/proc/<pid>/io`) over the k6
+    window. `rchar` and `syscr` are read but not reported;
+  - open file descriptors (`/proc/<pid>/fd`) and threads (`Threads:` in
+    `/proc/<pid>/status`), read 500 ms after k6 exits so keep-alive connections can close;
+  - completed journeys: iterations that finished every step without a failure, from a k6
+    counter per journey, and from them CPU ms, bytes written and write syscalls per
+    completed journey.
+  A counter that cannot be read is recorded as not measured for that pass and listed under
+  "Not measured" in the report; the run does not fail.
 - Database time: **not measured in the MVP.** It is reported only if the target exposes it
   (for example a debug route). Otherwise the report says "DB time: not measured". We do not
   guess.

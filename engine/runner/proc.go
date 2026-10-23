@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // clockTicksPerSecond is the kernel's USER_HZ, the unit of utime and stime in
@@ -59,6 +60,105 @@ func parseVmHWMMB(status string) (float64, error) {
 	return 0, fmt.Errorf("no VmHWM line in status")
 }
 
+// procIO is /proc/<pid>/io. Only the write counters are reported: the read
+// counters also count page-cache hits and vary with what else ran, so they are
+// parsed but not used.
+type procIO struct {
+	RChar, WChar, SyscR, SyscW uint64
+}
+
+// parseProcIO reads the contents of /proc/<pid>/io. wchar and syscw must be
+// present; rchar and syscr are optional.
+func parseProcIO(s string) (procIO, error) {
+	var io procIO
+	seen := map[string]bool{}
+	for _, line := range strings.Split(s, "\n") {
+		name, rest, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		var dst *uint64
+		switch name {
+		case "rchar":
+			dst = &io.RChar
+		case "wchar":
+			dst = &io.WChar
+		case "syscr":
+			dst = &io.SyscR
+		case "syscw":
+			dst = &io.SyscW
+		default:
+			continue
+		}
+		v, err := strconv.ParseUint(strings.TrimSpace(rest), 10, 64)
+		if err != nil {
+			return procIO{}, fmt.Errorf("%s: %w", name, err)
+		}
+		*dst = v
+		seen[name] = true
+	}
+	for _, need := range []string{"wchar", "syscw"} {
+		if !seen[need] {
+			return procIO{}, fmt.Errorf("no %s line in io", need)
+		}
+	}
+	return io, nil
+}
+
+// parseThreads returns the Threads count from the contents of /proc/<pid>/status.
+func parseThreads(status string) (int, error) {
+	for _, line := range strings.Split(status, "\n") {
+		rest, ok := strings.CutPrefix(line, "Threads:")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(rest))
+		if err != nil {
+			return 0, fmt.Errorf("Threads: %w", err)
+		}
+		if n < 1 {
+			return 0, fmt.Errorf("Threads: implausible count %d", n)
+		}
+		return n, nil
+	}
+	return 0, fmt.Errorf("no Threads line in status")
+}
+
+func readProcIO(pid int) (procIO, error) {
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/io", pid))
+	if err != nil {
+		return procIO{}, err
+	}
+	return parseProcIO(string(b))
+}
+
+func readThreads(pid int) (int, error) {
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0, err
+	}
+	return parseThreads(string(b))
+}
+
+// countFDs counts the entries of /proc/<pid>/fd.
+func countFDs(pid int) (int, error) {
+	ents, err := os.ReadDir(fmt.Sprintf("/proc/%d/fd", pid))
+	if err != nil {
+		return 0, err
+	}
+	return len(ents), nil
+}
+
+// procReader is where the runner gets the /proc counters. Tests replace
+// procSource to simulate a counter that cannot be read.
+type procReader struct {
+	io      func(pid int) (procIO, error)
+	threads func(pid int) (int, error)
+	fds     func(pid int) (int, error)
+}
+
+var procSource = procReader{io: readProcIO, threads: readThreads, fds: countFDs}
+
 func readCPUTicks(pid int) (uint64, error) {
 	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
@@ -109,4 +209,19 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+// rusageSeconds returns user+system CPU time of an exited process at the
+// resolution the kernel reports (microseconds). ok is false when the OS gave no
+// rusage.
+func rusageSeconds(ps *os.ProcessState) (secs float64, ok bool) {
+	if ps == nil {
+		return 0, false
+	}
+	ru, isRusage := ps.SysUsage().(*syscall.Rusage)
+	if !isRusage || ru == nil {
+		return 0, false
+	}
+	tv := func(t syscall.Timeval) float64 { return float64(t.Sec) + float64(t.Usec)/1e6 }
+	return tv(ru.Utime) + tv(ru.Stime), true
 }

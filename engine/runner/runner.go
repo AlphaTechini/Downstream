@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -162,7 +163,7 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 	runID := strconv.FormatInt(time.Now().Unix(), 16)
 
 	log.printf("baseline check: one iteration of each journey on base")
-	probe, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["base"], runID: runID, vus: 1, iterations: 1}, o.Journeys)
+	probe, _, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["base"], runID: runID, vus: 1, iterations: 1}, o.Journeys)
 	if err != nil {
 		return fail("baseline check", err)
 	}
@@ -185,9 +186,14 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 		{"B1", "base", baseSHA}, {"C", "head", headSHA}, {"B2", "base", baseSHA},
 	} {
 		log.printf("pass %s: %s %s", p.label, p.side, short(p.sha))
-		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds[p.side], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations}, keptFile)
+		res, notes, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds[p.side], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations, measure: true}, keptFile)
 		if err != nil {
 			return fail("pass "+p.label, err)
+		}
+		for _, n := range notes {
+			if !slices.Contains(run.NotMeasured, n) {
+				run.NotMeasured = append(run.NotMeasured, n)
+			}
 		}
 		res.Label, res.Commit = p.label, p.sha
 		run.Passes = append(run.Passes, res)
@@ -267,54 +273,98 @@ type passSpec struct {
 	runID      string
 	vus        int
 	iterations int
+	// measure turns on the process counters beyond CPU ticks and peak RSS. The
+	// one-iteration baseline check leaves it off: its figures are not reported.
+	measure bool
 }
 
+// connDrain is how long runPass waits after k6 exits before it counts open
+// file descriptors and threads. k6 closes its keep-alive connections when it
+// exits, but the app only drops its side when it reads the EOF, so a count taken
+// at once depends on how fast the app noticed. A var so tests can shorten it.
+var connDrain = 500 * time.Millisecond
+
 // runPass starts a fresh app, runs k6 against it once, samples /proc around
-// the k6 run, and stops the app on every path.
-func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass, error) {
+// the k6 run, and stops the app on every path. The second result holds the
+// Run.NotMeasured lines for counters that could not be read.
+func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass, []string, error) {
 	var res model.Pass
 	port, err := pickPort()
 	if err != nil {
-		return res, fmt.Errorf("choosing a port: %w", err)
+		return res, nil, fmt.Errorf("choosing a port: %w", err)
 	}
 	a, err := startApp(p.cfg, p.b.bin, p.b.tree, port)
 	if err != nil {
-		return res, fmt.Errorf("starting the app: %w", err)
+		return res, nil, fmt.Errorf("starting the app: %w", err)
 	}
 	defer a.stop()
 	if err := a.waitReady(ctx, p.cfg.ReadyPath); err != nil {
-		return res, err
+		return res, nil, err
 	}
 	script, err := k6gen.Script(jf, k6gen.Options{
 		BaseURL: a.baseURL(), VUs: p.vus, Iterations: p.iterations, MaxDuration: p.cfg.Duration, RunID: p.runID,
 	})
 	if err != nil {
-		return res, err
+		return res, nil, err
 	}
 
-	ticks0, err := readCPUTicks(a.pid)
-	if err != nil {
-		return res, fmt.Errorf("reading app CPU time: %w", err)
+	var s procSample
+	if s.ticks0, err = readCPUTicks(a.pid); err != nil {
+		return res, nil, fmt.Errorf("reading app CPU time: %w", err)
+	}
+	if p.measure {
+		s.io0, s.ioErr = procSource.io(a.pid)
 	}
 	started := time.Now()
-	steps, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration, p.log)
+	steps, completed, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration, p.log)
 	ended := time.Now()
 	if a.exited() {
-		return res, fmt.Errorf("%w; output tail:\n%s", errAppDied, a.out.String())
+		return res, nil, fmt.Errorf("%w; output tail:\n%s", errAppDied, a.out.String())
 	}
 	if kerr != nil {
-		return res, kerr
+		return res, nil, kerr
 	}
-	ticks1, err := readCPUTicks(a.pid)
-	if err != nil {
-		return res, fmt.Errorf("reading app CPU time: %w", err)
+	if s.ticks1, err = readCPUTicks(a.pid); err != nil {
+		return res, nil, fmt.Errorf("reading app CPU time: %w", err)
 	}
-	rss, err := readPeakRSSMB(a.pid)
-	if err != nil {
-		return res, fmt.Errorf("reading app peak memory: %w", err)
+	if p.measure {
+		io1, ioErr := procSource.io(a.pid)
+		s.io1 = io1
+		if s.ioErr == nil {
+			s.ioErr = ioErr
+		}
+	}
+	if s.rssMB, err = readPeakRSSMB(a.pid); err != nil {
+		return res, nil, fmt.Errorf("reading app peak memory: %w", err)
+	}
+	for _, n := range completed {
+		s.completed += n
 	}
 	res.StartedAt, res.EndedAt = stamp(started), stamp(ended)
-	res.Process = model.ProcessStats{CPUSeconds: float64(ticks1-ticks0) / clockTicksPerSecond, PeakRSSMB: rss}
 	res.Steps = steps
-	return res, nil
+
+	if !p.measure {
+		res.Process = model.ProcessStats{CPUSeconds: float64(s.ticks1-s.ticks0) / clockTicksPerSecond, PeakRSSMB: s.rssMB}
+		return res, nil, nil
+	}
+
+	select {
+	case <-time.After(connDrain):
+	case <-a.done:
+		return res, nil, fmt.Errorf("%w; output tail:\n%s", errAppDied, a.out.String())
+	case <-ctx.Done():
+		return res, nil, ctx.Err()
+	}
+	s.threads, s.threadsErr = procSource.threads(a.pid)
+	s.fds, s.fdsErr = procSource.fds(a.pid)
+
+	// Stop now rather than at return so the kernel's resource usage for the
+	// exited process is available. The deferred stop is then a no-op.
+	a.stop()
+	if a.exited() {
+		s.exactCPU, s.haveExact = rusageSeconds(a.cmd.ProcessState)
+	}
+	var notes []string
+	res.Process, notes = buildProcess(s)
+	return res, notes, nil
 }
