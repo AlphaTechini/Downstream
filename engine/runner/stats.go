@@ -21,6 +21,13 @@ type procSample struct {
 	fds        int
 	fdsErr     error
 
+	// sched0 and sched1 are the summed on-CPU nanoseconds of the app's threads
+	// just before k6 started and just after it exited. schedOK says both were
+	// read; schedErr is why they were not.
+	sched0, sched1 uint64
+	schedOK        bool
+	schedErr       error
+
 	// exactCPU is user+system seconds from the exited process's rusage.
 	exactCPU  float64
 	haveExact bool
@@ -43,17 +50,29 @@ func buildProcess(s procSample) (model.ProcessStats, []string) {
 		PeakRSSMB:         s.rssMB,
 		CompletedJourneys: s.completed,
 	}
-	var notes []string
 	unmeasured := func(names ...string) { ps.Unmeasured = append(ps.Unmeasured, names...) }
 
-	// The rusage figure covers the whole process lifetime (start, readiness
-	// polling, the k6 window, shutdown). Every pass starts a fresh process the
-	// same way, so that fixed part is the same in B1, C and B2 and cancels in
-	// the comparison. Ticks cover only the k6 window but are quantised to 10 ms.
-	if s.haveExact {
+	// Preferred: schedstat over the k6 window, in nanoseconds. The rusage figure
+	// covers the whole process lifetime (start, readiness polling, the k6
+	// window, shutdown), so a head that adds heavy initialisation would show as
+	// a per-journey rise; it is the fallback. Ticks cover only the k6 window but
+	// are quantised to 10 ms.
+	schedErr := s.schedErr
+	if schedErr == nil && s.schedOK && s.sched1 < s.sched0 {
+		schedErr = errors.New("the summed on-CPU time went backwards, so a thread exited inside the window")
+	}
+	switch {
+	case schedErr == nil && s.schedOK:
+		ps.CPUSecondsWindow = float64(s.sched1-s.sched0) / 1e9
+		ps.CPUSecondsExact, ps.CPUSource = ps.CPUSecondsWindow, model.CPUSourceSchedstat
+	case s.haveExact:
 		ps.CPUSecondsExact, ps.CPUSource = s.exactCPU, model.CPUSourceRusage
-	} else {
+	default:
 		ps.CPUSecondsExact, ps.CPUSource = ps.CPUSeconds, model.CPUSourceProcStat
+	}
+	var notes []string
+	if schedErr != nil {
+		notes = append(notes, fmt.Sprintf("CPU over the k6 window: not measured from schedstat (%s); CPU per journey uses %s", errText(schedErr), ps.CPUSource))
 	}
 
 	ioErr := s.ioErr
@@ -96,12 +115,13 @@ func buildProcess(s procSample) (model.ProcessStats, []string) {
 	}
 	if rtErr != nil {
 		unmeasured(model.UnmeasuredAllocObjectsPerJourney, model.UnmeasuredAllocBytesPerJourney,
-			model.UnmeasuredGCCyclesPerJourney, model.UnmeasuredGoroutines)
+			model.UnmeasuredGCCycles, model.UnmeasuredGCCyclesPerJourney, model.UnmeasuredGoroutines)
 		if !s.rtQuiet {
 			notes = append(notes, fmt.Sprintf("runtime counters: not measured; %s", errText(rtErr)))
 		}
 	} else {
 		ps.Goroutines = int(s.rtDrained.Goroutines)
+		ps.GCCycles = float64(gcCycles)
 	}
 
 	if s.completed <= 0 {

@@ -11,11 +11,10 @@ and any step finding that is not noise, with B1, B2, C, allowed rise, noise band
 smallest detectable change). `table.txt` lists the
 gated findings that are not noise.
 
-`raise-hash-cost` was written by an agent in an earlier session; `remove-list-limit` is a
-scripted edit, not AI-written (the `sed` command is in
-[`examples/changes/README.md`](../../examples/changes/README.md)). Both are planted; neither
-comes from real history. These runs say nothing about how often Downstream would catch a real
-change.
+Both changes are planted; neither comes from real history. `remove-list-limit` is a scripted
+edit, not AI-written: the patch is the output of the fixed `sed` command in
+[`examples/changes/README.md`](../../examples/changes/README.md). These runs say nothing about
+how often Downstream would catch a real change.
 
 | Set | Runs with a regression | Gated signal (all five runs) | Source |
 |---|---|---|---|
@@ -36,8 +35,8 @@ What else the runs show:
   stays within noise (`advisory=0` in L2-L6). One run of the same plant and journeys under the
   rule before gating (latency plus a 10 MB memory floor) reported `regression=0`; that run's
   output was not kept, so it is not evidence here.
-- The "about 42 times more bytes written" expected for an unbounded list did not happen
-  here: the demo's list grows only to the books the journeys create in one pass, so bytes per
+- A measurement of an unbounded list on a different service, outside this repository and
+  not checked here, had bytes written rise about 42 times. That did not happen here: the demo's list grows only to the books the journeys create in one pass, so bytes per
   journey rose by about 58%.
 
 ## Check with the final engine

@@ -2,8 +2,11 @@ package runner
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +40,60 @@ func parseStatTicks(stat string) (uint64, error) {
 		return 0, fmt.Errorf("stime: %w", err)
 	}
 	return u + s, nil
+}
+
+// parseSchedstat returns the first field of /proc/<pid>/task/<tid>/schedstat:
+// the nanoseconds the thread has spent on a CPU. The other two fields (time
+// waiting on a run queue, number of time slices) are not used.
+func parseSchedstat(s string) (uint64, error) {
+	f := strings.Fields(s)
+	if len(f) != 3 {
+		return 0, fmt.Errorf("schedstat has %d fields, need 3", len(f))
+	}
+	ns, err := strconv.ParseUint(f[0], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("schedstat on-cpu time: %w", err)
+	}
+	return ns, nil
+}
+
+// sumSchedstat adds the on-CPU nanoseconds of every thread under taskDir
+// (/proc/<pid>/task). A thread that exits between listing the directory and
+// reading its file is skipped, and a thread that exits between two sums takes
+// its time with it, so a later sum can be smaller than an earlier one; the
+// caller treats that as unusable. Go runtime threads rarely exit, so on the
+// app under test the sums are normally monotonic. An error is returned when the
+// directory cannot be read or no thread file could (no schedstat support).
+func sumSchedstat(taskDir string) (uint64, error) {
+	ents, err := os.ReadDir(taskDir)
+	if err != nil {
+		return 0, err
+	}
+	var total uint64
+	read := 0
+	for _, e := range ents {
+		b, err := os.ReadFile(filepath.Join(taskDir, e.Name(), "schedstat"))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		ns, err := parseSchedstat(string(b))
+		if err != nil {
+			return 0, fmt.Errorf("thread %s: %w", e.Name(), err)
+		}
+		total += ns
+		read++
+	}
+	if read == 0 {
+		return 0, errors.New("no thread has a readable schedstat file")
+	}
+	return total, nil
+}
+
+func readSchedstat(pid int) (uint64, error) {
+	return sumSchedstat(fmt.Sprintf("/proc/%d/task", pid))
 }
 
 // parseVmHWMMB returns the peak resident set size in MB from the contents of

@@ -62,7 +62,7 @@ def main():
     counters = ("cpu_ms_per_journey", "write_bytes_per_journey", "write_syscalls_per_journey",
                 "open_fds", "threads", "peak_rss_mb", "cpu_seconds_exact", "cpu_seconds",
                 "alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey",
-                "goroutines")
+                "gc_cycles", "goroutines", "cpu_seconds_window")
     cspread = defaultdict(list)
     cexcess = defaultdict(list)
     lines = ["run\tfinding\tmetric\tb1\tc\tb2\tband\tdelta_pct\tclass"]

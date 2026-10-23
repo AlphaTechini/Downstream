@@ -17,7 +17,7 @@ import (
 var gatedOrder = []string{
 	model.MetricCPUPerJourney, model.MetricWriteBytesPerJourney, model.MetricWriteSyscallsPerJourney,
 	model.MetricOpenFDs, model.MetricThreads, model.MetricRSS,
-	model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCyclesPerJourney, model.MetricGoroutines,
+	model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCycles, model.MetricGoroutines,
 }
 
 var gatedNames = map[string]string{
@@ -29,7 +29,7 @@ var gatedNames = map[string]string{
 	model.MetricRSS:                     "Peak RSS",
 	model.MetricAllocObjectsPerJourney:  "Heap objects allocated per journey",
 	model.MetricAllocBytesPerJourney:    "Heap bytes allocated per journey",
-	model.MetricGCCyclesPerJourney:      "GC cycles per journey",
+	model.MetricGCCycles:                "GC cycles per pass",
 	model.MetricGoroutines:              "Goroutines",
 }
 

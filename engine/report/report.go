@@ -136,12 +136,7 @@ func (r *renderer) order() {
 	}
 	r.completed = labels["B1"] && labels["C"] && labels["B2"]
 
-	r.legacy = len(r.run.Findings) > 0
-	for _, f := range r.run.Findings {
-		if f.Kind != "" {
-			r.legacy = false
-		}
-	}
+	r.legacy = issues.Legacy(r.run)
 }
 
 func (r *renderer) goal(id string) string {
@@ -585,7 +580,7 @@ func places(unit string) int {
 		return 2
 	case "GC cycles/journey":
 		return 4
-	case "count", "B/journey", "objects/journey":
+	case "count", "B/journey", "objects/journey", "cycles":
 		return 0
 	}
 	return 1

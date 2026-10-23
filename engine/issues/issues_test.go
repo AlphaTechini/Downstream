@@ -511,7 +511,7 @@ func groupFixture() (model.Run, *model.Scan) {
 		reg("j1", "s3", model.MetricP50, 120, 120),
 		reg("j2", "p1", model.MetricP95, 30, 30),
 		reg("j2", "p2", model.MetricP95, 200, 200),
-		{ID: "app.peak_rss_mb", Metric: model.MetricRSS, Unit: "MB", B1: 50, B2: 50, C: 90, Delta: 40, DeltaPct: 80, Class: model.ClassRegression, Reason: "rss"},
+		{ID: "app.peak_rss_mb", Metric: model.MetricRSS, Unit: "MB", Kind: model.KindMemory, Gated: true, B1: 50, B2: 50, C: 90, Delta: 40, DeltaPct: 80, Class: model.ClassRegression, Reason: "rss"},
 	}
 	scan := &model.Scan{Changed: []model.Impact{
 		{Route: model.Route{Method: "POST", Path: "/a"}, ChangedFuncs: []string{"pkg.Shared", "pkg.OnlyA"}},
@@ -593,6 +593,45 @@ func TestGrouping(t *testing.T) {
 	notes := model.Notes{Version: 1, Items: map[string]model.Note{"j2.p1.p95_ms": {LikelyCause: "x", FixOptions: []string{"y"}}}}
 	if _, err := Build(run, scan, &notes, 4, "dana"); err == nil || !strings.Contains(err.Error(), "not a headline") {
 		t.Errorf("non-headline note accepted: %v", err)
+	}
+}
+
+// A run.json from before findings had a Kind has no gated/advisory split: the
+// app-wide regression joins the largest step group, and stands alone only when
+// no step regressed.
+func TestLegacyRunAppFindingsJoinLargestGroup(t *testing.T) {
+	run, scan := groupFixture()
+	for i := range run.Findings {
+		run.Findings[i].Kind, run.Findings[i].Gated = "", false
+	}
+	if !Legacy(run) {
+		t.Fatal("run without any Kind is not legacy")
+	}
+	plan := PlanIssues(run, scan)
+	if len(plan.Groups) != 3 || len(plan.Groups[0].App) != 1 || plan.Groups[0].App[0].ID != "app.peak_rss_mb" {
+		t.Fatalf("app finding should join the largest group: %+v", plan)
+	}
+	for _, g := range plan.Groups {
+		if g.AppIssue {
+			t.Errorf("legacy run opened an app issue: %+v", g)
+		}
+	}
+
+	var stepless []model.Finding
+	for _, f := range run.Findings {
+		if f.Journey == "" {
+			stepless = append(stepless, f)
+		}
+	}
+	run.Findings = stepless
+	plan = PlanIssues(run, scan)
+	if len(plan.Groups) != 1 || plan.Groups[0].Headline.ID != "app.peak_rss_mb" {
+		t.Errorf("app finding alone should form one issue: %+v", plan)
+	}
+
+	run.Findings[0].Kind, run.Findings[0].Gated = model.KindMemory, true
+	if Legacy(run) {
+		t.Error("run with a Kind is legacy")
 	}
 }
 

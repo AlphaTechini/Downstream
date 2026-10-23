@@ -367,6 +367,8 @@ func metricWords(m string) string {
 		return "heap objects allocated per journey"
 	case model.MetricAllocBytesPerJourney:
 		return "heap bytes allocated per journey"
+	case model.MetricGCCycles:
+		return "GC cycles per pass"
 	case model.MetricGCCyclesPerJourney:
 		return "GC cycles per journey"
 	case model.MetricGoroutines:
@@ -381,7 +383,7 @@ func decimals(unit string) int {
 		return 2
 	case "GC cycles/journey":
 		return 4
-	case "count", "B/journey", "objects/journey":
+	case "count", "B/journey", "objects/journey", "cycles":
 		return 0
 	}
 	return 1

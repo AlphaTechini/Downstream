@@ -139,6 +139,8 @@ downstream validate --journeys journeys.json --scan scan.json
 downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
 downstream report   --run run.json [--scan scan.json] --out report.md
 downstream summary  --run run.json --scan scan.json   # one count per line: regression=N ...
+downstream files    --scan scan.json                 # numbered list of files the model may read
+downstream show     --scan scan.json --head <sha> --file N   # one of them at the head commit
 downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <user> --out issues.json
 downstream marker   parse [--journeys-out journeys.json] < issue_body.md
 downstream fixcheck --marker marker.json --option N  # checks option N exists; does not apply it
@@ -299,10 +301,13 @@ answers with a redirect to another host is never followed.
   `/proc/<pid>/stat`, read before and after, in 10 ms ticks) and its peak RSS (`VmHWM` from
   `/proc/<pid>/status` after k6 exits).
 - Per pass, process counters (`engine/runner/proc.go`, `stats.go`):
-  - exact CPU seconds: user plus system time from the app's rusage when it exits, in
-    microseconds. It covers the whole life of the process (start, readiness checks, the k6
-    window, shutdown); every pass starts a fresh process the same way. `cpu_source` says
-    whether rusage or the tick counter was used;
+  - CPU seconds over the k6 window at nanosecond resolution: the first field of
+    `/proc/<pid>/task/*/schedstat` (time on CPU) summed over the app's threads just before
+    k6 starts and just after it exits (`cpu_seconds_window`). A thread that exits inside the
+    window loses its time; Go runtime threads rarely exit. If schedstat cannot be read, the
+    app's rusage when it exits (whole process life, microseconds) is used, then the tick
+    counter. `cpu_source` says which; CPU per journey is compared only when B1, C and B2
+    used the same source;
   - bytes written and write syscalls (`wchar`, `syscw` from `/proc/<pid>/io`) over the k6
     window. `rchar` and `syscr` are read but not reported;
   - open file descriptors (`/proc/<pid>/fd`) and threads (`Threads:` in
@@ -334,8 +339,9 @@ answers with a redirect to another host is never followed.
     same 500 ms drain as the descriptor and thread counts. Allocated objects, allocated bytes
     and GC cycles are the difference between the first two readings, divided by the
     completed journeys; goroutines is the third reading;
-  - the metrics are `alloc_objects_per_journey`, `alloc_bytes_per_journey`,
-    `gc_cycles_per_journey` and `goroutines`, all gated counters in `engine/classify`;
+  - the gated metrics are `alloc_objects_per_journey`, `alloc_bytes_per_journey`,
+    `gc_cycles` (GC cycles in the k6 window, per pass) and `goroutines`;
+    `gc_cycles_per_journey` is shown but not judged;
   - the injection never fails a run. If `main_dir` is not a directory in the commit, the
     overlay cannot be written, or the build with the injected file fails (for example the
     package in `main_dir` is not named main), that commit is built again without it. If the
@@ -359,8 +365,10 @@ step p95 by several times its own value at worst (`evidence/aa/counters/summary.
 metrics are of two kinds:
 
 - **Gated** metrics decide whether a run has a regression: the process counters (bytes
-  written and write syscalls per completed journey, open file descriptors, threads), CPU
-  milliseconds per completed journey, peak memory, and step failures.
+  written and write syscalls per completed journey, open file descriptors, threads), the
+  runtime counters read through the build overlay (objects and bytes allocated per completed
+  journey, GC cycles per pass, goroutines), CPU milliseconds per completed journey, peak
+  memory, and step failures.
 - **Advisory** metrics are shown but never decide: p50, p95 and mean latency per step, and the
   app's total CPU seconds (which depends on how many journeys completed; CPU per completed
   journey replaces it as the gated CPU metric).
@@ -386,10 +394,14 @@ is not evidence of no change; the report says so beside every figure.
 
 The tolerances are `Thresholds.Tolerances` in `run.json` (`settings.thresholds`), set by
 `DefaultThresholds` in `engine/classify/classify.go`. Each was picked from the A/A runs in
-`evidence/aa/counters/summary.txt` (largest excess of C over the worse baseline on identical
-code) by one rule: about 1.5 to 2 times that largest excess, rounded up; for small integer
-counts (open file descriptors, threads) an absolute tolerance, because one thread is a large
-fraction of ten. No command-line flag changes them.
+`evidence/aa/counters/summary.txt` and `evidence/aa/runtime/summary.txt` (largest excess of C
+over the worse baseline on identical code), at between about 1.8 and 2.9 times that excess,
+rounded up; the ratio for each metric is in the comment on `DefaultThresholds`. Small integer
+counts (open file descriptors, threads, goroutines, GC cycles per pass) have an absolute
+tolerance instead, because one thread is a large fraction of ten; GC cycles were 0 in every
+A/A pass, so their tolerance of 2 cycles is chosen, not derived. CPU per journey was
+calibrated on whole-process CPU and is now measured over the k6 window; no committed A/A set
+used the window figure before `evidence/aa/final`. No command-line flag changes them.
 
 **Step failures** are gated: a step that passed on both baseline runs and failed on the
 candidate is a regression, whatever its latency. Its smallest detectable change is one
@@ -416,7 +428,7 @@ treats such findings as deciding, as they did then, and the report renders them 
 layout.
 
 Unit tests cover each branch with synthetic inputs, and a replay test feeds the A/A runs in
-`evidence/aa/*/passes.tsv` through the classifier and requires zero gated regressions. These
+`evidence/aa/{before,counters,after,runtime}/passes.tsv` through the classifier and requires zero gated regressions. These
 thresholds are not claimed to be statistically rigorous. A three-run design cannot give a
 confidence interval; the report says so in one line.
 
@@ -566,10 +578,11 @@ is loaded automatically. So:
 
 ## 11. Security model
 
-- The model may also fill `<path>` in the fixed command `git show <head>:<path>`, to read the
-  head code before choosing expected statuses. The prompt limits it to a path copied from
-  `scan.json` made of letters, digits and `/ . _ -`; nothing in the engine enforces that, so
-  it rests on the prompt and the sandbox like the heredoc below.
+- To read the head code before choosing expected statuses, the model runs `downstream files`,
+  which numbers the files it may read (changed files and the files registering changed or
+  affected routes), and `downstream show --file <n>`, which prints one at the head commit with
+  `git show` run from an argument list, not a shell. The model types only the number, so a
+  file name chosen by a merge request author never reaches a shell.
 - The model's only output that reaches execution is `journeys.json` and `notes.json`, which
   the engine validates (schema, route table, text rules). They reach the shell only as the
   body of a quoted heredoc (`<<'DOWNSTREAM_JSON'`), so the shell expands nothing in them; the

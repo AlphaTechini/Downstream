@@ -402,6 +402,9 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 	if p.measure {
 		s.io0, s.ioErr = procSource.io(a.pid)
 	}
+	if p.measure {
+		s.sched0, s.schedErr = readSchedstat(a.pid)
+	}
 	started := time.Now()
 	steps, completed, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration, p.log)
 	ended := time.Now()
@@ -415,6 +418,10 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 		return res, nil, fmt.Errorf("reading app CPU time: %w", err)
 	}
 	if p.measure {
+		if s.schedErr == nil {
+			s.sched1, s.schedErr = readSchedstat(a.pid)
+			s.schedOK = s.schedErr == nil
+		}
 		io1, ioErr := procSource.io(a.pid)
 		s.io1 = io1
 		if s.ioErr == nil {

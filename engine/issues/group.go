@@ -71,6 +71,21 @@ func AdvisoryRegressions(run model.Run) []model.Finding {
 	return out
 }
 
+// Legacy reports whether run.json was written before findings carried a Kind.
+// Such a run has no gated or advisory split, so it is planned the way it was
+// then: app-wide findings join the largest step group.
+func Legacy(run model.Run) bool {
+	if len(run.Findings) == 0 {
+		return false
+	}
+	for _, f := range run.Findings {
+		if f.Kind != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // PlanIssues groups the regressed steps. A step's cause key is the sorted,
 // de-duplicated list of changed functions (scan.Changed) on the routes it
 // calls. Without a scan every step is in one group. Only gated findings open
@@ -78,6 +93,8 @@ func AdvisoryRegressions(run model.Run) []model.Finding {
 // are measured per process, not per journey, so they form one more issue
 // instead of joining a step group. Advisory regressions open nothing; they are
 // listed in the issue that already covers their journey, or in the app issue.
+// A legacy run (see Legacy) has no such split: its app-wide findings join the
+// largest step group, or form their own issue when no step regressed.
 func PlanIssues(run model.Run, scan *model.Scan) Plan {
 	type skey struct{ journey, step string }
 	byStep := map[skey][]model.Finding{}
@@ -147,8 +164,9 @@ func PlanIssues(run model.Run, scan *model.Scan) Plan {
 	})
 
 	plan := Plan{RegressedSteps: len(byStep), TotalGroups: len(all), AppRegressions: len(app)}
+	legacy := Legacy(run)
 	room := maxIssues
-	if len(app) > 0 {
+	if len(app) > 0 && !legacy {
 		room--
 	}
 	if len(all) > room {
@@ -179,7 +197,13 @@ func PlanIssues(run model.Run, scan *model.Scan) Plan {
 
 	if len(app) > 0 {
 		sort.SliceStable(app, func(i, j int) bool { return appBefore(app[i], app[j]) })
-		g := Group{Scoped: scan != nil, Headline: app[0], App: app, AppIssue: true, routes: map[string][]string{}}
+		if legacy && len(plan.Groups) > 0 {
+			plan.Groups[0].App = app
+			app = nil
+		}
+	}
+	if len(app) > 0 {
+		g := Group{Scoped: scan != nil, Headline: app[0], App: app, AppIssue: !legacy, routes: map[string][]string{}}
 		if scan != nil {
 			var steps []model.Step
 			for _, j := range run.Journeys {

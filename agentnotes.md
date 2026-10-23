@@ -42,10 +42,11 @@ change breaks shows up with the steps below, so for each route the scan lists un
 6. A second user (own sign-up and login, names built with `{{uniq}}`) when the route is
    scoped to an owner: the second user reads or changes what the first user created.
 
-Expected statuses come from the head code, never from a guess. Read the code with
-`git show <head>:<path>`, where `<path>` is a file in `scan.json` `changed_files` or a
-route's `file`. The route's `file` is where the route is registered, so a handler in another
-file is not readable this way: leave out a step whose status the files you may read do not
+Expected statuses come from the head code, never from a guess. `downstream files` lists the
+files you may read, numbered: the changed files and the files that register changed or
+affected routes. `downstream show --file <n>` prints one of them at the head commit; you type
+only the number. A route's file is where the route is registered, so a handler in another
+unchanged file is not readable this way: leave out a step whose status the files you may read do not
 settle. Name the file the statuses came from in `why_included`. A step that expects a status
 the baseline does not return discards its whole journey, so a guess costs the journey.
 
@@ -70,7 +71,8 @@ advisory: it never counts toward a verdict, never opens an issue and is never th
 reason for one.
 
 Gated metrics, per app process: write bytes and write syscalls per completed journey, open
-file descriptors, threads (kind "counter"), CPU per completed journey (kind "cpu"), peak
+file descriptors, threads, objects and bytes allocated per completed journey, GC cycles per
+pass, goroutines (kind "counter"), CPU per completed journey (kind "cpu"), peak
 memory (kind "memory"); and step failures (kind "failures"). Advisory ("latency"): p50, p95
 and mean per step, and the app's total CPU seconds, which depends on how many journeys
 completed.
@@ -105,7 +107,8 @@ Only gated findings open issues (see "Classification"). Steps that fail on the c
 but passed on both baselines are grouped by the changed functions on the routes they call,
 one issue per group; failing steps on routes the diff does not reach share one more issue.
 Regressions of the app process (CPU per journey, bytes or write syscalls per journey, file
-descriptors, threads, peak memory) form one separate issue. Latency is advisory: it is shown
+descriptors, threads, allocations, GC cycles, goroutines, peak memory) form one separate
+issue. Latency is advisory: it is shown
 beside a gated finding but never opens an issue by itself. Titles,
 figures, the repro and the hidden marker come from the engine and are never edited. Post each
 title and body exactly as `downstream issues` prints them.

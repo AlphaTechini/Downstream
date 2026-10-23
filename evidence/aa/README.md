@@ -40,8 +40,8 @@ What this shows: on this machine the rule gives no false regression, but only be
 absolute floor. Every step of the demo takes a few milliseconds, so no difference between
 identical builds reaches 10 ms. The band and relative rules by themselves would flag about one
 latency finding in ten, and almost every run. The same floor means a real latency regression
-smaller than 10 ms is never reported on this app. App CPU per pass is 0.13 to 0.15 s
-(passes.tsv, "app" rows), so the 10 ms resolution of `/proc/<pid>/stat` alone is about 7% of
+smaller than 10 ms is never reported on this app. App CPU per pass is 0.13 to 0.21 s
+(passes.tsv, "app" rows), so the 10 ms resolution of `/proc/<pid>/stat` alone is 5% to 8% of
 it.
 
 What it does not show: the noise on the GitLab runner or in the Duo sandbox (the runner's

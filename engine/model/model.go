@@ -167,11 +167,17 @@ type ProcessStats struct {
 	CPUSeconds float64 `json:"cpu_seconds"` // user+system time consumed while k6 ran, in 10 ms ticks
 	PeakRSSMB  float64 `json:"peak_rss_mb"` // VmHWM at the end of the pass
 
-	// CPUSecondsExact is user+system time over the whole process lifetime at
-	// microsecond resolution when CPUSource is "rusage"; with "proc-stat" it is
-	// the tick value above.
+	// CPUSecondsExact is the figure CPU per journey is computed from. With
+	// CPUSource "schedstat" it is CPUSecondsWindow; with "rusage" it is user+system
+	// time over the whole process lifetime (start-up and shutdown included) at
+	// microsecond resolution; with "proc-stat" it is the tick value above.
 	CPUSecondsExact float64 `json:"cpu_seconds_exact"`
-	CPUSource       string  `json:"cpu_source"` // "rusage" or "proc-stat"
+	CPUSource       string  `json:"cpu_source"` // "schedstat", "rusage" or "proc-stat"
+
+	// CPUSecondsWindow is the time the app's threads spent on a CPU between just
+	// before k6 started and just after it exited, at nanosecond resolution, from
+	// /proc/<pid>/task/*/schedstat. It is 0 unless CPUSource is "schedstat".
+	CPUSecondsWindow float64 `json:"cpu_seconds_window"`
 
 	WriteBytes    float64 `json:"write_bytes"`    // wchar delta over the k6 run
 	WriteSyscalls float64 `json:"write_syscalls"` // syscw delta over the k6 run
@@ -188,7 +194,8 @@ type ProcessStats struct {
 	// build with the injected file succeeded; otherwise they are in Unmeasured.
 	AllocObjectsPerJourney float64 `json:"alloc_objects_per_journey"` // heap objects allocated during the k6 window
 	AllocBytesPerJourney   float64 `json:"alloc_bytes_per_journey"`   // heap bytes allocated during the k6 window
-	GCCyclesPerJourney     float64 `json:"gc_cycles_per_journey"`     // completed GC cycles during the k6 window
+	GCCycles               float64 `json:"gc_cycles"`                 // completed GC cycles during the k6 window; gated
+	GCCyclesPerJourney     float64 `json:"gc_cycles_per_journey"`     // GCCycles over completed journeys; for display only
 	Goroutines             int     `json:"goroutines"`                // after k6 exited and idle connections drained
 
 	// Unmeasured names each counter above that could not be read in this pass
@@ -198,8 +205,9 @@ type ProcessStats struct {
 
 // CPUSource values.
 const (
-	CPUSourceRusage   = "rusage"
-	CPUSourceProcStat = "proc-stat"
+	CPUSourceSchedstat = "schedstat"
+	CPUSourceRusage    = "rusage"
+	CPUSourceProcStat  = "proc-stat"
 )
 
 // Names used in ProcessStats.Unmeasured.
@@ -213,6 +221,7 @@ const (
 	UnmeasuredWriteSyscallsPerJourney = "write_syscalls_per_journey"
 	UnmeasuredAllocObjectsPerJourney  = "alloc_objects_per_journey"
 	UnmeasuredAllocBytesPerJourney    = "alloc_bytes_per_journey"
+	UnmeasuredGCCycles                = "gc_cycles"
 	UnmeasuredGCCyclesPerJourney      = "gc_cycles_per_journey"
 	UnmeasuredGoroutines              = "goroutines"
 )
@@ -269,7 +278,8 @@ const (
 	MetricThreads                 = "threads"
 	MetricAllocObjectsPerJourney  = "alloc_objects_per_journey"
 	MetricAllocBytesPerJourney    = "alloc_bytes_per_journey"
-	MetricGCCyclesPerJourney      = "gc_cycles_per_journey"
+	MetricGCCycles                = "gc_cycles"
+	MetricGCCyclesPerJourney      = "gc_cycles_per_journey" // run.json files from before gc_cycles; never gated now
 	MetricGoroutines              = "goroutines"
 )
 

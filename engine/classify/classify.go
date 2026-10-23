@@ -44,22 +44,40 @@ import (
 // The latency fields are the older advisory rule from agentnotes.md.
 //
 // The tolerances come from A/A runs, where the same commit is B1, C and B2 and
-// any difference is noise (evidence/aa/counters/summary.txt, lines 14 to 19:
-// the largest excess of C over the worse baseline, per metric). The rule used
-// to pick each: about 1.5 to 2 times that largest excess, rounded up; for the
-// small integer counts (open fds, threads) an absolute tolerance, because one
+// any difference is noise. "Excess" is how far C sat above the worse baseline,
+// as a percentage of it; the ratio below is tolerance over the largest excess
+// in 20 runs.
+//
+// Process counters, evidence/aa/counters/summary.txt lines 14 to 19:
+//
+//	cpu per journey     tolerance 20%   largest excess 11.17%   ratio 1.8
+//	bytes written       tolerance 1%    largest excess 0.35%    ratio 2.9
+//	write syscalls      tolerance 4%    largest excess 1.51%    ratio 2.6
+//	peak RSS            tolerance 2%    largest excess 0.93%    ratio 2.2
+//	open fds            absolute 1      largest excess 0
+//	threads             absolute 2      largest excess 1 thread (11.11% of 9)   ratio 2
+//
+// Go runtime counters, evidence/aa/runtime/summary.txt lines 31 to 33:
+//
+//	objects allocated   tolerance 10%   largest excess 4.18%    ratio 2.4
+//	bytes allocated     tolerance 5%    largest excess 1.70%    ratio 2.9
+//	goroutines          absolute 1      largest excess 0
+//
+// The ratios are not one rule: each tolerance was rounded up from its own
+// metric's spread, and the CPU one is the tightest. For the small integer
+// counts (open fds, threads, goroutines) the tolerance is absolute, because one
 // thread is a large fraction of ten.
 //
-// The four Go runtime counters (allocated objects, allocated bytes and GC
-// cycles per completed journey, goroutines) were calibrated the same way on a
-// 10-run A/A on this machine (examples/shelf, 2 VUs x 10 iterations, 80
-// completed journeys per pass). That run is not committed evidence yet. Largest
-// excess of C over the worse baseline: objects 4.8%, bytes 2.6%; the largest
-// B1/B2 spread was 6.8% and 3.5%. GC cycles were 0 in every pass (the pass
-// allocates under the 4 MB first-GC trigger) and goroutines were 7 in every
-// pass, so for those two the rule gives 0 and the tolerance is the smallest
-// step the figure can show: about two GC cycles in a pass of 80 journeys, and
-// one goroutine.
+// GC cycles were 0 in every pass of that set (same file, line 11), so there is
+// no excess to scale from and no ratio. The tolerance is gated on the total
+// per pass, not per journey, so it does not shrink as the journey count grows:
+// 2 cycles is chosen, not derived. It lets one cycle of jitter pass and still
+// flags a pass with three or more cycles beyond the worse baseline.
+//
+// The CPU figures in those sets are process-lifetime rusage readings. The
+// engine now reads CPU over the k6 window from schedstat (model.ProcessStats);
+// no committed A/A set has been run on that figure, so the 20% is not yet
+// checked against it.
 func DefaultThresholds() model.Thresholds {
 	return model.Thresholds{
 		BandMultiplier:    2,
@@ -77,7 +95,7 @@ func DefaultThresholds() model.Thresholds {
 			model.MetricRSS:                     {Relative: 0.02},
 			model.MetricAllocObjectsPerJourney:  {Relative: 0.10},
 			model.MetricAllocBytesPerJourney:    {Relative: 0.05},
-			model.MetricGCCyclesPerJourney:      {Absolute: 0.025},
+			model.MetricGCCycles:                {Absolute: 2},
 			model.MetricGoroutines:              {Absolute: 1},
 		},
 	}
@@ -107,7 +125,7 @@ var gatedMetrics = []gatedMetric{
 	{model.MetricRSS, model.KindMemory, "MB", func(p model.ProcessStats) float64 { return p.PeakRSSMB }, false, false},
 	{model.MetricAllocObjectsPerJourney, model.KindCounter, "objects/journey", func(p model.ProcessStats) float64 { return p.AllocObjectsPerJourney }, true, true},
 	{model.MetricAllocBytesPerJourney, model.KindCounter, "B/journey", func(p model.ProcessStats) float64 { return p.AllocBytesPerJourney }, true, true},
-	{model.MetricGCCyclesPerJourney, model.KindCounter, "GC cycles/journey", func(p model.ProcessStats) float64 { return p.GCCyclesPerJourney }, true, true},
+	{model.MetricGCCycles, model.KindCounter, "cycles", func(p model.ProcessStats) float64 { return p.GCCycles }, true, true},
 	{model.MetricGoroutines, model.KindCounter, "count", func(p model.ProcessStats) float64 { return float64(p.Goroutines) }, true, true},
 }
 
@@ -178,11 +196,24 @@ func Classify(passes []model.Pass, t model.Thresholds) []model.Finding {
 		if m.needsRuntime && !haveRuntime {
 			continue
 		}
+		// A run.json from before the total GC count has only the per-journey
+		// figure; with no total there is nothing to compare.
+		if m.metric == model.MetricGCCycles && !(hasGCTotal(b1) && hasGCTotal(c) && hasGCTotal(b2)) {
+			continue
+		}
 		var f model.Finding
 		if missing := unmeasuredIn(m.metric, b1, c, b2); len(missing) > 0 {
 			f = model.Finding{
 				Class:  model.ClassNotMeasured,
 				Reason: "not measured in " + passWord(missing) + " " + strings.Join(missing, ", ") + ": the figure could not be read, so nothing is compared",
+			}
+		} else if m.metric == model.MetricCPUPerJourney && !(b1.Process.CPUSource == c.Process.CPUSource && c.Process.CPUSource == b2.Process.CPUSource) {
+			// Window, lifetime and tick figures differ by a fixed start-up part, so
+			// they cannot be compared with each other.
+			f = model.Finding{
+				Class: model.ClassNotMeasured,
+				Reason: "CPU was read differently across passes (B1 " + b1.Process.CPUSource + ", C " + c.Process.CPUSource + ", B2 " + b2.Process.CPUSource +
+					"), so the figures are not comparable and nothing is compared",
 			}
 		} else {
 			f = judgeGated(m.get(b1.Process), m.get(c.Process), m.get(b2.Process), m.unit, tolerance(t, m.metric))
@@ -213,6 +244,13 @@ func hasRuntimeCounters(p *model.Pass) bool {
 	return p.Process.Goroutines > 0 || slices.Contains(p.Process.Unmeasured, model.UnmeasuredGoroutines)
 }
 
+// hasGCTotal reports whether the pass carries the total GC count: either it
+// is set, or the per-journey figure is also zero. A per-journey count with no
+// total marks a pass written before the total existed.
+func hasGCTotal(p *model.Pass) bool {
+	return p.Process.GCCycles > 0 || p.Process.GCCyclesPerJourney == 0
+}
+
 // tolerance returns the metric's tolerance from t, or the default when t has
 // none for it (thresholds built by hand, without a Tolerances map).
 func tolerance(t model.Thresholds, metric string) model.Tolerance {
@@ -229,7 +267,8 @@ func unmeasuredIn(metric string, b1, c, b2 *model.Pass) []string {
 		label string
 		pass  *model.Pass
 	}{{"B1", b1}, {"C", c}, {"B2", b2}} {
-		if slices.Contains(p.pass.Process.Unmeasured, metric) {
+		if slices.Contains(p.pass.Process.Unmeasured, metric) ||
+			(metric == model.MetricGCCycles && slices.Contains(p.pass.Process.Unmeasured, model.MetricGCCyclesPerJourney)) {
 			out = append(out, p.label)
 		}
 	}
@@ -509,8 +548,8 @@ func amount(v float64, unit string) string {
 		return num(v, 2) + " " + unit
 	case "B/journey", "objects/journey":
 		return num(v, 0) + " " + unit
-	case "GC cycles/journey":
-		return num(v, 4) + " " + unit
+	case "cycles":
+		return num(v, 0) + " " + unit
 	}
 	return num(v, 0)
 }

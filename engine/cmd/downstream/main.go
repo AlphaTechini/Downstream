@@ -12,11 +12,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"syscall"
+	"unicode"
 
 	"downstream/engine/classify"
 	"downstream/engine/issues"
@@ -36,6 +38,8 @@ const usage = `usage:
   downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
   downstream report   --run run.json [--scan scan.json] --out report.md
   downstream summary  --run run.json --scan scan.json
+  downstream files    --scan scan.json
+  downstream show     --scan scan.json --head <sha> --file N [--repo .]
   downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <username> --out issues.json
   downstream marker   parse [--journeys-out journeys.json] < issue_body.md
   downstream fixcheck --marker marker.json --option N
@@ -56,6 +60,8 @@ func main() {
 		"run":      cmdRun,
 		"report":   cmdReport,
 		"summary":  cmdSummary,
+		"files":    cmdFiles,
+		"show":     cmdShow,
 		"issues":   cmdIssues,
 		"marker":   cmdMarker,
 		"fixcheck": cmdFixcheck,
@@ -245,6 +251,89 @@ func writeSummary(w io.Writer, run model.Run, scan *model.Scan) {
 	if run.Error != nil {
 		fmt.Fprintf(w, "stopped=%s\n", run.Error.Stage)
 	}
+}
+
+// readableFiles is the list of files the model may read, in the order the
+// numbers refer to: the files the diff changed and the file of every route in
+// the blast radius, de-duplicated and sorted. A path that is not a plain
+// relative path inside the repository, or that holds a control character, is
+// left out, so a line of the list is always one path.
+func readableFiles(s *model.Scan) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if p == "" || seen[p] || !filepath.IsLocal(p) || strings.ContainsFunc(p, unicode.IsControl) {
+			return
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	for _, f := range s.ChangedFiles {
+		add(f.Path)
+	}
+	for _, im := range s.Changed {
+		add(im.File)
+	}
+	for _, im := range s.Affected {
+		add(im.File)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func cmdFiles(args []string) error {
+	fs := flag.NewFlagSet("files", flag.ContinueOnError)
+	spath := fs.String("scan", "", "scan.json")
+	if err := parse(fs, args, "scan"); err != nil {
+		return err
+	}
+	var s model.Scan
+	if err := readJSON(*spath, &s); err != nil {
+		return err
+	}
+	listFiles(os.Stdout, readableFiles(&s))
+	return nil
+}
+
+// listFiles prints one "N<tab>path" line per file, numbered from 1.
+func listFiles(w io.Writer, files []string) {
+	for i, p := range files {
+		fmt.Fprintf(w, "%d\t%s\n", i+1, p)
+	}
+}
+
+func cmdShow(args []string) error {
+	fs := flag.NewFlagSet("show", flag.ContinueOnError)
+	spath := fs.String("scan", "", "scan.json")
+	head := fs.String("head", "", "candidate commit SHA")
+	n := fs.Int("file", 0, "file number from `downstream files`")
+	repo := fs.String("repo", ".", "repository root")
+	if err := parse(fs, args, "scan", "head", "file"); err != nil {
+		return err
+	}
+	if err := commits(*repo, *head); err != nil {
+		return err
+	}
+	var s model.Scan
+	if err := readJSON(*spath, &s); err != nil {
+		return err
+	}
+	return showFile(os.Stdout, *repo, *head, readableFiles(&s), *n)
+}
+
+// showFile writes the content of entry n (1-based) of files at commit head.
+// The path goes to git as one argument; no shell is involved.
+func showFile(w io.Writer, repo, head string, files []string, n int) error {
+	if n < 1 || n > len(files) {
+		return fmt.Errorf("--file %d is out of range: the list has %d files", n, len(files))
+	}
+	var stderr strings.Builder
+	cmd := exec.Command("git", "-C", repo, "show", head+":"+files[n-1])
+	cmd.Stdout, cmd.Stderr = w, &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git show %s: %w: %s", files[n-1], err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
 }
 
 type issuesOut struct {

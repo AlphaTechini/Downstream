@@ -3,6 +3,7 @@ package classify
 import (
 	"bufio"
 	"encoding/json"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -232,7 +233,7 @@ func TestDefaults(t *testing.T) {
 
 		"alloc_objects_per_journey": {Relative: 0.10},
 		"alloc_bytes_per_journey":   {Relative: 0.05},
-		"gc_cycles_per_journey":     {Absolute: 0.025},
+		"gc_cycles":                 {Absolute: 2},
 		"goroutines":                {Absolute: 1},
 	}
 	if len(d.Tolerances) != len(want) {
@@ -610,7 +611,10 @@ func TestLatencyDetectable(t *testing.T) {
 // Identical code in B1, C and B2 must never give a gated regression. The A/A
 // runs in evidence/aa are replayed through the classifier as committed.
 func TestReplayAARuns(t *testing.T) {
-	for _, set := range []string{"before", "counters"} {
+	// "runtime" carries the Go runtime counters in its process JSON; the
+	// parser reads only the keys it knows and ignores the rest, so every set
+	// replays through the same code.
+	for _, set := range []string{"before", "counters", "after", "runtime"} {
 		t.Run(set, func(t *testing.T) {
 			runs := readPasses(t, "../../evidence/aa/"+set+"/passes.tsv")
 			if len(runs) == 0 {
@@ -621,7 +625,7 @@ func TestReplayAARuns(t *testing.T) {
 				names = append(names, n)
 			}
 			sort.Strings(names)
-			gatedFindings := 0
+			gatedFindings, runtimeFindings := 0, 0
 			for _, n := range names {
 				ps := runs[n]
 				if len(ps) != 3 {
@@ -630,6 +634,10 @@ func TestReplayAARuns(t *testing.T) {
 				for _, f := range Classify(ps, DefaultThresholds()) {
 					if f.Gated {
 						gatedFindings++
+						switch f.Metric {
+						case model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCycles, model.MetricGoroutines:
+							runtimeFindings++
+						}
 					}
 					if f.Gated && f.Class == model.ClassRegression {
 						t.Errorf("%s: gated regression %s: B1 %v C %v B2 %v (%s)", n, f.ID, f.B1, f.C, f.B2, f.Reason)
@@ -639,7 +647,10 @@ func TestReplayAARuns(t *testing.T) {
 			if gatedFindings == 0 {
 				t.Errorf("no gated finding was produced")
 			}
-			t.Logf("%s: %d runs replayed", set, len(names))
+			if want := 4 * len(names); set == "runtime" && runtimeFindings != want {
+				t.Errorf("runtime set: %d runtime-counter findings, want %d", runtimeFindings, want)
+			}
+			t.Logf("%s: %d runs replayed, %d gated findings", set, len(names), gatedFindings)
 		})
 	}
 }
@@ -681,6 +692,11 @@ func readPasses(t *testing.T, path string) map[string][]model.Pass {
 			if err := json.Unmarshal([]byte(cols[9]), &p.Process); err != nil {
 				t.Fatalf("%s %s %s: %v", path, run, label, err)
 			}
+			// Sets written before the total GC count have only the per-journey
+			// figure, which is that total over the completed journeys.
+			if p.Process.GCCycles == 0 && p.Process.GCCyclesPerJourney > 0 {
+				p.Process.GCCycles = math.Round(p.Process.GCCyclesPerJourney * float64(p.Process.CompletedJourneys))
+			}
 			continue
 		}
 		num := func(s string) float64 {
@@ -710,7 +726,7 @@ func readPasses(t *testing.T, path string) map[string][]model.Pass {
 // runtimeProc is proc with the Go runtime counters set.
 func runtimeProc() model.ProcessStats {
 	p := proc()
-	p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCyclesPerJourney, p.Goroutines = 200, 20000, 0, 7
+	p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCycles, p.GCCyclesPerJourney, p.Goroutines = 200, 20000, 0, 0, 7
 	return p
 }
 
@@ -723,8 +739,9 @@ func runtimePasses(metric string, v vals) []model.Pass {
 			ps[i].Process.AllocObjectsPerJourney = x
 		case model.MetricAllocBytesPerJourney:
 			ps[i].Process.AllocBytesPerJourney = x
-		case model.MetricGCCyclesPerJourney:
-			ps[i].Process.GCCyclesPerJourney = x
+		case model.MetricGCCycles:
+			ps[i].Process.GCCycles = x
+			ps[i].Process.GCCyclesPerJourney = x / float64(ps[i].Process.CompletedJourneys)
 		case model.MetricGoroutines:
 			ps[i].Process.Goroutines = int(x)
 		}
@@ -744,9 +761,10 @@ func TestRuntimeCounterRule(t *testing.T) {
 		{"objects: 15% is a regression", model.MetricAllocObjectsPerJourney, vals{200, 232, 202}, model.ClassRegression, "objects/journey"},
 		{"bytes: 3% is noise", model.MetricAllocBytesPerJourney, vals{20000, 20700, 20100}, model.ClassNoise, "B/journey"},
 		{"bytes: 10% is a regression", model.MetricAllocBytesPerJourney, vals{20000, 22300, 20100}, model.ClassRegression, "B/journey"},
-		{"gc: no cycle in any pass is noise", model.MetricGCCyclesPerJourney, vals{0, 0, 0}, model.ClassNoise, "GC cycles/journey"},
-		{"gc: one cycle in 80 journeys is noise", model.MetricGCCyclesPerJourney, vals{0, 0.0125, 0}, model.ClassNoise, "GC cycles/journey"},
-		{"gc: three cycles in 80 journeys is a regression", model.MetricGCCyclesPerJourney, vals{0, 0.0375, 0}, model.ClassRegression, "GC cycles/journey"},
+		{"gc: no cycle in any pass is noise", model.MetricGCCycles, vals{0, 0, 0}, model.ClassNoise, "cycles"},
+		{"gc: one extra cycle is noise", model.MetricGCCycles, vals{0, 1, 0}, model.ClassNoise, "cycles"},
+		{"gc: two extra cycles are inside the tolerance", model.MetricGCCycles, vals{0, 2, 0}, model.ClassNoise, "cycles"},
+		{"gc: three extra cycles are a regression", model.MetricGCCycles, vals{0, 3, 0}, model.ClassRegression, "cycles"},
 		{"goroutines: one more is noise", model.MetricGoroutines, vals{7, 8, 7}, model.ClassNoise, "count"},
 		{"goroutines: a leak is a regression", model.MetricGoroutines, vals{7, 207, 7}, model.ClassRegression, "count"},
 	}
@@ -764,7 +782,7 @@ func TestRuntimeCountersAbsentFromOlderRuns(t *testing.T) {
 	// proc() has no goroutine count and no Unmeasured entry: a run.json from
 	// before the runtime counters existed.
 	fs := Classify(gatedPasses(model.MetricThreads, vals{9, 9, 9}), DefaultThresholds())
-	for _, m := range []string{model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCyclesPerJourney, model.MetricGoroutines} {
+	for _, m := range []string{model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCycles, model.MetricGoroutines} {
 		for _, f := range fs {
 			if f.Metric == m {
 				t.Errorf("%s judged for a run without runtime counters: %+v", m, f)
@@ -776,14 +794,86 @@ func TestRuntimeCountersAbsentFromOlderRuns(t *testing.T) {
 func TestRuntimeCountersNotMeasured(t *testing.T) {
 	ps := runtimePasses(model.MetricGoroutines, vals{7, 7, 7})
 	for i := range ps {
-		ps[i].Process.AllocObjectsPerJourney, ps[i].Process.AllocBytesPerJourney, ps[i].Process.GCCyclesPerJourney, ps[i].Process.Goroutines = 0, 0, 0, 0
-		ps[i].Process.Unmeasured = []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey", "goroutines"}
+		ps[i].Process.AllocObjectsPerJourney, ps[i].Process.AllocBytesPerJourney, ps[i].Process.GCCycles, ps[i].Process.GCCyclesPerJourney, ps[i].Process.Goroutines = 0, 0, 0, 0, 0
+		ps[i].Process.Unmeasured = []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles", "gc_cycles_per_journey", "goroutines"}
 	}
 	fs := Classify(ps, DefaultThresholds())
-	for _, m := range []string{model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCyclesPerJourney, model.MetricGoroutines} {
+	for _, m := range []string{model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCycles, model.MetricGoroutines} {
 		f := find(t, fs, "app."+m)
 		if f.Class != model.ClassNotMeasured || !f.Gated {
 			t.Errorf("%s: %+v", m, f)
 		}
+	}
+}
+
+// The GC tolerance is on the pass total, so it means the same at any journey
+// count: two extra cycles are noise and three are a regression whether the
+// pass completed 20 journeys or 20000.
+func TestGCCyclesToleranceDoesNotDependOnJourneyCount(t *testing.T) {
+	for _, completed := range []int{20, 80, 20000} {
+		for _, tc := range []struct {
+			extra float64
+			class string
+		}{{2, model.ClassNoise}, {3, model.ClassRegression}} {
+			ps := runtimePasses(model.MetricGCCycles, vals{1, 1 + tc.extra, 1})
+			for i := range ps {
+				ps[i].Process.CompletedJourneys = completed
+				ps[i].Process.GCCyclesPerJourney = ps[i].Process.GCCycles / float64(completed)
+			}
+			f := find(t, Classify(ps, DefaultThresholds()), "app.gc_cycles")
+			if f.Class != tc.class {
+				t.Errorf("%d journeys, %v extra cycles: class %s, want %s (%s)", completed, tc.extra, f.Class, tc.class, f.Reason)
+			}
+		}
+	}
+}
+
+// A run.json written between the per-journey GC figure and the total has
+// gc_cycles_per_journey but no gc_cycles: nothing is compared for it.
+func TestGCCyclesAbsentFromRunsWithOnlyPerJourney(t *testing.T) {
+	ps := runtimePasses(model.MetricGoroutines, vals{7, 7, 7})
+	for i := range ps {
+		ps[i].Process.GCCycles, ps[i].Process.GCCyclesPerJourney = 0, 0.05
+	}
+	for _, f := range Classify(ps, DefaultThresholds()) {
+		if f.Metric == model.MetricGCCycles || f.Metric == model.MetricGCCyclesPerJourney {
+			t.Errorf("GC judged without a total: %+v", f)
+		}
+	}
+	// and a pass from that era that lists only the old name as unread
+	for i := range ps {
+		ps[i].Process.GCCyclesPerJourney = 0
+		ps[i].Process.Unmeasured = []string{"gc_cycles_per_journey"}
+	}
+	f := find(t, Classify(ps, DefaultThresholds()), "app.gc_cycles")
+	if f.Class != model.ClassNotMeasured {
+		t.Errorf("old Unmeasured name not honoured: %+v", f)
+	}
+}
+
+// CPU per journey is compared only when B1, C and B2 were read the same way:
+// a window figure and a lifetime figure differ by the start-up cost.
+func TestCPUSourceMismatchIsNotMeasured(t *testing.T) {
+	mk := func(sources ...string) []model.Pass {
+		ps := passes(vals{100, 100, 100}, vals{})
+		for i := range ps {
+			ps[i].Process = proc()
+			ps[i].Process.CPUSource = sources[i]
+		}
+		ps[1].Process.CPUMsPerJourney = 500 // would be a regression if compared
+		return ps
+	}
+	f := find(t, Classify(mk(model.CPUSourceSchedstat, model.CPUSourceRusage, model.CPUSourceSchedstat), DefaultThresholds()), "app.cpu_ms_per_journey")
+	if f.Class != model.ClassNotMeasured || !f.Gated || !strings.Contains(f.Reason, "B1 schedstat, C rusage, B2 schedstat") {
+		t.Errorf("mismatched sources: %+v", f)
+	}
+	f = find(t, Classify(mk(model.CPUSourceSchedstat, model.CPUSourceSchedstat, model.CPUSourceSchedstat), DefaultThresholds()), "app.cpu_ms_per_journey")
+	if f.Class != model.ClassRegression {
+		t.Errorf("same source not compared: %+v", f)
+	}
+	// the other gated counters are still compared when only the CPU source differs
+	fs := Classify(mk(model.CPUSourceSchedstat, model.CPUSourceRusage, model.CPUSourceSchedstat), DefaultThresholds())
+	if f := find(t, fs, "app.threads"); f.Class == model.ClassNotMeasured {
+		t.Errorf("threads dropped on a CPU source mismatch: %+v", f)
 	}
 }

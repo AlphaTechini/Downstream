@@ -278,7 +278,7 @@ func quickRun(t *testing.T, mainDirLine string, extra map[string]string, mainSrc
 
 func wantNoRuntimeCounters(t *testing.T, run model.Run) []string {
 	t.Helper()
-	four := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey", "goroutines"}
+	four := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles", "gc_cycles_per_journey", "goroutines"}
 	for _, p := range run.Passes {
 		var got []string
 		for _, u := range p.Process.Unmeasured {
@@ -290,7 +290,7 @@ func wantNoRuntimeCounters(t *testing.T, run model.Run) []string {
 			t.Errorf("%s: unmeasured %v", p.Label, p.Process.Unmeasured)
 		}
 		ps := p.Process
-		if ps.AllocObjectsPerJourney != 0 || ps.AllocBytesPerJourney != 0 || ps.GCCyclesPerJourney != 0 || ps.Goroutines != 0 {
+		if ps.AllocObjectsPerJourney != 0 || ps.AllocBytesPerJourney != 0 || ps.GCCycles != 0 || ps.GCCyclesPerJourney != 0 || ps.Goroutines != 0 {
 			t.Errorf("%s: unmeasured counters carry values: %+v", p.Label, ps)
 		}
 		if ps.CompletedJourneys == 0 || ps.CPUMsPerJourney <= 0 {

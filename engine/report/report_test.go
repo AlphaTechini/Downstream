@@ -306,14 +306,16 @@ func TestSummaryAndIssuesToOpen(t *testing.T) {
 	out := Render(run, &scan)
 	for _, w := range []string{
 		"**Findings:** regressed steps 2, trade-off journeys 1, improved metrics 0, withheld metrics 3. App process regressions: 2.",
-		"**Issues to open**\n\n- `shelf.add_book.p95_ms`\n- `signin.login.failures`\n- `app.peak_rss_mb`\n\n2 regressed steps are grouped into 2 by the changed functions",
+		"**Issues to open**\n\n- `shelf.add_book.p95_ms`\n- `signin.login.failures`\n\n2 regressed steps are grouped into 2 by the changed functions",
 	} {
 		if !strings.Contains(out, w) {
 			t.Errorf("missing %q", w)
 		}
 	}
-	// without a scan both steps share one group, headed by the failures finding
-	if out := Render(run, nil); !strings.Contains(out, "**Issues to open**\n\n- `signin.login.failures` (2 steps)\n- `app.peak_rss_mb`\n\n2 regressed steps are grouped into 1 by") {
+	// run_basic.json has no Kind on any finding, so its app-wide regressions join
+	// the largest step group rather than opening an issue of their own.
+	// Without a scan both steps share one group, headed by the failures finding
+	if out := Render(run, nil); !strings.Contains(out, "**Issues to open**\n\n- `signin.login.failures` (2 steps)\n\n2 regressed steps are grouped into 1 by") {
 		t.Errorf("no-scan grouping wrong:\n%s", out)
 	}
 
@@ -577,7 +579,7 @@ func TestGatedTableShowsRuntimeCounters(t *testing.T) {
 	run := gatedRun()
 	for i := range run.Passes {
 		p := &run.Passes[i].Process
-		p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCyclesPerJourney, p.Goroutines = 223, 23000, 0.0125, 7
+		p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCycles, p.GCCyclesPerJourney, p.Goroutines = 223, 23000, 3, 0.0375, 7
 	}
 	run.Passes[1].Process.AllocBytesPerJourney = 30000
 	run.Findings = classify.Classify(run.Passes, run.Settings.Thresholds)
@@ -585,9 +587,9 @@ func TestGatedTableShowsRuntimeCounters(t *testing.T) {
 	for _, want := range []string{
 		"| Heap objects allocated per journey | 223 objects/journey |",
 		"| Heap bytes allocated per journey | 23000 B/journey | 23000 B/journey | 30000 B/journey |",
-		"| GC cycles per journey | 0.0125 GC cycles/journey |",
+		"| GC cycles per pass | 3 cycles | 3 cycles | 3 cycles |",
 		"| Goroutines | 7 | 7 | 7 |",
-		"GC cycles per journey an absolute 0.025; Goroutines an absolute 1.",
+		"GC cycles per pass an absolute 2; Goroutines an absolute 1.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report lacks %q", want)

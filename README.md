@@ -11,8 +11,13 @@ staging environment that replays real user behaviour.
 > GitLab CI; the product flow has not run yet.** The engine (`engine/`) scans a diff, runs
 > journeys on two builds with k6 and renders the report and issues. In CI it flags the planted
 > regression in the demo app and passes the clean control in 22 of 22 runs
-> ([evidence/runs.md](evidence/runs.md)). It has not yet run inside the Duo flow. The claims
-> table says exactly what has been shown.
+> ([evidence/runs.md](evidence/runs.md)). Those CI runs used the earlier rule, which judged
+> latency. The rule now decides regressions on process counters (CPU per completed journey,
+> bytes and syscalls written, memory, fds, threads, allocations) and step failures, and treats
+> latency as advisory; its evidence so far is local runs on one 4-CPU machine
+> ([evidence/aa](evidence/aa/README.md), [evidence/plants](evidence/plants/README.md)), not
+> CI. It has not yet run inside the Duo flow. The claims table says exactly what has been
+> shown.
 
 ## Built for GitLab Transcend: Life After Code
 
@@ -51,7 +56,7 @@ to routes the author never opened. That gap is what Downstream targets.
 | 2 | It maps changed routes and routes that depend on them (blast radius) | Built: `downstream scan` ([`engine/scan`](engine/scan/)), Go `net/http` only; ran in CI on the demo app ([evidence](evidence/runs.md)) |
 | 3 | It writes 3 to 6 user journeys and shows them to the reviewer in plain English first | Engine side built: schema and validation ([`engine/journey`](engine/journey/)); the model writing them is in the flow prompt, not run |
 | 4 | k6 runs them on the old build twice and the new build once, so noise is measured | Built: `downstream run` ([`engine/runner`](engine/runner/), [`engine/k6gen`](engine/k6gen/)); ran in CI with hand-written example journeys ([evidence](evidence/runs.md)) |
-| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Engine side built: [`engine/classify`](engine/classify/), [`engine/report`](engine/report/), [`engine/issues`](engine/issues/); report and issue bodies produced in CI; the planted change gives 2 issues for 1 cause; creating issues from the flow untested (T-08) |
+| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Engine side built: [`engine/classify`](engine/classify/), [`engine/report`](engine/report/), [`engine/issues`](engine/issues/); report and issue bodies produced in CI; with the earlier latency rule the planted change gave 2 issues for 1 cause (CI), with the gated rule 1 (local, [evidence](evidence/plants/README.md)); creating issues from the flow untested (T-08) |
 | 6 | `@handle fix option N` applies an option and reruns that journey; `verify` reruns after merge | Engine side built: marker parsing and `fixcheck`; committing a fix from the flow untested (T-10), so a fix is posted as a diff for a human |
 
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
@@ -84,10 +89,12 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | A server on 127.0.0.1 inside the sandbox answers | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L545-550 |
 | A 150 s command completes | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L561-586 |
 | This GitLab project is public | Verified | GitLab project settings | [API record](evidence/gitlab-project-2026-10-22.json) |
-| The engine finds a planted regression between two builds and traces it to the changed function | Verified in GitLab CI on the demo app; not yet run inside the flow | `engine/` | [CI job log](evidence/runs/ci-63-engine-e2e/raise-hash-cost-job-log.txt) L77; [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5, L12, L53, L90-96 |
-| A clean change comes out clean on the GitLab runner | Verified, 22 of 22 runs on `saas-linux-small-amd64`; 6 of 12 local WSL2 runs were false positives; the Duo sandbox is not measured | `engine/classify` | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) 20 runs; [summary](evidence/runs.md) |
+| The engine finds a planted regression between two builds and traces it to the changed function | Verified in GitLab CI on the demo app with the earlier latency rule; not yet run inside the flow | `engine/` | [CI job log](evidence/runs/ci-63-engine-e2e/raise-hash-cost-job-log.txt) L77; [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5, L12, L53, L90-96 |
+| A clean change comes out clean on the GitLab runner | Verified with the earlier latency rule, 22 of 22 runs on `saas-linux-small-amd64`; 6 of 12 local WSL2 runs were false positives; the gated rule has not run in CI; the Duo sandbox is not measured | `engine/classify` | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) 20 runs; [summary](evidence/runs.md) |
 | Journeys are generated from the diff and run by k6 against an app | k6 runs verified in CI with hand-written example journeys; the model writing journeys has not run | `engine/journey`, `engine/k6gen` | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) |
-| One issue per cause, starter tagged | Issue bodies produced in CI; the planted change gives 2 issues for 1 cause; issue creation from a flow untested | `engine/issues` | [issues.json](evidence/runs/ci-63-engine-e2e/raise-hash-cost/issues.json) L5, L31 |
+| Identical code gives no gated false regression | Verified locally, 40 A/A runs on one 4-CPU machine (20 with the process counters, 20 more with the runtime counters); not run in CI | `engine/classify` | [after](evidence/aa/after/summary.txt) L2; [runtime](evidence/aa/runtime/summary.txt) L2; [notes](evidence/aa/README.md) |
+| The gated rule reports both planted regressions and not the clean change | Verified locally, 5 runs per plant and 10 clean runs on one 4-CPU machine; not run in CI | `engine/classify`, `examples/changes/` | [plants](evidence/plants/README.md), [hash table](evidence/plants/raise-hash-cost-example/table.txt) L2-L6, [list table](evidence/plants/remove-list-limit-thorough/table.txt) L2-L6 |
+| One issue per cause, starter tagged | Issue bodies produced in CI; with the earlier latency rule the planted change gave 2 issues for 1 cause; issue creation from a flow untested | `engine/issues` | [issues.json](evidence/runs/ci-63-engine-e2e/raise-hash-cost/issues.json) L5, L31 |
 | `fix option N` applies a change; `verify` reruns after merge | Not built in the flow; engine checks the option number only; committing from a flow untested | `engine/issues` | none |
 | Cost in credits of one run | Not measured | none | none |
 
@@ -95,9 +102,12 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 
 - **The engine has run only in CI and locally, not in the flow.** Its committed runs use the
   demo app and the hand-written journeys in `examples/shelf/journeys.example.json`.
-- **False positives on noisy machines.** Each step's p95 comes from 20 samples, so a short
-  stall can pass the 10 ms floor. The clean control was flagged in 6 of 12 local WSL2 runs and
-  in 0 of 22 runner runs; the Duo sandbox's noise is not measured ([evidence/runs.md](evidence/runs.md)).
+- **False positives on noisy machines.** With the earlier latency rule, the clean control was
+  flagged in 6 of 12 local WSL2 runs and in 0 of 22 runner runs ([evidence/runs.md](evidence/runs.md)):
+  a p95 from 20 samples is set by one or two slow requests. Latency is now advisory. The gated
+  rule's tolerances come from one 4-CPU machine; the largest A/A excess for CPU per journey
+  there was close to its tolerance ([evidence/aa/README.md](evidence/aa/README.md)), so a
+  noisier runner may still give false positives. The Duo sandbox's noise is not measured.
 - **The product flow has not run.** [`flows/downstream.yml`](flows/downstream.yml) uses tools
   not yet exercised from a custom flow (`create_issue`, `get_issue`, `create_issue_note`;
   T-08, T-09), and the engine has not yet been built inside the sandbox.
@@ -111,7 +121,10 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
   is a change made to look safe in review and to slow every authenticated route; it was not
   found in real history. It was added in the commit "Add the shelf demo API with a planted
   regression and a clean change" (`git log --grep "planted regression"`).
-  [`examples/changes/README.md`](examples/changes/README.md) says why.
+  [`examples/changes/remove-list-limit.patch`](examples/changes/remove-list-limit.patch), a
+  second plant, removes the page size of `GET /books`; it is a scripted edit (one fixed `sed`
+  substitution), added in the commit "Plant an unbounded book list in the demo and run it in
+  CI". [`examples/changes/README.md`](examples/changes/README.md) says why.
 - **Mock-ups.** Notes and issues in [`docs/userflow.md`](docs/userflow.md) are mock-ups with
   placeholders such as `<p95_base_ms>`.
 - **Untested platform capabilities** are T-07 to T-15 in [`docs/requirements.md`](docs/requirements.md).
@@ -214,8 +227,8 @@ own credentials.
 **Deployment.** The flow is enabled in the GitLab project through the UI; there is nothing to
 deploy from this repo. What the brief means by deployment for a flow entry is unverified (T-12).
 
-**Security.** The model's only output that reaches execution is validated JSON and a file path
-copied from `scan.json` (letters, digits and `/ . _ -` only, for `git show`), the engine talks
+**Security.** The model's only output that reaches execution is validated JSON and a number
+picking a file from the engine's own list (`downstream show --file <n>`), the engine talks
 to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
 under CODEOWNERS. `agentnotes.md` and `downstream.yml` are read from the base commit, so a
 merge request cannot rewrite them for its own run. Known gaps: the model's JSON reaches the

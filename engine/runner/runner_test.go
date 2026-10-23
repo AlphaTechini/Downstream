@@ -242,6 +242,15 @@ func TestRusageSeconds(t *testing.T) {
 	}
 }
 
+// wantCPUSource is the source a real pass should report on this machine:
+// schedstat when the kernel offers it, else the lifetime rusage reading.
+func wantCPUSource() string {
+	if _, err := readSchedstat(os.Getpid()); err == nil {
+		return model.CPUSourceSchedstat
+	}
+	return model.CPUSourceRusage
+}
+
 func TestBuildProcess(t *testing.T) {
 	full := procSample{
 		ticks0: 10, ticks1: 24, rssMB: 21.5,
@@ -256,7 +265,7 @@ func TestBuildProcess(t *testing.T) {
 		CPUSeconds: 0.14, PeakRSSMB: 21.5, CPUSecondsExact: 0.1375, CPUSource: "rusage",
 		WriteBytes: 40000, WriteSyscalls: 100, OpenFDs: 12, Threads: 8,
 		CompletedJourneys: 20, CPUMsPerJourney: 6.875, WriteBytesPerJourney: 2000, WriteSyscallsPerJourney: 5,
-		AllocObjectsPerJourney: 2000, AllocBytesPerJourney: 10000, GCCyclesPerJourney: 0.1, Goroutines: 7,
+		AllocObjectsPerJourney: 2000, AllocBytesPerJourney: 10000, GCCycles: 2, GCCyclesPerJourney: 0.1, Goroutines: 7,
 	}
 	if len(notes) != 0 || !reflect.DeepEqual(ps, want) {
 		t.Errorf("full sample: %+v notes %v", ps, notes)
@@ -267,6 +276,41 @@ func TestBuildProcess(t *testing.T) {
 		s.haveExact = false
 		ps, notes := buildProcess(s)
 		if ps.CPUSource != "proc-stat" || ps.CPUSecondsExact != ps.CPUSeconds || ps.CPUMsPerJourney != 0.14*1000/20 || len(notes) != 0 {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+	})
+	t.Run("schedstat window is preferred and covers only the k6 window", func(t *testing.T) {
+		s := full
+		s.sched0, s.sched1, s.schedOK = 5_000_000_000, 5_250_000_000, true // 0.25 s on CPU inside the window
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "schedstat" || ps.CPUSecondsWindow != 0.25 || ps.CPUSecondsExact != 0.25 ||
+			ps.CPUMsPerJourney != 0.25*1000/20 || len(notes) != 0 {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+		// the lifetime reading, however large, no longer enters the figure
+		s.exactCPU = 9
+		if ps2, _ := buildProcess(s); ps2.CPUMsPerJourney != ps.CPUMsPerJourney {
+			t.Errorf("rusage leaked into the window figure: %v vs %v", ps2.CPUMsPerJourney, ps.CPUMsPerJourney)
+		}
+	})
+	t.Run("schedstat unreadable falls back to rusage with a note", func(t *testing.T) {
+		s := full
+		s.schedErr = &fs.PathError{Op: "open", Path: "/proc/1/task/1/schedstat", Err: errors.New("no such file or directory")}
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "rusage" || ps.CPUSecondsWindow != 0 || ps.CPUMsPerJourney != 6.875 || len(notes) != 1 ||
+			!strings.Contains(notes[0], "not measured from schedstat (no such file or directory); CPU per journey uses rusage") {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+		s.haveExact = false
+		if ps, _ := buildProcess(s); ps.CPUSource != "proc-stat" {
+			t.Errorf("source %q, want proc-stat", ps.CPUSource)
+		}
+	})
+	t.Run("schedstat sum going backwards is not used", func(t *testing.T) {
+		s := full
+		s.sched0, s.sched1, s.schedOK = 5_000_000_000, 4_000_000_000, true // a thread exited in the window
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "rusage" || ps.CPUSecondsWindow != 0 || len(notes) != 1 || !strings.Contains(notes[0], "went backwards") {
 			t.Errorf("%+v notes %v", ps, notes)
 		}
 	})
@@ -326,7 +370,7 @@ func TestBuildProcessRuntimeCounters(t *testing.T) {
 		rt0: runtimeCounters{AllocObjects: 100, AllocBytes: 1000, GCCycles: 2}, rt1: runtimeCounters{AllocObjects: 600, AllocBytes: 6000, GCCycles: 4},
 		rtDrained: runtimeCounters{Goroutines: 5},
 	}
-	allFour := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey", "goroutines"}
+	allFour := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles", "gc_cycles_per_journey", "goroutines"}
 
 	t.Run("read failed adds a note", func(t *testing.T) {
 		s := base
@@ -627,9 +671,12 @@ func TestRunIntegration(t *testing.T) {
 		if ps.CompletedJourneys != 60 {
 			t.Errorf("%s: %d completed journeys, want 60", p.Label, ps.CompletedJourneys)
 		}
-		if ps.CPUSource != "rusage" || ps.CPUSecondsExact <= 0 || ps.CPUMsPerJourney <= 0 ||
+		if ps.CPUSource != wantCPUSource() || ps.CPUSecondsExact <= 0 || ps.CPUMsPerJourney <= 0 ||
 			math.Abs(ps.CPUMsPerJourney-ps.CPUSecondsExact*1000/60) > 1e-9 {
 			t.Errorf("%s: cpu %+v", p.Label, ps)
+		}
+		if (ps.CPUSource == model.CPUSourceSchedstat) != (ps.CPUSecondsWindow > 0) || (ps.CPUSecondsWindow > 0 && ps.CPUSecondsWindow != ps.CPUSecondsExact) {
+			t.Errorf("%s: window %v exact %v source %s", p.Label, ps.CPUSecondsWindow, ps.CPUSecondsExact, ps.CPUSource)
 		}
 		if ps.OpenFDs < 3 || ps.Threads < 1 {
 			t.Errorf("%s: open fds %d threads %d", p.Label, ps.OpenFDs, ps.Threads)
@@ -706,7 +753,7 @@ func TestRunSurvivesUnreadableCounters(t *testing.T) {
 		if !reflect.DeepEqual(ps.Unmeasured, wantU) {
 			t.Errorf("%s: unmeasured %v, want %v", p.Label, ps.Unmeasured, wantU)
 		}
-		if ps.WriteBytes != 0 || ps.OpenFDs != 0 || ps.Threads < 1 || ps.CPUSource != "rusage" || ps.CompletedJourneys != 60 {
+		if ps.WriteBytes != 0 || ps.OpenFDs != 0 || ps.Threads < 1 || ps.CPUSource != wantCPUSource() || ps.CompletedJourneys != 60 {
 			t.Errorf("%s: %+v", p.Label, ps)
 		}
 	}
