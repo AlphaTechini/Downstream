@@ -80,13 +80,13 @@ engine-e2e:
 
 # Measures how often the clean change is wrongly flagged on shared runners: 5
 # jobs, 4 runs each. It records results and does not fail on a false positive.
-# Runs only in a pipeline started with DOWNSTREAM_NOISE=1.
+# Runs only on the measure-noise branch; this project blocks pipeline variables.
 engine-noise:
   stage: e2e
   image: golang:1.22
   needs: [k6]
   rules:
-    - if: $DOWNSTREAM_NOISE == "1"
+    - if: $CI_COMMIT_BRANCH == "measure-noise"
   parallel: 5
   script:
     - export PATH="$CI_PROJECT_DIR/bin:$PATH"
