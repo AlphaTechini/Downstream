@@ -128,6 +128,20 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-A1. On identical code the rule reports no regression, and the floor is why
+
+- **Files:** `engine/classify/classify.go`, `scripts/aa.sh`, `scripts/aa_summary.py`
+- **Proof:** [evidence/aa/before/summary.txt](../evidence/aa/before/summary.txt) lines 2-3
+  and 8-10: 20 A/A runs on a 4-CPU machine, 0 with a false regression; with the 10 ms
+  absolute floor removed, the same band and 20% rules would flag 8.6% to 11.8% of latency
+  findings and 19 of 20 runs. Raw figures: `evidence/aa/before/passes.tsv`.
+- **Check:** `scripts/aa.sh 20 /tmp/aa && python3 scripts/aa_summary.py /tmp/aa`
+- **Does not show:** behaviour on the GitLab runner or in the Duo sandbox; behaviour on a
+  slower machine (the laptop runs in `evidence/runs.md` had false regressions); that a real
+  latency regression under 10 ms would be reported (it would not).
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |

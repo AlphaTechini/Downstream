@@ -174,6 +174,8 @@ row unless stated; details in [evidence/runs.md](evidence/runs.md)):
 | Planted change: app CPU time, B1 / candidate / B2 | 0.16 / 27.10 / 0.16 s | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L53 |
 | Clean change: runs flagged as regression | 0 of 22 (pipelines 63 and 66) | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) |
 | Clean change: largest step p95 increase over 20 runs | 4.6 ms (regression floor 10 ms) | `evidence/runs/ci-66-engine-noise/noise-*/report-*.md` |
+| A/A (same commit as base and head), 4-CPU dev machine: runs with a false regression | 0 of 20; 19 of 20 if the 10 ms floor were removed | [evidence/aa/README.md](evidence/aa/README.md), [summary](evidence/aa/before/summary.txt) L2-L3 |
+| A/A: B1/B2 spread of step p95 (median, p90) | 32.5%, 105.8% | [summary](evidence/aa/before/summary.txt) L10 |
 
 The platform, from the logs in `evidence/day0/`:
 

@@ -122,3 +122,8 @@ de7a3f5d2912b81940d2287a7b54003b1bf9c81270c7c0d04f39e0e39285d5f6  evidence/runs/
 7b2d4220dcb813b6bdc60d408db5314e0e0885589381cd5665a643c487c2fbfb  evidence/runs/local-wsl-clean-change/loop/run-6.json
 857f37d95b4aa0c02b21054d89cbeae6232f60d1afee1732a33f3f99a19ec1e8  evidence/runs/local-wsl-clean-change/loop/run-7.json
 efbbed270116e92a906c153ef16d3c0e61a02bbdfa86b25bbfe43375da720ad9  evidence/runs/local-wsl-clean-change/loop/run-8.json
+1af4a846ccc388aebed962ac9f8a61120c733447b9db75db858fcb25ba3de0f7  evidence/aa/before/findings.tsv
+07e578de52108ba7b33f70efb4811597bd8a386a5102ea472efbdd7e6dc066c6  evidence/aa/before/machine.txt
+bc05e31eb935f9bf9d4796a28372198568fcb63d56cb559dfee240c9ef52d995  evidence/aa/before/passes.tsv
+2ebbfcf4646caaaab6f392d7c430dd27fe856cd29983a2e24e0c88ae7d7a7406  evidence/aa/before/run-01.log
+bcdf27de533e65e5a0678772b902942fc81b1fcb77e7ad8c3042d0f007cce086  evidence/aa/before/summary.txt
