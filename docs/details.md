@@ -167,6 +167,7 @@ change how it is measured. Parser: `engine/target`. This repository's own file:
 
 ```yaml
 root: examples/shelf                      # directory scanned for routes
+main_dir: examples/shelf/cmd/shelf        # package main; the engine adds runtime counters here
 build: go build -o {out} ./examples/shelf/cmd/shelf
 start: "{out}"
 port_env: PORT                            # engine sets this to a free loopback port
@@ -311,6 +312,40 @@ answers with a redirect to another host is never followed.
     completed journey.
   A counter that cannot be read is recorded as not measured for that pass and listed under
   "Not measured" in the report; the run does not fail.
+- Per pass, Go runtime counters (`engine/runner/metrics.go`), only when `downstream.yml` sets
+  the optional key `main_dir`, the directory of the target's package main (relative to the
+  repo, no `..`, checked like `root`). Without it they are recorded as not measured, with the
+  reason in the report.
+  - How: for the base and the head build alike, the engine writes one file,
+    `zz_downstream_metrics.go` (package main, standard library only, every identifier
+    prefixed `zzDownstream`), and an overlay JSON that maps
+    `<extracted tree>/<main_dir>/zz_downstream_metrics.go` to it. The build runs with
+    `-overlay=<json>` added to `GOFLAGS` in its environment (any existing `GOFLAGS` is kept),
+    so the build command from `downstream.yml` is not rewritten and neither the repository
+    nor the extracted tree gains a file;
+  - the file's `init` does nothing unless the environment variable
+    `DOWNSTREAM_METRICS_ADDR` is set. The engine sets it, on the measured app process only,
+    to a free `127.0.0.1` port other than the app's own. It then serves `GET /metrics`
+    there: a JSON object with four unsigned integers read from `runtime/metrics`:
+    `/gc/heap/allocs:objects`, `/gc/heap/allocs:bytes`, `/gc/cycles/total:gc-cycles` and
+    `/sched/goroutines:goroutines`;
+  - the engine reads that endpoint three times per measured pass, on the side port, so the
+    reads are not journey traffic: just before the k6 window, just after it, and after the
+    same 500 ms drain as the descriptor and thread counts. Allocated objects, allocated bytes
+    and GC cycles are the difference between the first two readings, divided by the
+    completed journeys; goroutines is the third reading;
+  - the metrics are `alloc_objects_per_journey`, `alloc_bytes_per_journey`,
+    `gc_cycles_per_journey` and `goroutines`, all gated counters in `engine/classify`;
+  - the injection never fails a run. If `main_dir` is not a directory in the commit, the
+    overlay cannot be written, or the build with the injected file fails (for example the
+    package in `main_dir` is not named main), that commit is built again without it. If the
+    endpoint does not answer or a counter goes backwards, the pass keeps its other counters.
+    In each case the four figures are listed as not measured for that pass and a line in
+    "Not measured" says why;
+  - limits: the reads add a few allocations of their own, the same in every pass, and the
+    goroutine count includes the goroutine that serves the side port. A `GOFLAGS` set with
+    `go env -w` rather than in the environment is replaced by the environment value for
+    these builds.
 - Database time: **not measured in the MVP.** It is reported only if the target exposes it
   (for example a debug route). Otherwise the report says "DB time: not measured". We do not
   guess.
@@ -335,7 +370,7 @@ metrics are of two kinds:
 an absolute part, and `allowed = max(relative x worse, absolute)`. Then:
 
 - **regression**: `C - worse > allowed` and `C - worse > band`.
-- **improved**: the mirror against `better`.
+- **improved**: the opposite, against `better`.
 - **withheld**: neither of the above, and `band > allowed`: the two baselines of this run
   disagree by more than the tolerance, so a change of the tolerance's size could not be seen.
   The reason names both figures.

@@ -572,3 +572,25 @@ func TestGatedMethodListsTolerances(t *testing.T) {
 		}
 	}
 }
+
+func TestGatedTableShowsRuntimeCounters(t *testing.T) {
+	run := gatedRun()
+	for i := range run.Passes {
+		p := &run.Passes[i].Process
+		p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCyclesPerJourney, p.Goroutines = 223, 23000, 0.0125, 7
+	}
+	run.Passes[1].Process.AllocBytesPerJourney = 30000
+	run.Findings = classify.Classify(run.Passes, run.Settings.Thresholds)
+	out := Render(run, nil)
+	for _, want := range []string{
+		"| Heap objects allocated per journey | 223 objects/journey |",
+		"| Heap bytes allocated per journey | 23000 B/journey | 23000 B/journey | 30000 B/journey |",
+		"| GC cycles per journey | 0.0125 GC cycles/journey |",
+		"| Goroutines | 7 | 7 | 7 |",
+		"GC cycles per journey an absolute 0.025; Goroutines an absolute 1.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report lacks %q", want)
+		}
+	}
+}

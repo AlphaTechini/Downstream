@@ -229,6 +229,11 @@ func TestDefaults(t *testing.T) {
 		"threads":                    {Absolute: 2},
 		"cpu_ms_per_journey":         {Relative: 0.20},
 		"peak_rss_mb":                {Relative: 0.02},
+
+		"alloc_objects_per_journey": {Relative: 0.10},
+		"alloc_bytes_per_journey":   {Relative: 0.05},
+		"gc_cycles_per_journey":     {Absolute: 0.025},
+		"goroutines":                {Absolute: 1},
 	}
 	if len(d.Tolerances) != len(want) {
 		t.Errorf("tolerances: %+v", d.Tolerances)
@@ -700,4 +705,85 @@ func readPasses(t *testing.T, path string) map[string][]model.Pass {
 		}
 	}
 	return out
+}
+
+// runtimeProc is proc with the Go runtime counters set.
+func runtimeProc() model.ProcessStats {
+	p := proc()
+	p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCyclesPerJourney, p.Goroutines = 200, 20000, 0, 7
+	return p
+}
+
+func runtimePasses(metric string, v vals) []model.Pass {
+	ps := passes(vals{100, 100, 100}, vals{})
+	for i, x := range []float64{v.b1, v.c, v.b2} {
+		ps[i].Process = runtimeProc()
+		switch metric {
+		case model.MetricAllocObjectsPerJourney:
+			ps[i].Process.AllocObjectsPerJourney = x
+		case model.MetricAllocBytesPerJourney:
+			ps[i].Process.AllocBytesPerJourney = x
+		case model.MetricGCCyclesPerJourney:
+			ps[i].Process.GCCyclesPerJourney = x
+		case model.MetricGoroutines:
+			ps[i].Process.Goroutines = int(x)
+		}
+	}
+	return ps
+}
+
+func TestRuntimeCounterRule(t *testing.T) {
+	cases := []struct {
+		name   string
+		metric string
+		v      vals
+		class  string
+		unit   string
+	}{
+		{"objects: 8% is noise", model.MetricAllocObjectsPerJourney, vals{200, 216, 202}, model.ClassNoise, "objects/journey"},
+		{"objects: 15% is a regression", model.MetricAllocObjectsPerJourney, vals{200, 232, 202}, model.ClassRegression, "objects/journey"},
+		{"bytes: 3% is noise", model.MetricAllocBytesPerJourney, vals{20000, 20700, 20100}, model.ClassNoise, "B/journey"},
+		{"bytes: 10% is a regression", model.MetricAllocBytesPerJourney, vals{20000, 22300, 20100}, model.ClassRegression, "B/journey"},
+		{"gc: no cycle in any pass is noise", model.MetricGCCyclesPerJourney, vals{0, 0, 0}, model.ClassNoise, "GC cycles/journey"},
+		{"gc: one cycle in 80 journeys is noise", model.MetricGCCyclesPerJourney, vals{0, 0.0125, 0}, model.ClassNoise, "GC cycles/journey"},
+		{"gc: three cycles in 80 journeys is a regression", model.MetricGCCyclesPerJourney, vals{0, 0.0375, 0}, model.ClassRegression, "GC cycles/journey"},
+		{"goroutines: one more is noise", model.MetricGoroutines, vals{7, 8, 7}, model.ClassNoise, "count"},
+		{"goroutines: a leak is a regression", model.MetricGoroutines, vals{7, 207, 7}, model.ClassRegression, "count"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := find(t, Classify(runtimePasses(tc.metric, tc.v), DefaultThresholds()), "app."+tc.metric)
+			if f.Class != tc.class || f.Unit != tc.unit || f.Kind != model.KindCounter || !f.Gated {
+				t.Errorf("%+v", f)
+			}
+		})
+	}
+}
+
+func TestRuntimeCountersAbsentFromOlderRuns(t *testing.T) {
+	// proc() has no goroutine count and no Unmeasured entry: a run.json from
+	// before the runtime counters existed.
+	fs := Classify(gatedPasses(model.MetricThreads, vals{9, 9, 9}), DefaultThresholds())
+	for _, m := range []string{model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCyclesPerJourney, model.MetricGoroutines} {
+		for _, f := range fs {
+			if f.Metric == m {
+				t.Errorf("%s judged for a run without runtime counters: %+v", m, f)
+			}
+		}
+	}
+}
+
+func TestRuntimeCountersNotMeasured(t *testing.T) {
+	ps := runtimePasses(model.MetricGoroutines, vals{7, 7, 7})
+	for i := range ps {
+		ps[i].Process.AllocObjectsPerJourney, ps[i].Process.AllocBytesPerJourney, ps[i].Process.GCCyclesPerJourney, ps[i].Process.Goroutines = 0, 0, 0, 0
+		ps[i].Process.Unmeasured = []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey", "goroutines"}
+	}
+	fs := Classify(ps, DefaultThresholds())
+	for _, m := range []string{model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCyclesPerJourney, model.MetricGoroutines} {
+		f := find(t, fs, "app."+m)
+		if f.Class != model.ClassNotMeasured || !f.Gated {
+			t.Errorf("%s: %+v", m, f)
+		}
+	}
 }

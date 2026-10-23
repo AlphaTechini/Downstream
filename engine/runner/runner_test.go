@@ -247,12 +247,16 @@ func TestBuildProcess(t *testing.T) {
 		ticks0: 10, ticks1: 24, rssMB: 21.5,
 		io0: procIO{WChar: 1000, SyscW: 10}, io1: procIO{WChar: 41000, SyscW: 110},
 		threads: 8, fds: 12, exactCPU: 0.1375, haveExact: true, completed: 20,
+		rt0:       runtimeCounters{AllocObjects: 1000, AllocBytes: 50000, GCCycles: 3, Goroutines: 6},
+		rt1:       runtimeCounters{AllocObjects: 41000, AllocBytes: 250000, GCCycles: 5, Goroutines: 14},
+		rtDrained: runtimeCounters{Goroutines: 7},
 	}
 	ps, notes := buildProcess(full)
 	want := model.ProcessStats{
 		CPUSeconds: 0.14, PeakRSSMB: 21.5, CPUSecondsExact: 0.1375, CPUSource: "rusage",
 		WriteBytes: 40000, WriteSyscalls: 100, OpenFDs: 12, Threads: 8,
 		CompletedJourneys: 20, CPUMsPerJourney: 6.875, WriteBytesPerJourney: 2000, WriteSyscallsPerJourney: 5,
+		AllocObjectsPerJourney: 2000, AllocBytesPerJourney: 10000, GCCyclesPerJourney: 0.1, Goroutines: 7,
 	}
 	if len(notes) != 0 || !reflect.DeepEqual(ps, want) {
 		t.Errorf("full sample: %+v notes %v", ps, notes)
@@ -305,11 +309,59 @@ func TestBuildProcess(t *testing.T) {
 		s.completed = 0
 		ps, notes := buildProcess(s)
 		if ps.CPUMsPerJourney != 0 || ps.WriteBytesPerJourney != 0 || ps.WriteSyscallsPerJourney != 0 || len(notes) != 1 ||
-			!reflect.DeepEqual(ps.Unmeasured, []string{"cpu_ms_per_journey", "write_bytes_per_journey", "write_syscalls_per_journey"}) {
+			ps.AllocObjectsPerJourney != 0 || ps.AllocBytesPerJourney != 0 || ps.GCCyclesPerJourney != 0 || ps.Goroutines != 7 ||
+			!reflect.DeepEqual(ps.Unmeasured, []string{"cpu_ms_per_journey", "write_bytes_per_journey", "write_syscalls_per_journey",
+				"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey"}) {
 			t.Errorf("%+v notes %v", ps, notes)
 		}
 		if ps.WriteBytes != 40000 || ps.CPUSecondsExact != 0.1375 {
 			t.Errorf("pass totals lost: %+v", ps)
+		}
+	})
+}
+
+func TestBuildProcessRuntimeCounters(t *testing.T) {
+	base := procSample{
+		ticks0: 10, ticks1: 24, rssMB: 21.5, exactCPU: 0.1, haveExact: true, completed: 10,
+		rt0: runtimeCounters{AllocObjects: 100, AllocBytes: 1000, GCCycles: 2}, rt1: runtimeCounters{AllocObjects: 600, AllocBytes: 6000, GCCycles: 4},
+		rtDrained: runtimeCounters{Goroutines: 5},
+	}
+	allFour := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey", "goroutines"}
+
+	t.Run("read failed adds a note", func(t *testing.T) {
+		s := base
+		s.rtErr = errors.New("the injected /metrics endpoint did not answer")
+		ps, notes := buildProcess(s)
+		if !reflect.DeepEqual(ps.Unmeasured, allFour) || ps.Goroutines != 0 || ps.AllocBytesPerJourney != 0 {
+			t.Errorf("%+v", ps)
+		}
+		want := []string{"runtime counters: not measured; the injected /metrics endpoint did not answer"}
+		if !reflect.DeepEqual(notes, want) {
+			t.Errorf("notes %q", notes)
+		}
+	})
+	t.Run("no injection is quiet", func(t *testing.T) {
+		s := base
+		s.rtErr, s.rtQuiet = errors.New("no injected file"), true
+		ps, notes := buildProcess(s)
+		if !reflect.DeepEqual(ps.Unmeasured, allFour) || len(notes) != 0 {
+			t.Errorf("%+v notes %q", ps, notes)
+		}
+	})
+	t.Run("a counter going backwards", func(t *testing.T) {
+		s := base
+		s.rt1.GCCycles = 1
+		ps, notes := buildProcess(s)
+		if !reflect.DeepEqual(ps.Unmeasured, allFour) || len(notes) != 1 || !strings.Contains(notes[0], "GC cycles went backwards") {
+			t.Errorf("%+v notes %q", ps, notes)
+		}
+	})
+	t.Run("zero allocations are a measurement", func(t *testing.T) {
+		s := base
+		s.rt1 = s.rt0
+		ps, notes := buildProcess(s)
+		if len(ps.Unmeasured) != 0 || len(notes) != 0 || ps.AllocObjectsPerJourney != 0 || ps.Goroutines != 5 {
+			t.Errorf("%+v notes %q", ps, notes)
 		}
 	})
 }
@@ -427,6 +479,7 @@ func main() {
 `
 
 const tinyConfig = `root: .
+main_dir: .
 build: go build -o {out} .
 start: "{out}"
 port_env: PORT
@@ -479,6 +532,13 @@ func tinyJourneys() model.JourneyFile {
 // tinyRepo creates a git repository with two commits; the second slows one handler.
 func tinyRepo(t *testing.T) (repo, base, head string) {
 	t.Helper()
+	return tinyRepoWith(t, tinyConfig, nil)
+}
+
+// tinyRepoWith is tinyRepo with its own downstream.yml and extra files, which
+// are committed in the base commit.
+func tinyRepoWith(t *testing.T, config string, extra map[string]string) (repo, base, head string) {
+	t.Helper()
 	t.Setenv("GIT_AUTHOR_NAME", "Test")
 	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.invalid")
 	t.Setenv("GIT_COMMITTER_NAME", "Test")
@@ -495,7 +555,13 @@ func tinyRepo(t *testing.T) (repo, base, head string) {
 	}
 	write("go.mod", tinyGoMod)
 	write("main.go", tinyMain)
-	write("downstream.yml", tinyConfig)
+	write("downstream.yml", config)
+	for name, body := range extra {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(repo, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(name, body)
+	}
 	git(t, repo, "add", ".")
 	git(t, repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base")
 	base = git(t, repo, "rev-parse", "HEAD")
@@ -568,6 +634,9 @@ func TestRunIntegration(t *testing.T) {
 		if ps.OpenFDs < 3 || ps.Threads < 1 {
 			t.Errorf("%s: open fds %d threads %d", p.Label, ps.OpenFDs, ps.Threads)
 		}
+		if ps.AllocObjectsPerJourney <= 0 || ps.AllocBytesPerJourney <= 0 || ps.GCCyclesPerJourney < 0 || ps.Goroutines < 1 || len(ps.Unmeasured) != 0 {
+			t.Errorf("%s: runtime counters %+v", p.Label, ps)
+		}
 		if _, err := os.Stat("/proc/self/io"); err == nil {
 			if ps.WriteBytes <= 0 || ps.WriteSyscalls <= 0 || ps.WriteBytesPerJourney <= 0 || ps.WriteSyscallsPerJourney <= 0 || len(ps.Unmeasured) != 0 {
 				t.Errorf("%s: write counters %+v", p.Label, ps)
@@ -590,6 +659,11 @@ func TestRunIntegration(t *testing.T) {
 	}
 	if got := git(t, repo, "status", "--porcelain"); got != statusBefore {
 		t.Errorf("repository status changed: %q", got)
+	}
+	for _, n := range run.NotMeasured {
+		if strings.HasPrefix(n, "runtime counters") {
+			t.Errorf("runtime counters reported as not measured: %q", n)
+		}
 	}
 
 	// The apps must not outlive the run: no process may still run from the

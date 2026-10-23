@@ -183,6 +183,14 @@ type ProcessStats struct {
 	WriteBytesPerJourney    float64 `json:"write_bytes_per_journey"`
 	WriteSyscallsPerJourney float64 `json:"write_syscalls_per_journey"`
 
+	// Go runtime counters, read from the app over a loopback side port during
+	// the pass. They exist only when the target config sets main_dir and the
+	// build with the injected file succeeded; otherwise they are in Unmeasured.
+	AllocObjectsPerJourney float64 `json:"alloc_objects_per_journey"` // heap objects allocated during the k6 window
+	AllocBytesPerJourney   float64 `json:"alloc_bytes_per_journey"`   // heap bytes allocated during the k6 window
+	GCCyclesPerJourney     float64 `json:"gc_cycles_per_journey"`     // completed GC cycles during the k6 window
+	Goroutines             int     `json:"goroutines"`                // after k6 exited and idle connections drained
+
 	// Unmeasured names each counter above that could not be read in this pass
 	// (its value is then 0 and means nothing).
 	Unmeasured []string `json:"unmeasured,omitempty"`
@@ -203,6 +211,10 @@ const (
 	UnmeasuredCPUPerJourney           = "cpu_ms_per_journey"
 	UnmeasuredWriteBytesPerJourney    = "write_bytes_per_journey"
 	UnmeasuredWriteSyscallsPerJourney = "write_syscalls_per_journey"
+	UnmeasuredAllocObjectsPerJourney  = "alloc_objects_per_journey"
+	UnmeasuredAllocBytesPerJourney    = "alloc_bytes_per_journey"
+	UnmeasuredGCCyclesPerJourney      = "gc_cycles_per_journey"
+	UnmeasuredGoroutines              = "goroutines"
 )
 
 // StepMetrics are k6 figures for one step in one pass. Latencies are in ms.
@@ -255,6 +267,10 @@ const (
 	MetricWriteSyscallsPerJourney = "write_syscalls_per_journey"
 	MetricOpenFDs                 = "open_fds"
 	MetricThreads                 = "threads"
+	MetricAllocObjectsPerJourney  = "alloc_objects_per_journey"
+	MetricAllocBytesPerJourney    = "alloc_bytes_per_journey"
+	MetricGCCyclesPerJourney      = "gc_cycles_per_journey"
+	MetricGoroutines              = "goroutines"
 )
 
 // Finding compares one metric across B1, C and B2.

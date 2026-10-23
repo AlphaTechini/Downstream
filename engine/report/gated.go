@@ -17,6 +17,7 @@ import (
 var gatedOrder = []string{
 	model.MetricCPUPerJourney, model.MetricWriteBytesPerJourney, model.MetricWriteSyscallsPerJourney,
 	model.MetricOpenFDs, model.MetricThreads, model.MetricRSS,
+	model.MetricAllocObjectsPerJourney, model.MetricAllocBytesPerJourney, model.MetricGCCyclesPerJourney, model.MetricGoroutines,
 }
 
 var gatedNames = map[string]string{
@@ -26,6 +27,10 @@ var gatedNames = map[string]string{
 	model.MetricOpenFDs:                 "Open fds",
 	model.MetricThreads:                 "Threads",
 	model.MetricRSS:                     "Peak RSS",
+	model.MetricAllocObjectsPerJourney:  "Heap objects allocated per journey",
+	model.MetricAllocBytesPerJourney:    "Heap bytes allocated per journey",
+	model.MetricGCCyclesPerJourney:      "GC cycles per journey",
+	model.MetricGoroutines:              "Goroutines",
 }
 
 func (r *renderer) gatedSummary() {
@@ -349,7 +354,7 @@ func toleranceLine(t model.Thresholds) string {
 			how = append(how, fixed(tol.Relative*100)+"% of the worse baseline")
 		}
 		if tol.Absolute > 0 {
-			how = append(how, "an absolute "+fixed(tol.Absolute))
+			how = append(how, "an absolute "+strconv.FormatFloat(tol.Absolute, 'f', -1, 64))
 		}
 		name := gatedNames[m]
 		if name == "" {

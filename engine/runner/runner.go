@@ -127,15 +127,14 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 		return fail("temp dir", err)
 	}
 
-	type build struct{ tree, bin string }
-	builds := map[string]build{}
+	builds := map[string]buildOut{}
 	for _, side := range []struct{ name, sha string }{{"base", baseSHA}, {"head", headSHA}} {
 		if side.name == "head" && headSHA == baseSHA {
 			builds["head"] = builds["base"]
 			log.printf("head is the same commit as base; building once")
 			break
 		}
-		b := build{tree: filepath.Join(tmp, side.name+"-src"), bin: filepath.Join(tmp, "bin", side.name+"-app")}
+		b := buildOut{tree: filepath.Join(tmp, side.name+"-src"), bin: filepath.Join(tmp, "bin", side.name+"-app")}
 		stage := "build (" + side.name + ")"
 		log.printf("%s: extracting %s", stage, short(side.sha))
 		if err := os.Mkdir(b.tree, 0o755); err != nil {
@@ -145,8 +144,14 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 			return fail(stage, fmt.Errorf("extracting the commit: %w", err))
 		}
 		log.printf("%s: %s", stage, cfg.BuildCommand(b.bin))
-		if err := buildTree(ctx, cfg, b.tree, b.bin); err != nil {
+		metrics, note, err := buildTarget(ctx, cfg, tmp, side.name, b.tree, b.bin)
+		if err != nil {
 			return fail(stage, err)
+		}
+		b.metrics = metrics
+		if note != "" && !slices.Contains(run.NotMeasured, note) {
+			run.NotMeasured = append(run.NotMeasured, note)
+			log.printf("%s: %s", stage, note)
 		}
 		builds[side.name] = b
 	}
@@ -221,13 +226,70 @@ func resolveCommit(ctx context.Context, repo, ref string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// buildTree runs the configured build command in tree.
-func buildTree(ctx context.Context, cfg target.Config, tree, bin string) error {
+// buildOut is one extracted and built commit.
+type buildOut struct {
+	tree, bin string
+	// metrics is true when the binary carries the injected counters file.
+	metrics bool
+}
+
+// buildTarget builds tree, with the runtime-counter file injected when the
+// config names a main_dir and the build accepts it. It never fails because of
+// the injection: when the file cannot be added or the build refuses it, the
+// target is built as is and the second result says why the counters are not
+// measured. The error is the plain build's.
+func buildTarget(ctx context.Context, cfg target.Config, tmp, side, tree, bin string) (bool, string, error) {
+	plain := func(reason string) (bool, string, error) {
+		return false, "runtime counters: not measured; " + reason, buildTree(ctx, cfg, tree, bin, os.Environ())
+	}
+	if cfg.MainDir == "" {
+		return plain("downstream.yml sets no main_dir, so no counter code is added to the build.")
+	}
+	if st, err := os.Stat(filepath.Join(tree, filepath.FromSlash(cfg.MainDir))); err != nil || !st.IsDir() {
+		return plain("main_dir " + cfg.MainDir + " is not a directory in the " + side + " commit.")
+	}
+	dir := filepath.Join(tmp, "overlay-"+side)
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return plain("the overlay directory could not be created (" + errText(err) + ").")
+	}
+	overlay, err := writeOverlay(dir, tree, cfg.MainDir)
+	if err != nil {
+		return plain("the overlay could not be written (" + errText(err) + ").")
+	}
+	env, err := withOverlayFlag(os.Environ(), overlay)
+	if err != nil {
+		return plain(err.Error() + ".")
+	}
+	err = buildTree(ctx, cfg, tree, bin, env)
+	if err == nil {
+		return true, "", nil
+	}
+	if ctx.Err() != nil {
+		return false, "", err
+	}
+	_ = os.Remove(bin)
+	return plain("the " + side + " build with the injected file failed, so it was built without it (" +
+		lastLine(strings.ReplaceAll(err.Error(), tree, "<tree>")) + ").")
+}
+
+// lastLine returns the last non-empty line of s, trimmed, which is where go
+// build prints its error.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if len(last) > 200 {
+		last = last[:200]
+	}
+	return last
+}
+
+// buildTree runs the configured build command in tree with env.
+func buildTree(ctx context.Context, cfg target.Config, tree, bin string, env []string) error {
 	ctx, cancel := context.WithTimeout(ctx, buildTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", cfg.BuildCommand(bin))
 	cmd.Dir = tree
-	cmd.Env = os.Environ()
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 5 * time.Second
@@ -269,7 +331,7 @@ type passSpec struct {
 	k6, tmp    string
 	log        logger
 	cfg        target.Config
-	b          struct{ tree, bin string }
+	b          buildOut
 	runID      string
 	vus        int
 	iterations int
@@ -293,7 +355,20 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 	if err != nil {
 		return res, nil, fmt.Errorf("choosing a port: %w", err)
 	}
-	a, err := startApp(p.cfg, p.b.bin, p.b.tree, port)
+	// The side port is only for passes that report the runtime counters.
+	var env []string
+	var rtAddr string
+	if p.measure && p.b.metrics {
+		mport := port
+		for mport == port {
+			if mport, err = pickPort(); err != nil {
+				return res, nil, fmt.Errorf("choosing a port: %w", err)
+			}
+		}
+		rtAddr = "127.0.0.1:" + strconv.Itoa(mport)
+		env = append(env, metricsAddrEnv+"="+rtAddr)
+	}
+	a, err := startApp(p.cfg, p.b.bin, p.b.tree, port, env...)
 	if err != nil {
 		return res, nil, fmt.Errorf("starting the app: %w", err)
 	}
@@ -309,6 +384,18 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 	}
 
 	var s procSample
+	// A failure to read the side port never fails the pass: the counters are
+	// then recorded as not measured. The reads go to the side port, so they are
+	// not journey traffic.
+	switch {
+	case !p.measure:
+	case rtAddr == "":
+		s.rtErr, s.rtQuiet = errors.New("the build has no injected counters file"), true
+	default:
+		if s.rt0, s.rtErr = firstRuntimeCounters(ctx, rtAddr); s.rtErr != nil && ctx.Err() != nil {
+			return res, nil, ctx.Err()
+		}
+	}
 	if s.ticks0, err = readCPUTicks(a.pid); err != nil {
 		return res, nil, fmt.Errorf("reading app CPU time: %w", err)
 	}
@@ -334,6 +421,9 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 			s.ioErr = ioErr
 		}
 	}
+	if p.measure && s.rtErr == nil {
+		s.rt1, s.rtErr = readRuntimeCounters(ctx, rtAddr)
+	}
 	if s.rssMB, err = readPeakRSSMB(a.pid); err != nil {
 		return res, nil, fmt.Errorf("reading app peak memory: %w", err)
 	}
@@ -357,6 +447,9 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 	}
 	s.threads, s.threadsErr = procSource.threads(a.pid)
 	s.fds, s.fdsErr = procSource.fds(a.pid)
+	if s.rtErr == nil {
+		s.rtDrained, s.rtErr = readRuntimeCounters(ctx, rtAddr)
+	}
 
 	// Stop now rather than at return so the kernel's resource usage for the
 	// exited process is available. The deferred stop is then a no-op.

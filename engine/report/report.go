@@ -561,7 +561,7 @@ func (r *renderer) method() {
 	}
 	r.line("Gated metrics decide the verdict. For each, the worse baseline is the larger of B1 and B2, the noise band is the difference between them, " +
 		"and the allowed rise is the larger of a fraction of the worse baseline and an absolute figure. A metric is a regression when the candidate is above the worse baseline " +
-		"by more than the allowed rise and by more than the noise band, and improved by the mirror rule against the better baseline. " +
+		"by more than the allowed rise and by more than the noise band, and improved by the opposite rule against the better baseline. " +
 		"When neither holds and the noise band is larger than the allowed rise, no verdict is given (withheld): a change of the allowed size could not be seen in this run. " +
 		"Smallest detectable is the larger of the allowed rise and the noise band. A step that passed on both baseline runs and failed on the candidate is a regression. " +
 		"One gated app metric clearly better and another clearly worse is reported as a trade-off.")
@@ -583,7 +583,9 @@ func places(unit string) int {
 	switch unit {
 	case "s", "ms/journey", "calls/journey":
 		return 2
-	case "count", "B/journey":
+	case "GC cycles/journey":
+		return 4
+	case "count", "B/journey", "objects/journey":
 		return 0
 	}
 	return 1

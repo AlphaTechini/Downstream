@@ -25,6 +25,13 @@ type procSample struct {
 	exactCPU  float64
 	haveExact bool
 	completed int // journey iterations that finished every step
+
+	// rt0 and rt1 bracket the k6 window; rtDrained is read after the drain.
+	// rtErr is why they are unusable; with rtQuiet set the reason is already
+	// in Run.NotMeasured from the build stage, so no line is added per pass.
+	rt0, rt1, rtDrained runtimeCounters
+	rtErr               error
+	rtQuiet             bool
 }
 
 // buildProcess turns a sample into ProcessStats and the lines for
@@ -73,12 +80,44 @@ func buildProcess(s procSample) (model.ProcessStats, []string) {
 		ps.Threads = s.threads
 	}
 
+	var allocObjects, allocBytes, gcCycles uint64
+	rtErr := s.rtErr
+	if rtErr == nil {
+		var e1, e2, e3 error
+		allocObjects, e1 = counterDelta("allocated objects", s.rt0.AllocObjects, s.rt1.AllocObjects)
+		allocBytes, e2 = counterDelta("allocated bytes", s.rt0.AllocBytes, s.rt1.AllocBytes)
+		gcCycles, e3 = counterDelta("GC cycles", s.rt0.GCCycles, s.rt1.GCCycles)
+		for _, e := range []error{e1, e2, e3} {
+			if e != nil {
+				rtErr = e
+				break
+			}
+		}
+	}
+	if rtErr != nil {
+		unmeasured(model.UnmeasuredAllocObjectsPerJourney, model.UnmeasuredAllocBytesPerJourney,
+			model.UnmeasuredGCCyclesPerJourney, model.UnmeasuredGoroutines)
+		if !s.rtQuiet {
+			notes = append(notes, fmt.Sprintf("runtime counters: not measured; %s", errText(rtErr)))
+		}
+	} else {
+		ps.Goroutines = int(s.rtDrained.Goroutines)
+	}
+
 	if s.completed <= 0 {
 		unmeasured(model.UnmeasuredCPUPerJourney, model.UnmeasuredWriteBytesPerJourney, model.UnmeasuredWriteSyscallsPerJourney)
+		if rtErr == nil {
+			unmeasured(model.UnmeasuredAllocObjectsPerJourney, model.UnmeasuredAllocBytesPerJourney, model.UnmeasuredGCCyclesPerJourney)
+		}
 		notes = append(notes, "per-journey figures: not measured; k6 reported no completed journey iteration in a pass")
 		return ps, notes
 	}
 	n := float64(s.completed)
+	if rtErr == nil {
+		ps.AllocObjectsPerJourney = float64(allocObjects) / n
+		ps.AllocBytesPerJourney = float64(allocBytes) / n
+		ps.GCCyclesPerJourney = float64(gcCycles) / n
+	}
 	ps.CPUMsPerJourney = ps.CPUSecondsExact * 1000 / n
 	if ioErr == nil {
 		ps.WriteBytesPerJourney = ps.WriteBytes / n

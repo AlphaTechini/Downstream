@@ -42,10 +42,11 @@ type app struct {
 
 // startApp launches the start command with exec so the shell is replaced by
 // the app and the pid we sample in /proc is the app's own.
-func startApp(cfg target.Config, bin, tree string, port int) (*app, error) {
+// extraEnv entries (KEY=value) are added to the app's environment only.
+func startApp(cfg target.Config, bin, tree string, port int, extraEnv ...string) (*app, error) {
 	cmd := exec.Command("sh", "-c", "exec "+cfg.StartCommand(bin))
 	cmd.Dir = tree
-	cmd.Env = append(os.Environ(), cfg.PortEnv+"="+strconv.Itoa(port))
+	cmd.Env = append(append(os.Environ(), cfg.PortEnv+"="+strconv.Itoa(port)), extraEnv...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	out := &tailBuffer{max: 4096}
 	cmd.Stdout, cmd.Stderr = out, out

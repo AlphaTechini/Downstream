@@ -11,7 +11,7 @@
 // allowed = max(Relative * worse, Absolute) from the metric's Tolerance:
 //
 //	regression: C - worse > allowed and C - worse > band
-//	improved:   the mirror, better - C against allowed taken on better, and band
+//	improved:   the opposite, better - C against allowed taken on better, and band
 //	withheld:   neither of the above, and band > allowed: the two baselines of
 //	            this run disagree by more than the tolerance, so a change of the
 //	            tolerance's size could not be seen
@@ -49,6 +49,17 @@ import (
 // to pick each: about 1.5 to 2 times that largest excess, rounded up; for the
 // small integer counts (open fds, threads) an absolute tolerance, because one
 // thread is a large fraction of ten.
+//
+// The four Go runtime counters (allocated objects, allocated bytes and GC
+// cycles per completed journey, goroutines) were calibrated the same way on a
+// 10-run A/A on this machine (examples/shelf, 2 VUs x 10 iterations, 80
+// completed journeys per pass). That run is not committed evidence yet. Largest
+// excess of C over the worse baseline: objects 4.8%, bytes 2.6%; the largest
+// B1/B2 spread was 6.8% and 3.5%. GC cycles were 0 in every pass (the pass
+// allocates under the 4 MB first-GC trigger) and goroutines were 7 in every
+// pass, so for those two the rule gives 0 and the tolerance is the smallest
+// step the figure can show: about two GC cycles in a pass of 80 journeys, and
+// one goroutine.
 func DefaultThresholds() model.Thresholds {
 	return model.Thresholds{
 		BandMultiplier:    2,
@@ -64,6 +75,10 @@ func DefaultThresholds() model.Thresholds {
 			model.MetricThreads:                 {Absolute: 2},
 			model.MetricCPUPerJourney:           {Relative: 0.20},
 			model.MetricRSS:                     {Relative: 0.02},
+			model.MetricAllocObjectsPerJourney:  {Relative: 0.10},
+			model.MetricAllocBytesPerJourney:    {Relative: 0.05},
+			model.MetricGCCyclesPerJourney:      {Absolute: 0.025},
+			model.MetricGoroutines:              {Absolute: 1},
 		},
 	}
 }
@@ -77,15 +92,23 @@ type gatedMetric struct {
 	// needsCounters is true for figures that exist only in a run.json written
 	// after the process counters were added.
 	needsCounters bool
+	// needsRuntime is true for the Go runtime counters, which exist only in a
+	// run.json written after they were added. Such a file has neither a
+	// goroutine count nor an Unmeasured entry for it in any pass.
+	needsRuntime bool
 }
 
 var gatedMetrics = []gatedMetric{
-	{model.MetricCPUPerJourney, model.KindCPU, "ms/journey", func(p model.ProcessStats) float64 { return p.CPUMsPerJourney }, true},
-	{model.MetricWriteBytesPerJourney, model.KindCounter, "B/journey", func(p model.ProcessStats) float64 { return p.WriteBytesPerJourney }, true},
-	{model.MetricWriteSyscallsPerJourney, model.KindCounter, "calls/journey", func(p model.ProcessStats) float64 { return p.WriteSyscallsPerJourney }, true},
-	{model.MetricOpenFDs, model.KindCounter, "count", func(p model.ProcessStats) float64 { return float64(p.OpenFDs) }, true},
-	{model.MetricThreads, model.KindCounter, "count", func(p model.ProcessStats) float64 { return float64(p.Threads) }, true},
-	{model.MetricRSS, model.KindMemory, "MB", func(p model.ProcessStats) float64 { return p.PeakRSSMB }, false},
+	{model.MetricCPUPerJourney, model.KindCPU, "ms/journey", func(p model.ProcessStats) float64 { return p.CPUMsPerJourney }, true, false},
+	{model.MetricWriteBytesPerJourney, model.KindCounter, "B/journey", func(p model.ProcessStats) float64 { return p.WriteBytesPerJourney }, true, false},
+	{model.MetricWriteSyscallsPerJourney, model.KindCounter, "calls/journey", func(p model.ProcessStats) float64 { return p.WriteSyscallsPerJourney }, true, false},
+	{model.MetricOpenFDs, model.KindCounter, "count", func(p model.ProcessStats) float64 { return float64(p.OpenFDs) }, true, false},
+	{model.MetricThreads, model.KindCounter, "count", func(p model.ProcessStats) float64 { return float64(p.Threads) }, true, false},
+	{model.MetricRSS, model.KindMemory, "MB", func(p model.ProcessStats) float64 { return p.PeakRSSMB }, false, false},
+	{model.MetricAllocObjectsPerJourney, model.KindCounter, "objects/journey", func(p model.ProcessStats) float64 { return p.AllocObjectsPerJourney }, true, true},
+	{model.MetricAllocBytesPerJourney, model.KindCounter, "B/journey", func(p model.ProcessStats) float64 { return p.AllocBytesPerJourney }, true, true},
+	{model.MetricGCCyclesPerJourney, model.KindCounter, "GC cycles/journey", func(p model.ProcessStats) float64 { return p.GCCyclesPerJourney }, true, true},
+	{model.MetricGoroutines, model.KindCounter, "count", func(p model.ProcessStats) float64 { return float64(p.Goroutines) }, true, true},
 }
 
 type key struct{ journey, step string }
@@ -147,8 +170,12 @@ func Classify(passes []model.Pass, t model.Thresholds) []model.Finding {
 	out = append(out, cpu)
 
 	haveCounters := b1.Process.CPUSource != "" && c.Process.CPUSource != "" && b2.Process.CPUSource != ""
+	haveRuntime := hasRuntimeCounters(b1) && hasRuntimeCounters(c) && hasRuntimeCounters(b2)
 	for _, m := range gatedMetrics {
 		if m.needsCounters && !haveCounters {
+			continue
+		}
+		if m.needsRuntime && !haveRuntime {
 			continue
 		}
 		var f model.Finding
@@ -177,6 +204,13 @@ func index(p *model.Pass) map[key]model.StepMetrics {
 		m[key{s.Journey, s.Step}] = s
 	}
 	return m
+}
+
+// hasRuntimeCounters reports whether the pass was written by an engine that
+// knew the runtime counters: it either measured a goroutine count (never below
+// one) or says the counters were not measured.
+func hasRuntimeCounters(p *model.Pass) bool {
+	return p.Process.Goroutines > 0 || slices.Contains(p.Process.Unmeasured, model.UnmeasuredGoroutines)
 }
 
 // tolerance returns the metric's tolerance from t, or the default when t has
@@ -473,8 +507,10 @@ func amount(v float64, unit string) string {
 		return num(v, 2) + " s"
 	case "ms/journey", "calls/journey":
 		return num(v, 2) + " " + unit
-	case "B/journey":
+	case "B/journey", "objects/journey":
 		return num(v, 0) + " " + unit
+	case "GC cycles/journey":
+		return num(v, 4) + " " + unit
 	}
 	return num(v, 0)
 }

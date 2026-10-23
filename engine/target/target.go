@@ -16,6 +16,7 @@ import (
 // Config is the parsed downstream.yml.
 type Config struct {
 	Root       string // directory scanned for routes, relative to the repo
+	MainDir    string // optional: directory of the app's package main, relative to the repo; enables the runtime counters
 	Build      string // shell command; {out} is the binary path
 	Start      string // shell command; {out} is the binary path
 	PortEnv    string // environment variable that carries the loopback port
@@ -76,6 +77,8 @@ func Parse(data []byte) (Config, error) {
 		switch key {
 		case "root":
 			cfg.Root = val
+		case "main_dir":
+			cfg.MainDir = val
 		case "build":
 			cfg.Build = val
 		case "start":
@@ -129,6 +132,14 @@ func Parse(data []byte) (Config, error) {
 	}
 	if strings.HasPrefix(cfg.Root, "/") || strings.Contains(cfg.Root, "..") {
 		return Config{}, fmt.Errorf("line %d: root must be a relative path inside the repo", seen["root"])
+	}
+	if n, ok := seen["main_dir"]; ok {
+		if cfg.MainDir == "" {
+			return Config{}, fmt.Errorf("line %d: main_dir must not be empty", n)
+		}
+		if strings.HasPrefix(cfg.MainDir, "/") || strings.Contains(cfg.MainDir, "..") {
+			return Config{}, fmt.Errorf("line %d: main_dir must be a relative path inside the repo", n)
+		}
 	}
 	if !portEnvRe.MatchString(cfg.PortEnv) {
 		return Config{}, fmt.Errorf("line %d: port_env %q is not an environment variable name", seen["port_env"], cfg.PortEnv)

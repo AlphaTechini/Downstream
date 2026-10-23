@@ -80,7 +80,7 @@ band = |B1 - B2| and allowed = max(relative tolerance x worse, absolute toleranc
 tolerances are in `settings.thresholds.tolerances` of `run.json`.
 
 - regression: C - worse is more than allowed and more than band.
-- improved: the mirror, against better.
+- improved: the opposite, against better.
 - withheld: neither of those, and band is more than allowed. This run's baselines disagree by
   more than the tolerance, so a change of the tolerance's size could not be seen.
 - noise: otherwise.

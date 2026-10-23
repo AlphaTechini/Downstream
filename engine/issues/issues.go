@@ -363,6 +363,14 @@ func metricWords(m string) string {
 		return "open file descriptors"
 	case model.MetricThreads:
 		return "threads"
+	case model.MetricAllocObjectsPerJourney:
+		return "heap objects allocated per journey"
+	case model.MetricAllocBytesPerJourney:
+		return "heap bytes allocated per journey"
+	case model.MetricGCCyclesPerJourney:
+		return "GC cycles per journey"
+	case model.MetricGoroutines:
+		return "goroutines"
 	}
 	return m
 }
@@ -371,7 +379,9 @@ func decimals(unit string) int {
 	switch unit {
 	case "s", "ms/journey", "calls/journey":
 		return 2
-	case "count", "B/journey":
+	case "GC cycles/journey":
+		return 4
+	case "count", "B/journey", "objects/journey":
 		return 0
 	}
 	return 1
