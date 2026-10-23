@@ -209,7 +209,8 @@ own credentials.
 **Deployment.** The flow is enabled in the GitLab project through the UI; there is nothing to
 deploy from this repo. What the brief means by deployment for a flow entry is unverified (T-12).
 
-**Security.** The model's only output that reaches execution is validated JSON, the engine talks
+**Security.** The model's only output that reaches execution is validated JSON and a file path
+copied from `scan.json` (letters, digits and `/ . _ -` only, for `git show`), the engine talks
 to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
 under CODEOWNERS. `agentnotes.md` and `downstream.yml` are read from the base commit, so a
 merge request cannot rewrite them for its own run. Known gaps: the model's JSON reaches the

@@ -227,6 +227,18 @@ The model writes journeys; the engine decides whether to trust them.
    "Reviewer summary"), so a human can say "yes, users do that" or "add one for X" before
    anyone reads numbers.
 
+Coverage rules (`agentnotes.md` "Coverage per route", flow step R6): for each changed or
+affected route the journeys must include the happy path, a negative step, an edge-input step,
+a repeated request if the route creates data, enough data to pass a list's page size, and a
+second user if the route is scoped to an owner, with expected statuses read from the head code.
+`downstream validate` warns, without failing, when a changed route is covered only by 2xx steps
+or not at all, or an affected route is not covered (`engine/journey/lint.go`).
+`examples/shelf/journeys.thorough.json` has all of these against the demo app, and
+`examples/shelf/thorough_test.go` replays it against the app. Whether the flow's model
+reliably writes such steps has **not been tested**. Known limit: the model may read only
+changed files and route registration files, so a handler in an unchanged file cannot settle a
+status.
+
 At least one journey must avoid the changed route and share only a dependency with it. That
 is the point of the product: finding the thing nobody was looking at.
 
@@ -452,6 +464,10 @@ is loaded automatically. So:
 
 ## 11. Security model
 
+- The model may also fill `<path>` in the fixed command `git show <head>:<path>`, to read the
+  head code before choosing expected statuses. The prompt limits it to a path copied from
+  `scan.json` made of letters, digits and `/ . _ -`; nothing in the engine enforces that, so
+  it rests on the prompt and the sandbox like the heredoc below.
 - The model's only output that reaches execution is `journeys.json` and `notes.json`, which
   the engine validates (schema, route table, text rules). They reach the shell only as the
   body of a quoted heredoc (`<<'DOWNSTREAM_JSON'`), so the shell expands nothing in them; the

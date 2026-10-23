@@ -22,6 +22,40 @@ steps. It is not a list of endpoints.
   baseline is discarded and the discard is reported, not hidden.
 - Name journeys by the user's goal ("reader opens an article and favourites it").
 
+### Coverage per route
+
+A journey of successful requests only passes on most real regressions. Which regressions a
+change breaks shows up with the steps below, so for each route the scan lists under
+`changed` or `affected` the journeys together include:
+
+1. The happy path.
+2. At least one negative step: a missing or invalid token, another user's resource, or
+   invalid input. Expect the 401, 403, 404, 409 or 400 the code returns.
+3. At least one edge-input step: a negative, empty, oversized or wrong-type value.
+4. A repeated request when the route creates data: the same create twice, or the same
+   idempotency key twice. The schema allows only Authorization, Content-Type, Accept and X-*
+   headers, so an idempotency key must travel in an X-* header.
+5. Enough created data to pass the default page size when the route is a list. A journey is
+   capped at 12 steps. If one iteration cannot pass the page size, rely on data accumulating
+   over the iterations of a pass, and say so in `why_included`. Do not state how many
+   iterations that takes: the run's settings say, and you do not know them in advance.
+6. A second user (own sign-up and login, names built with `{{uniq}}`) when the route is
+   scoped to an owner: the second user reads or changes what the first user created.
+
+Expected statuses come from the head code, never from a guess. Read the code with
+`git show <head>:<path>`, where `<path>` is a file in `scan.json` `changed_files` or a
+route's `file`. The route's `file` is where the route is registered, so a handler in another
+file is not readable this way: leave out a step whose status the files you may read do not
+settle. Name the file the statuses came from in `why_included`. A step that expects a status
+the baseline does not return discards its whole journey, so a guess costs the journey.
+
+Extract a variable only from a step that expects a 2xx status; a negative step has no
+value to extract. `downstream validate` prints a `warning:` line for a changed route covered
+only by 2xx steps or by no step, and for an affected route no step reaches. A warning does
+not fail validation. Fix the journeys when the code you read settles a status for it,
+otherwise say in the "Journeys added" note that the gap remains. A worked example with all
+five additions is `examples/shelf/journeys.thorough.json`.
+
 ## Reviewer summary (the "Journeys added" note)
 
 For each journey: one line for the goal, then a numbered list of steps in plain English,

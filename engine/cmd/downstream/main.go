@@ -117,12 +117,18 @@ func cmdValidate(args []string) error {
 	if err := parse(fs, args, "journeys", "scan"); err != nil {
 		return err
 	}
-	f, err := readJourneys(*jpath)
+	return validate(os.Stdout, *jpath, *spath)
+}
+
+// validate fails only on invalid journeys. Lint findings are printed as
+// warnings after the ok line and never change the result.
+func validate(w io.Writer, jpath, spath string) error {
+	f, err := readJourneys(jpath)
 	if err != nil {
 		return err
 	}
 	var s model.Scan
-	if err := readJSON(*spath, &s); err != nil {
+	if err := readJSON(spath, &s); err != nil {
 		return err
 	}
 	if err := journey.Validate(f, s.Routes); err != nil {
@@ -132,7 +138,10 @@ func cmdValidate(args []string) error {
 	for _, j := range f.Journeys {
 		steps += len(j.Steps)
 	}
-	fmt.Printf("ok: %d journeys, %d steps\n", len(f.Journeys), steps)
+	fmt.Fprintf(w, "ok: %d journeys, %d steps\n", len(f.Journeys), steps)
+	for _, msg := range journey.Lint(f, s) {
+		fmt.Fprintf(w, "warning: %s\n", msg)
+	}
 	return nil
 }
 
