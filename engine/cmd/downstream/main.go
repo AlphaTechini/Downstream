@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -42,6 +43,7 @@ const usage = `usage:
   downstream show     --scan scan.json --head <sha> --file N [--repo .]
   downstream issues   [--run run.json] [--scan scan.json] [--notes notes.json] [--frontend frontend.json] --mr <iid> --starter <username> --out issues.json
   downstream frontend --base <sha> --head <sha> --journeys fe-journeys.json --fecheck <dir> [--repo .] --out frontend.json
+  downstream frontend --detect --base <sha> --head <sha> [--repo .]
   downstream marker   parse [--journeys-out journeys.json] < issue_body.md
   downstream fixcheck --marker marker.json --option N
 `
@@ -474,11 +476,30 @@ func cmdFrontend(args []string) error {
 	fecheck := fs.String("fecheck", "", "directory holding fecheck.mjs with its node_modules installed")
 	repo := fs.String("repo", ".", "repository root")
 	out := fs.String("out", "", "output file")
-	if err := parse(fs, args, "base", "head", "journeys", "fecheck", "out"); err != nil {
+	detect := fs.Bool("detect", false, "only list the changed frontend files and the mode")
+	required := []string{"base", "head", "journeys", "fecheck", "out"}
+	if slices.Contains(args, "--detect") || slices.Contains(args, "-detect") {
+		required = required[:2]
+	}
+	if err := parse(fs, args, required...); err != nil {
 		return err
 	}
 	if err := commits(*repo, *base, *head); err != nil {
 		return err
+	}
+	if *detect {
+		mode, files, err := runner.DetectFrontend(context.Background(), *repo, *base, *head)
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			fmt.Println(f)
+		}
+		if mode == "" {
+			mode = "none"
+		}
+		fmt.Printf("frontend: files=%d mode=%s\n", len(files), mode)
+		return nil
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

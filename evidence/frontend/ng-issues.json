@@ -1,0 +1,36 @@
+{
+  "issues": [
+    {
+      "finding_id": "fe:a11y:image-alt",
+      "title": "[Downstream] frontend: new accessibility violation image-alt",
+      "body": "Downstream's frontend check on !3 found this on the head build (e85e350d97d7) and not on the base build (7f2473276ae8). Started by @dev.\n\n**Where it shows up**\n\n- `home`: image-alt at `img` (Images must have alternative text)\n- `repo`: image-alt at `img` (Images must have alternative text)\n- `issues`: image-alt at `img` (Images must have alternative text)\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home",
+        "repo",
+        "issues"
+      ]
+    },
+    {
+      "finding_id": "fe:markup:wcag/h37",
+      "title": "[Downstream] frontend: new markup error wcag/h37",
+      "body": "Downstream's frontend check on !3 found this on the head build (e85e350d97d7) and not on the base build (7f2473276ae8). Started by @dev.\n\n**Where it shows up**\n\n- `home`: wcag/h37 at `html \u003e body \u003e header \u003e img`: \u003cimg\u003e is missing required \"alt\" attribute\n- `repo`: wcag/h37 at `html \u003e body \u003e header \u003e img`: \u003cimg\u003e is missing required \"alt\" attribute\n- `issues`: wcag/h37 at `html \u003e body \u003e header \u003e img`: \u003cimg\u003e is missing required \"alt\" attribute\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home",
+        "repo",
+        "issues"
+      ]
+    },
+    {
+      "finding_id": "fe:missing:/static/promo-banner.png",
+      "title": "[Downstream] frontend: missing asset /static/promo-banner.png",
+      "body": "Downstream's frontend check on !3 found this on the head build (e85e350d97d7) and not on the base build (7f2473276ae8). Started by @dev.\n\n**Where it shows up**\n\n- `home`: `/static/promo-banner.png` answered 404\n- `repo`: `/static/promo-banner.png` answered 404\n- `issues`: `/static/promo-banner.png` answered 404\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home",
+        "repo",
+        "issues"
+      ]
+    }
+  ],
+  "questions": [],
+  "needs_notes": []
+}

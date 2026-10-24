@@ -1,0 +1,123 @@
+node v22.23.3, npm 10.9.9, go version go1.22.12 linux/amd64
+
+== react-vite, plant
+downstream: frontend: 2 journeys, 0 steps dropped by validation
+downstream: frontend build (base): extracting c77f9f148439
+downstream: frontend build (base): npm ci
+downstream: frontend build (base): npm run build
+downstream: frontend build (head): extracting 36dda84e5d71
+downstream: frontend build (head): same lockfile as base, linking node_modules
+downstream: frontend build (head): npm run build
+downstream: frontend: collect base
+downstream: frontend: collect base2
+downstream: frontend: collect head
+frontend: status=checked regression=6 improved=0 withheld=0
+### Downstream report
+
+#### Frontend
+
+**Frontend (static build, 2 journeys, Node 22.23.3, base c77f9f14, head 36dda84e):** regressions 6, improved 0, withheld 0.
+
+| Journey | Check | Verdict | Detail |
+|---|---|---|---|
+| reports | js bytes (gzip) | regression | 68814 to 73929 gzip bytes (+7.4%); /assets/Reports-CMCplyA2.js changed +5112 |
+| reports | missing assets | regression | /chart.png (404) |
+| reports | DOM size | regression | 37 to 1825 elements (+1194 td, +596 tr, +1 img) |
+| reports | accessibility | regression | image-alt at img[width="400"] |
+| reports | markup validity | regression | wcag/h37 at #root > main > section > img |
+| reports | JS errors | regression | Error: reports: chart data missing |
+
+Base against base: every page check gave the same result twice, so the changes above are not noise.
+
+Frontend files changed: `src/Reports.jsx`, `src/catalog.js`.
+
+Not checked: color-contrast, visual layout, real paint/CPU timing. Pages are rendered in happy-dom, which runs the app's JavaScript but has no layout or paint.
+
+== react-vite, clean
+downstream: frontend: 2 journeys, 0 steps dropped by validation
+downstream: frontend build (base): extracting c77f9f148439
+downstream: frontend build (base): npm ci
+downstream: frontend build (base): npm run build
+downstream: frontend build (head): extracting 0ebee4aa4846
+downstream: frontend build (head): same lockfile as base, linking node_modules
+downstream: frontend build (head): npm run build
+downstream: frontend: collect base
+downstream: frontend: collect base2
+downstream: frontend: collect head
+frontend: status=checked regression=0 improved=0 withheld=0
+### Downstream report
+
+#### Frontend
+
+**Frontend (static build, 2 journeys, Node 22.23.3, base c77f9f14, head 0ebee4aa):** regressions 0, improved 0, withheld 0.
+
+No page check moved between base and head.
+
+Base against base: every page check gave the same result twice, so the changes above are not noise.
+
+Frontend files changed: `src/App.jsx`.
+
+Not checked: color-contrast, visual layout, real paint/CPU timing. Pages are rendered in happy-dom, which runs the app's JavaScript but has no layout or paint.
+react-vite: planted ['DOM size', 'JS errors', 'accessibility', 'js bytes (gzip)', 'markup validity', 'missing assets']; missing []; clean regressions []: ok
+
+== svelte-vite, plant
+downstream: frontend: 2 journeys, 0 steps dropped by validation
+downstream: frontend build (base): extracting 911b3db15d8b
+downstream: frontend build (base): npm ci
+downstream: frontend build (base): npm run build
+downstream: frontend build (head): extracting d446a7e7fcc2
+downstream: frontend build (head): same lockfile as base, linking node_modules
+downstream: frontend build (head): npm run build
+downstream: frontend: collect base
+downstream: frontend: collect base2
+downstream: frontend: collect head
+frontend: status=checked regression=6 improved=0 withheld=0
+### Downstream report
+
+#### Frontend
+
+**Frontend (static build, 2 journeys, Node 22.23.3, base 911b3db1, head d446a7e7):** regressions 6, improved 0, withheld 0.
+
+| Journey | Check | Verdict | Detail |
+|---|---|---|---|
+| reports | js bytes (gzip) | regression | 14518 to 20268 gzip bytes (+39.6%); /assets/Reports-Duhjbbda.js changed +5184, /assets/index-CTtQTKf7.js changed +566 |
+| reports | missing assets | regression | /chart.png (404) |
+| reports | DOM size | regression | 37 to 1825 elements (+1194 td, +596 tr, +1 img) |
+| reports | accessibility | regression | image-alt at img[src$="chart.png"] |
+| reports | markup validity | regression | wcag/h37 at #app > main > section > img |
+| reports | JS errors | regression | Error: reports: chart data missing |
+
+Base against base: every page check gave the same result twice, so the changes above are not noise.
+
+Frontend files changed: `src/Reports.svelte`, `src/catalog.js`.
+
+Not checked: color-contrast, visual layout, real paint/CPU timing. Pages are rendered in happy-dom, which runs the app's JavaScript but has no layout or paint.
+
+== svelte-vite, clean
+downstream: frontend: 2 journeys, 0 steps dropped by validation
+downstream: frontend build (base): extracting 911b3db15d8b
+downstream: frontend build (base): npm ci
+downstream: frontend build (base): npm run build
+downstream: frontend build (head): extracting 9ed4f47550d2
+downstream: frontend build (head): same lockfile as base, linking node_modules
+downstream: frontend build (head): npm run build
+downstream: frontend: collect base
+downstream: frontend: collect base2
+downstream: frontend: collect head
+frontend: status=checked regression=0 improved=0 withheld=0
+### Downstream report
+
+#### Frontend
+
+**Frontend (static build, 2 journeys, Node 22.23.3, base 911b3db1, head 9ed4f475):** regressions 0, improved 0, withheld 0.
+
+No page check moved between base and head.
+
+Base against base: every page check gave the same result twice, so the changes above are not noise.
+
+Frontend files changed: `src/App.svelte`.
+
+Not checked: color-contrast, visual layout, real paint/CPU timing. Pages are rendered in happy-dom, which runs the app's JavaScript but has no layout or paint.
+svelte-vite: planted ['DOM size', 'JS errors', 'accessibility', 'js bytes (gzip)', 'markup validity', 'missing assets']; missing []; clean regressions []: ok
+
+verify-frontend: PASS

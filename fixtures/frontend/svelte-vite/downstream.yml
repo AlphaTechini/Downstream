@@ -1,0 +1,3 @@
+# Frontend-only target: Downstream builds dist/ for each commit and serves it on loopback.
+frontend_build: npm run build
+frontend_out: dist

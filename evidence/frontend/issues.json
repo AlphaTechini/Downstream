@@ -1,0 +1,54 @@
+{
+  "issues": [
+    {
+      "finding_id": "fe:a11y:image-alt",
+      "title": "[Downstream] frontend: new accessibility violation image-alt",
+      "body": "Downstream's frontend check on !1 found this on the head build (8518b39fbf5c) and not on the base build (25d36ca56b17). Started by @dev.\n\n**Where it shows up**\n\n- `home`: image-alt at `img[src$=\"logo.png\"]` (Images must have alternative text)\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home"
+      ]
+    },
+    {
+      "finding_id": "fe:bytes:/app.js",
+      "title": "[Downstream] frontend: /app.js grew",
+      "body": "Downstream's frontend check on !1 found this on the head build (8518b39fbf5c) and not on the base build (25d36ca56b17). Started by @dev.\n\n**Where it shows up**\n\n- `home`: `/app-BBBBBBBB.js` changed, +40250 gzip bytes (js bytes (gzip) total 147 to 40397)\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home"
+      ]
+    },
+    {
+      "finding_id": "fe:dom",
+      "title": "[Downstream] frontend: page DOM grew",
+      "body": "Downstream's frontend check on !1 found this on the head build (8518b39fbf5c) and not on the base build (25d36ca56b17). Started by @dev.\n\n**Where it shows up**\n\n- `home`: 15 to 311 elements\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home"
+      ]
+    },
+    {
+      "finding_id": "fe:markup:wcag/h37",
+      "title": "[Downstream] frontend: new markup error wcag/h37",
+      "body": "Downstream's frontend check on !1 found this on the head build (8518b39fbf5c) and not on the base build (25d36ca56b17). Started by @dev.\n\n**Where it shows up**\n\n- `home`: wcag/h37 at `html \u003e body \u003e main \u003e img:nth-child(2)`: \u003cimg\u003e is missing required \"alt\" attribute\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home"
+      ]
+    },
+    {
+      "finding_id": "fe:missing:/banner.png",
+      "title": "[Downstream] frontend: missing asset /banner.png",
+      "body": "Downstream's frontend check on !1 found this on the head build (8518b39fbf5c) and not on the base build (25d36ca56b17). Started by @dev.\n\n**Where it shows up**\n\n- `home`: `/banner.png` answered 404\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home"
+      ]
+    },
+    {
+      "finding_id": "fe:steps:home",
+      "title": "[Downstream] frontend: journey home fails on the head build",
+      "body": "Downstream's frontend check on !1 found this on the head build (8518b39fbf5c) and not on the base build (25d36ca56b17). Started by @dev.\n\n**Where it shows up**\n\n- `home`: expected 5 x #list li, got 300\n\nPages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing.\n\nThe `fix it` reply works on backend issues only; this one needs a human change.\n",
+      "steps": [
+        "home"
+      ]
+    }
+  ],
+  "questions": [],
+  "needs_notes": []
+}

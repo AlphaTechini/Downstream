@@ -68,10 +68,15 @@ func TestFrontendChanges(t *testing.T) {
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("static: got %v, want %v", got, want)
 	}
-	server := target.Config{Build: "go build -o {out} ./cmd/app"}
+	server := target.Config{Root: ".", Build: "go build -o {out} ./cmd/app"}
 	got = frontendChanges(server, files)
 	if len(got) != 4 || got[3] != "templates/page.gohtml" {
 		t.Fatalf("server: got %v", got)
+	}
+	// A backend rooted in a subdirectory ignores scripts elsewhere in the repo.
+	sub := target.Config{Root: "examples/shelf", Build: "go build -o {out} ./examples/shelf/cmd/shelf"}
+	if got := frontendChanges(sub, []string{"engine/k6gen/interpreter.js", "examples/shelf/web/app.js"}); len(got) != 1 || got[0] != "examples/shelf/web/app.js" {
+		t.Fatalf("server with root: got %v", got)
 	}
 }
 

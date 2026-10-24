@@ -61,6 +61,38 @@ func Frontend(ctx context.Context, o FrontendOptions) model.Frontend {
 	return res
 }
 
+// DetectFrontend lists the changed files that can alter the pages and says how
+// they would be checked: "static" for a declared frontend build, "server" for
+// pages the backend renders, or "" when no frontend file changed.
+func DetectFrontend(ctx context.Context, repo, base, head string) (string, []string, error) {
+	baseSHA, err := resolveCommit(ctx, repo, base)
+	if err != nil {
+		return "", nil, err
+	}
+	headSHA, err := resolveCommit(ctx, repo, head)
+	if err != nil {
+		return "", nil, err
+	}
+	cfg, err := target.Load(repo, baseSHA)
+	if err != nil {
+		return "", nil, err
+	}
+	files, err := changedFiles(ctx, repo, baseSHA, headSHA)
+	if err != nil {
+		return "", nil, err
+	}
+	hits := frontendChanges(cfg, files)
+	switch {
+	case len(hits) == 0:
+		return "", nil, nil
+	case cfg.HasStaticFrontend():
+		return "static", hits, nil
+	case cfg.HasBackend():
+		return "server", hits, nil
+	}
+	return "", nil, nil
+}
+
 // side is one built and served commit.
 type side struct {
 	name, sha, tree string

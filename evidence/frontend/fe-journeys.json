@@ -1,0 +1,2 @@
+[{"id":"home","steps":[{"visit":"/"},{"expectText":["h1","Shop"]},{"expectCount":["#list li",5]}]},
+ {"id":"bad","steps":[{"visit":"http://example.com/"},{"click":"a[["}]}]

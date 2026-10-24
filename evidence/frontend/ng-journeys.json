@@ -1,0 +1,3 @@
+[{"id":"home","steps":[{"visit":"/"}]},
+ {"id":"repo","steps":[{"visit":"/demo/storefront"},{"expectText":["h1","storefront"]}]},
+ {"id":"issues","steps":[{"visit":"/demo/storefront/-/issues"},{"click":"a[href$='/-/issues/1']"}]}]

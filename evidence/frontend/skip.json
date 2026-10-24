@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "status": "skipped",
+  "reason": "the change touches no frontend file",
+  "base": "8518b39fbf5c6e21cdf4aafd1e5f557561fbfcb2",
+  "head": "518f0bfb5c2bdda3d5da637457f58b4fbddb5ace",
+  "not_checked": [
+    "color-contrast",
+    "visual layout",
+    "real paint/CPU timing"
+  ],
+  "started_at": "2026-10-24T14:36:18Z",
+  "ended_at": "2026-10-24T14:36:18Z"
+}

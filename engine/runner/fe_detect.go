@@ -42,12 +42,17 @@ func changedFiles(ctx context.Context, repo, base, head string) ([]string, error
 }
 
 // frontendChanges returns the changed files that can alter the pages. With a
-// declared frontend build, only files under frontend_dir count; the backend's
-// own templates and assets count otherwise.
+// declared frontend build, only files under frontend_dir count; otherwise the
+// templates and assets under the backend's root count.
 func frontendChanges(cfg target.Config, files []string) []string {
+	dir := cfg.Root
+	if cfg.HasStaticFrontend() {
+		dir = cfg.Frontend.Dir
+	}
+	dir = strings.TrimSuffix(dir, "/")
 	var hits []string
 	for _, f := range files {
-		if cfg.HasStaticFrontend() && cfg.Frontend.Dir != "." && !strings.HasPrefix(f, strings.TrimSuffix(cfg.Frontend.Dir, "/")+"/") {
+		if dir != "" && dir != "." && !strings.HasPrefix(f, dir+"/") {
 			continue
 		}
 		if cfg.HasStaticFrontend() && strings.HasPrefix(f, strings.TrimSuffix(cfg.Frontend.Out, "/")+"/") {
