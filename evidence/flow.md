@@ -140,6 +140,15 @@ and the file is not in the build. The flow came from branch `frontend-stage` (en
   changes above are not noise" (`engine/report/frontend.go`); the note says "so the changed
   results above are not noise".
 
+### After release to the live bot (flow 1.0.13, engine `831a73e`)
+
+- Showcase !16, the clean change: 0 regressed metrics and no Frontend section, because no page
+  file changed ([live-1.0.13-mr-16-notes.json](flow/frontend/live-1.0.13-mr-16-notes.json) L151).
+- NewGit !5 again: 0 backend regressions; Frontend section with 15 regressions on 5
+  model-written page journeys, base against base identical; 3 issues, one per cause
+  ([live-1.0.13-newgit-mr-5-notes.json](flow/frontend/live-1.0.13-newgit-mr-5-notes.json) L151,
+  L263). The test MR and its issues were closed afterwards.
+
 ## Not shown here
 
 - Noise of the Duo sandbox as a rate: one clean-change run (10001525) came out clean.

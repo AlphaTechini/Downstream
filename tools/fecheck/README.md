@@ -41,7 +41,7 @@ whose steps already fail on the base build is reported as broken and not compare
 
 - **happy-dom, not a real browser.** No layout or paint, so color contrast, visual layout and
   real paint or CPU timing are never checked, and every report says so. The render time is
-  recorded as advisory only. In exchange there is no 150 MB browser download, and the result
+  recorded as advisory only. In exchange there is no browser download of over 100 MB, and the result
   is the same on every run.
 - **`import.meta` is rewritten.** happy-dom's module loader cannot evaluate `import.meta`,
   which Vite and Angular use for preload URLs, so each module's `import.meta` becomes a literal
