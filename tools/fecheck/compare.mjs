@@ -126,9 +126,16 @@ export function compareRuns(base, head, base2) {
     }
     result.noise = { deterministic: unstable.length === 0, unstable }
   }
+  result.brokenOnBase = []
   for (const b of base.journeys) {
     const h = head.journeys.find((x) => x.id === b.id)
     if (!h) continue
+    // A journey whose steps fail on the base build cannot say anything about the change.
+    const baseStepFailures = b.failures.filter((f) => typeof f.step === 'object')
+    if (baseStepFailures.length) {
+      result.brokenOnBase.push({ id: b.id, failures: baseStepFailures })
+      continue
+    }
     const findings = compareJourney(b, h)
     // If base was unstable on a metric, withhold that metric for this journey.
     const unstable = result.noise?.unstable.find((u) => u.id === b.id)

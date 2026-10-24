@@ -18,6 +18,11 @@ if (cmd === 'collect') {
   const out = await collect(origin, readJSON(args.journeys))
   writeFileSync(args.out, JSON.stringify(out, null, 2))
   console.log(`collected ${out.journeys.length} journeys from ${origin} -> ${args.out}`)
+} else if (cmd === 'validate') {
+  const { validateJourneys } = await import('./validate.mjs')
+  const result = validateJourneys(readJSON(args.journeys))
+  writeFileSync(args.out, JSON.stringify(result.journeys, null, 2))
+  console.log(JSON.stringify({ journeys: result.journeys.length, dropped: result.dropped }))
 } else if (cmd === 'compare') {
   const result = compareRuns(readJSON(args.base), readJSON(args.head), args.base2 ? readJSON(args.base2) : null)
   const out = JSON.stringify(result, null, 2)

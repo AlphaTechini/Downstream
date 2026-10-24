@@ -59,6 +59,13 @@ test('a base run that differs from itself withholds that metric', () => {
   assert.equal(r.journeys[0].findings.find((f) => f.metric === 'missing assets').verdict, 'withheld')
 })
 
+test('a journey that fails on base is reported as broken and not compared', () => {
+  const broken = journey({ failures: [{ step: { click: '#gone' }, error: 'click target not found: #gone' }] })
+  const r = compareRuns({ journeys: [broken] }, { journeys: [journey({ missing: [{ url: '/x.png', status: 404 }] })] }, null)
+  assert.deepEqual(r.journeys, [])
+  assert.equal(r.brokenOnBase[0].id, 'j')
+})
+
 test('identical runs give no findings', () => {
   const r = compareRuns({ journeys: [journey()] }, { journeys: [journey()] }, { journeys: [journey()] })
   assert.equal(r.noise.deterministic, true)
