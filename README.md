@@ -166,7 +166,8 @@ project; their pipelines are under CI/CD > Pipelines.
 ```text
 mention on an MR
  -> flows/downstream.yml              one AgentComponent, one prompt (written, not yet run)
-     reads agentnotes.md              from the base commit: journey style, issue format
+     clones this repo at a pinned SHA builds the engine, reads agentnotes.md (journey style,
+                                      issue format); one flow serves any project it is enabled in
      calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
                                       summary, issues, marker, fixcheck (built; CI runs in
                                       evidence/runs.md, not yet run from the flow)
@@ -226,9 +227,9 @@ deploy from this repo. What the brief means by deployment for a flow entry is un
 
 **Security.** The model's only output that reaches execution is validated JSON, the engine talks
 to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
-under CODEOWNERS. `agentnotes.md` and `downstream.yml` are read from the base commit, so a
-merge request cannot rewrite them for its own run. Known gaps: the model's JSON reaches the
-shell inside a quoted heredoc, and the engine is built from the merge request's own checkout
+under CODEOWNERS. The engine and `agentnotes.md` come from this repo at a commit pinned in the
+flow, and `downstream.yml` is read from the base commit, so a merge request cannot rewrite any
+of them for its own run. Known gap: the model's JSON reaches the shell inside a quoted heredoc
 ([`docs/details.md`](docs/details.md) section 11).
 
 ## Roadmap
