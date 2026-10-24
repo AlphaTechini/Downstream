@@ -28,6 +28,48 @@ staging environment that replays real user behaviour.
 > ([evidence/frontend/README.md](evidence/frontend/README.md)). Color contrast, layout and paint
 > are never checked.
 
+## Engineering highlights
+
+Downstream is not a prompt wrapped around a chat model. It is a measurement engine (Go,
+standard library only) driven by an agent, built so that every number it posts can be trusted
+and traced. **For more details, visit [technical_implementation.md](technical_implementation.md)**,
+a plain-English walkthrough of the architecture, the design decisions and the real-world
+scenarios it handles.
+
+- **It measures its own noise in every run.** The old build runs twice, before and after the
+  new one, so machine drift is counted as noise instead of blamed on the change
+  ([`engine/runner`](engine/runner/)).
+- **It decides on what the process did, not on jittery latency.** On identical code the two
+  baseline runs differed by 32.5% in step latency at the median
+  ([A/A summary](evidence/aa/before/summary.txt) L10), while the new run never exceeded the
+  worse baseline by more than 0.35% in bytes written or 1.51% in write syscalls
+  ([counters](evidence/aa/counters/summary.txt) L15-L16). So verdicts are gated on CPU per
+  journey, bytes written, syscalls, memory, file descriptors, threads and Go runtime counters
+  read from `/proc` and from a file injected at build time with `go build -overlay`, without
+  editing the target repository ([`engine/runner`](engine/runner/), [`engine/classify`](engine/classify/classify.go)).
+- **Tolerances are calibrated, then hardened on the live bot.** Each metric's tolerance came
+  from A/A runs; each floor was added in its own merge request after a real false alarm. On the
+  current version a clean change came out clean in 3 of 3 live runs while planted and feature
+  regressions were caught ([C-18](docs/CLAIMS.md)).
+- **It follows the change past the diff.** A Go AST scan maps routes to handlers and walks
+  calls to find routes that share code with the changed ones, then requires journeys that reach
+  all of them, plus controls elsewhere ([`engine/scan`](engine/scan/), [`engine/journey`](engine/journey/coverage.go)).
+- **It checks frontends too, without a browser.** Pages are rendered in happy-dom with the
+  app's own JavaScript, on the old build twice and the new build once; bundle growth is traced
+  to the asset responsible, and findings are grouped into one issue per cause. Shown in the Duo
+  sandbox on a server-rendered app and on real React and Svelte builds
+  ([`tools/fecheck`](tools/fecheck/README.md), [C-19, C-20](docs/CLAIMS.md)).
+- **It closes the loop, under human control.** `fix it` commits a fix on a new branch, opens a
+  merge request for the requester and re-measures it; Downstream never merges ([C-13](docs/CLAIMS.md)).
+- **The model never holds the keys.** It writes validated JSON and sentences; every command is
+  fixed in the flow, every figure comes from the engine, the engine is pinned outside the merge
+  request, and traffic stays on `127.0.0.1` ([`flows/downstream.yml`](flows/downstream.yml)).
+- **It runs where GitLab runs it.** Built and proven inside the Duo sandbox, working around its
+  PID namespace, read-only home, missing `TMPDIR`, blocked clones and 200 s command limit
+  ([evidence/flow.md](evidence/flow.md)).
+- **Every claim is checked by a script.** `make verify` fails if a Verified row lacks committed
+  evidence or an evidence file changed since it was recorded.
+
 ## Built for GitLab Transcend: Life After Code
 
 Requirements below come from the Devpost Rules as read during research on 2026-10-21/22. They
@@ -124,6 +166,18 @@ Flow sessions on GitLab, from [`evidence/flow/`](evidence/flow/) (details in
 | Gated rule, clean change: runs with an issue | 0 of 3 | [gated/mr-16-notes.json](evidence/flow/gated/mr-16-notes.json) L1273, L1475, L1677 |
 | Gated rule, planted change: CPU per completed journey, B1 / B2 / C | 2.87 / 2.91 / 451.25 ms | [gated/mr-11-notes.json](evidence/flow/gated/mr-11-notes.json) L1991 |
 | Gated rule, new feature: CPU per completed journey, B1 / B2 / C | 3.09 / 3.04 / 94.96 ms | [gated/mr-14-notes.json](evidence/flow/gated/mr-14-notes.json) L1211 |
+| Floors (flow 1.0.12), clean change: runs with an issue | 0 of 3 | [floors/mr-16-notes.json](evidence/flow/floors/mr-16-notes.json) L1127, L1329, L1531 |
+| Floors (flow 1.0.12), NewGit avatar change: CPU per completed journey, B1 / B2 / C | 10.38 / 9.75 / 32.28 ms | [floors/newgit-mr-3-notes.json](evidence/flow/floors/newgit-mr-3-notes.json) L409 |
+| Frontend stage, NewGit template change (experiment bot / live bot 1.0.13): page regressions, issues | 12 on 4 pages, 3 / 15 on 5 pages, 3 | [newgit-mr-5-notes.json](evidence/flow/frontend/newgit-mr-5-notes.json) L151; [live-1.0.13-newgit-mr-5-notes.json](evidence/flow/frontend/live-1.0.13-newgit-mr-5-notes.json) L151 |
+
+Frontend stage on real builds, local WSL2 machine ([frontend-verify.txt](evidence/frontend-verify.txt)):
+
+| Measurement | Value | Source |
+|---|---|---|
+| React 19.3.1 / Svelte 5.57.2 (Vite 8.3.5), planted change: regressed check kinds | 6 of 6 / 6 of 6 | L61, L121 |
+| React planted change: JS bytes (gzip) and the chunk named | 68814 to 73929 (+7.4%), `Reports-CMCplyA2.js` +5112 | L23 |
+| Svelte planted change: JS bytes (gzip) and the chunk named | 14518 to 20268 (+39.6%), `Reports-Duhjbbda.js` +5184 | L83 |
+| Clean text change, both apps: regressions | 0 / 0 | L47, L107 |
 
 Engine runs in GitLab CI on the demo app, from [`evidence/runs/`](evidence/runs/) (one run per
 row unless stated; details in [evidence/runs.md](evidence/runs.md)):
@@ -161,11 +215,13 @@ mention on an MR
      fetches a pinned commit          of this repo (GitHub mirror tarball), builds the engine,
                                       reads agentnotes.md; one flow serves any project
      calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
-                                      summary, issues, marker, fixcheck (CI runs in
+                                      summary, issues, marker, fixcheck, frontend (CI runs in
                                       evidence/runs.md, flow runs in evidence/flow.md)
        builds base and head from git, runs the app on 127.0.0.1
        k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
        Go 1.22.12                     already in the sandbox image (verified), nothing to install
+       frontend stage                 tools/fecheck (happy-dom, axe-core, html-validate) on
+                                      Node 20.20.2 in the sandbox; old build twice, new once
  -> MR notes and issues; each issue ends with a "Downstream state" block so a reply
     (fix it, verify) rebuilds its state from the issue
  -> fix it: create_commit on downstream/fix-*, create_merge_request, re-measure on that MR
@@ -296,6 +352,10 @@ pin the application to the sandbox's versions or install the missing tool in the
    [this one](.gitlab/duo/agent-config.yml)).
 4. Optional: `downstream.md` describing the app's test data and key pages, for the journey
    writer. Start the app with its test data in `downstream.yml`'s `start` command.
+   For a frontend build (React, Svelte, Vite and similar), add `frontend_build` and
+   `frontend_out` to `downstream.yml`; a frontend-only repository needs only those two keys
+   ([`fixtures/frontend/react-vite/downstream.yml`](fixtures/frontend/react-vite/downstream.yml)).
+   Server-rendered pages need nothing extra.
 5. Mention the flow's account on a merge request.
 
 ## Built during the hackathon, and what is not
@@ -303,7 +363,9 @@ pin the application to the sandbox's versions or install the missing tool in the
 Everything here was written for this entry; the first commit is 2026-10-22 and no earlier code
 is reused. The engine and the demo app use the Go standard library only (Go 1.22). Used but not
 written by us: GitLab Duo Agent Platform and its default job image, Go, k6 v0.56.0 (downloaded
-at job start, not vendored), PyYAML (checks only).
+at job start, not vendored), PyYAML (checks only), and for the frontend stage happy-dom 21.0.4,
+axe-core 4.14.0 and html-validate 10.17.0 (pinned in `tools/fecheck`, installed at run time).
+The frontend fixtures use React, Svelte and Vite at the versions in their lockfiles.
 
 ## Reproduce the day-0 probe
 
@@ -332,11 +394,12 @@ of them for its own run. Known gap: the model's JSON reaches the shell inside a 
 
 Done: engine built and logged in CI; the flow runs end to end on GitLab on two projects;
 `fix it` opens and re-measures a fix merge request; journeys cover the change, including new
-features. Next: a clean-change control inside the flow to measure the sandbox's noise, `verify`
+features; tolerances hardened with floors on the live bot; a browser-free frontend stage. Next: a clean-change control inside the flow to measure the sandbox's noise, `verify`
 after a merge, following `template.FuncMap` in static analysis, and the cost of a session.
 
 ## Docs
 
+[`technical_implementation.md`](technical_implementation.md) plain-English technical walkthrough ·
 [`docs/details.md`](docs/details.md) design · [`docs/requirements.md`](docs/requirements.md)
 requirements, tests T-01 to T-15 · [`docs/userflow.md`](docs/userflow.md) reviewer flow and demo
 script · [`docs/CLAIMS.md`](docs/CLAIMS.md) claims with limits · [`evidence/`](evidence/) raw logs ·
