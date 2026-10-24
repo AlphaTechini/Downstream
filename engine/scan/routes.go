@@ -114,6 +114,19 @@ func (p *program) addRoute(ctx *function, call *ast.CallExpr, pattern string) {
 	for _, m := range ri.mws {
 		ri.Middleware = append(ri.Middleware, m.name)
 	}
+	seen := map[string]bool{}
+	addFile := func(fs []*function) {
+		for _, f := range fs {
+			if f.file != "" && !seen[f.file] {
+				seen[f.file] = true
+				ri.HandlerFiles = append(ri.HandlerFiles, f.file)
+			}
+		}
+	}
+	addFile(ri.handlerRoots)
+	for _, m := range ri.mws {
+		addFile(m.roots)
+	}
 	if len(ri.handlerRoots) == 0 {
 		p.notes = append(p.notes, fmt.Sprintf("route %s: handler %s is not a function declared in %s, so its call path was not traced", label(ri.Route), ri.Handler, p.cfg.prefix))
 	}

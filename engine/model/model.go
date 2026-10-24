@@ -49,6 +49,9 @@ type Route struct {
 	Middleware []string `json:"middleware,omitempty"` // outermost first
 	File       string   `json:"file"`
 	Line       int      `json:"line"`
+	// HandlerFiles are the files that define the handler and its middleware, where
+	// the statuses a step can expect are decided.
+	HandlerFiles []string `json:"handler_files,omitempty"`
 }
 
 // Impact is a route in the blast radius and why it is there.

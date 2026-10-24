@@ -129,7 +129,8 @@ prompts:
             Take every expected status from the head code, never from a guess. run_command:
             downstream files --scan /tmp/ds/scan.json
             It prints a numbered list of the files you may read (changed files, and the files
-            that register changed or affected routes). For each one you need, run_command:
+            that register changed or affected routes and define their handlers and
+            middleware). For each one you need, run_command:
             downstream show --scan /tmp/ds/scan.json --head <head> --file <n>
             State in why_included which file the expected status
             came from. A step whose status the code does not settle is left out. Read the

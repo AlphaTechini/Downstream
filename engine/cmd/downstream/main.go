@@ -287,9 +287,15 @@ func readableFiles(s *model.Scan) []string {
 	}
 	for _, im := range s.Changed {
 		add(im.File)
+		for _, f := range im.HandlerFiles {
+			add(f)
+		}
 	}
 	for _, im := range s.Affected {
 		add(im.File)
+		for _, f := range im.HandlerFiles {
+			add(f)
+		}
 	}
 	sort.Strings(out)
 	return out
