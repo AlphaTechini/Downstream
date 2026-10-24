@@ -175,8 +175,9 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ## C-17. Under the gated rule a clean change opens no issue, and real regressions are caught
 
-- **File:** `engine/classify` (tolerances), `engine/runner` (process counters), engine commit
-  `84e61cb` as pinned in `flows/downstream.yml`
+- **File:** `engine/classify` (tolerances), `engine/runner` (process counters). The proof runs used
+  engine `84e61cb`; the pinned engine adds a 1 KB per journey floor on bytes written, after CI
+  pipeline 2984592625 flagged the clean change on a near-zero baseline
 - **Proof:** [gated/mr-16-notes.json](../evidence/flow/gated/mr-16-notes.json) lines 1273,
   1475 and 1677: three clean-change runs with 0 regressed metrics.
   [gated/mr-11-notes.json](../evidence/flow/gated/mr-11-notes.json) line 1991: the planted
