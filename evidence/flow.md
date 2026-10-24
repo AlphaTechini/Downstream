@@ -50,6 +50,15 @@ and control journeys; every route in the change was covered.
 
 The engine was changed between the two sessions so that new-feature journeys run in pass C.
 
+## Showcase, refusals and a clean change
+
+| Session | What | Result | Source |
+|---|---|---|---|
+| 10001522 | `fix option 9` on issue #6, which has options 1 to 4 | Refused at F1 with the engine's text: "option 9 is out of range: this issue has options 1 to 4". No branch or merge request was made | [issue-6-notes.json](flow/session-10001522/issue-6-notes.json) L409; [job log](flow/session-10001522/job-log.txt) L584 |
+| 10001525 | Clean change !16 (`examples/changes/clean-change.patch`: `GET /health` also returns the service name) | 0 regressed steps; app CPU time 0.09 / 0.09 / 0.08 s; the `/health` p95 moved by 1 to 2 ms and was classed as noise (below the 10 ms floor) | [mr-16-notes.json](flow/session-10001525/mr-16-notes.json) L151; [job log](flow/session-10001525/job-log.txt) L705 |
+
+One clean-change run in the sandbox is not a false-positive rate; CI's 22 of 22 is.
+
 ## NewGit, test MR !3 (`avatarHue` hashes each name 20,000 times)
 
 [NewGit](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/newgit) is a
@@ -67,6 +76,6 @@ from NewGit's `downstream.md` and the control journeys.
 
 ## Not shown here
 
-- Noise of the Duo sandbox itself: no clean-change control has run in the flow yet.
+- Noise of the Duo sandbox as a rate: one clean-change run (10001525) came out clean.
 - `verify` after a merge: not run.
 - Cost in credits of a session: not measured.

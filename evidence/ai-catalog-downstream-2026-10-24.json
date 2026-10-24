@@ -1,0 +1,18 @@
+{
+ "data": {
+  "aiCatalogItem": {
+   "id": "gid://gitlab/Ai::Catalog::Item/1019478",
+   "name": "downstream",
+   "visibility": "PUBLIC",
+   "webPath": "/explore/ai-catalog/flows/1019478",
+   "itemType": "FLOW",
+   "latestVersion": {
+    "versionName": "1.0.8",
+    "released": true
+   },
+   "project": {
+    "fullPath": "gitlab-ai-hackathon/transcend-october-2026/35141659/showcase"
+   }
+  }
+ }
+}

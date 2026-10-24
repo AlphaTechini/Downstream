@@ -24,10 +24,9 @@
 # Toolset status
 #   verified in a custom flow on 2026-10-22 (flows/probe.yml):
 #       get_current_user, get_merge_request, create_merge_request_note, run_command
-#   verified in this flow on 2026-10-24 (session 9999905): create_issue
-#   documented for flows, not yet exercised from ours:
-#       create_issue_note and get_issue (T-09), get_repository_file,
-#       create_commit and create_merge_request (T-10)
+#   verified in this flow on 2026-10-24 (evidence/flow.md): create_issue
+#       (session 9999905); get_issue, create_issue_note, get_repository_file,
+#       create_commit and create_merge_request (session 10000200)
 version: v1
 environment: ambient
 components:
@@ -136,7 +135,7 @@ prompts:
             DOWNSTREAM_JSON
             downstream issues --run /tmp/ds/run.json --scan /tmp/ds/scan.json --notes /tmp/ds/notes.json --mr <iid> --starter <starter> --out /tmp/ds/issues.json && cat /tmp/ds/issues.json
             If the engine rejects the notes, fix them using its error text, at most twice.
-        R12. For each entry in "issues", create_issue with its title and body exactly (T-08).
+        R12. For each entry in "issues", create_issue with its title and body exactly.
             For each entry in "questions", create_merge_request_note with the text exactly.
             Then post a last merge request note listing the issues you opened.
 
