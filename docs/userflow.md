@@ -219,15 +219,14 @@ from the README rather than faked.
 | 1:15 | The report note appearing. | "Old build twice, new build once, so it knows how noisy the machine is." |
 | 1:40 | One regression row highlighted, on a journey that does not touch the changed route. | "This route was not in the diff. It got slower because it shares `<dependency>` with the route that was." |
 | 2:00 | The issue: repro, likely cause, numbered options, starter tagged. | "One issue for it, with a repro and fix options." |
-| 2:15 | Type `@… fix option 2`. | "A maintainer picks an option." |
-| 2:25 | The rerun result note. | "Same journey, rerun, with the noise band." |
+| 2:15 | Type `@… fix it`. | "A maintainer picks an option." |
+| 2:25 | The fix merge request and its re-measure note. | "It commits the fix on a branch, opens a merge request for me, and reruns the same journey with the noise band. It never merges." |
 | 2:40 | A clean change, one line: "no difference beyond noise". | "On a clean change it says so and stops. It does not manufacture findings." |
 | 2:50 | README claims table, evidence folder. | "Everything claimed here links to a logged run." |
 
-Before recording, check each of these exists in a real logged run: the journeys note, the
-report with a regression on an untouched route, an issue with the starter tagged, the
-`fix option` rerun note, and a clean-change run. Those five can be among the five runs
-required by the cut rule in requirements.md.
+Each of these exists in a logged flow run (`evidence/flow.md`): the journeys note, a report
+with a regression on routes the diff does not reach, an issue with the starter tagged, a
+`fix it` merge request with its re-measure, and a clean-change run.
 
 ---
 

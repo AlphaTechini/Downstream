@@ -191,7 +191,7 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 |---|---|---|---|
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
-| N-8 | A clean change comes out clean inside the Duo sandbox | `flows/downstream.yml` | a clean-change control session |
+| N-8 | A clean change comes out clean inside the Duo sandbox, as a rate | `flows/downstream.yml` | repeated clean-change sessions (one so far, clean: [mr-16-notes.json](../evidence/flow/session-10001525/mr-16-notes.json) line 151) |
 
 N-1 to N-4 (regressions found in a flow run, model-written journeys, issues opened by the
 flow, fixes applied) moved to C-12 to C-15; N-7 (licence shown by GitLab) moved to C-16.

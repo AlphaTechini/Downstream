@@ -14,7 +14,7 @@ staging environment that replays real user behaviour.
 > this project and on [NewGit](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/newgit),
 > a separate project, with the same flow ([evidence/flow.md](evidence/flow.md)). In CI the engine
 > also passes the clean control in 22 of 22 runs ([evidence/runs.md](evidence/runs.md)); the
-> sandbox's own noise is not measured yet. The claims table says exactly what has been shown.
+> sandbox's own noise rate is not measured yet (one clean run there). The claims table says exactly what has been shown.
 
 ## Built for GitLab Transcend: Life After Code
 
@@ -53,7 +53,7 @@ to routes the author never opened. That gap is what Downstream targets.
 | 2 | It maps changed routes, routes that share code with them (blast radius) and routes the merge request adds | Verified: `downstream scan` ([`engine/scan`](engine/scan/)), Go `net/http` only ([evidence](evidence/flow.md)) |
 | 3 | The model writes journeys that cover the change, up to 20: existing journeys reaching every changed and affected route, new journeys for every new route, and control journeys elsewhere; the engine rejects a set that leaves a route out. They are shown to the reviewer in plain English first | Verified: coverage rules in [`engine/journey`](engine/journey/coverage.go), model-written journeys in every full session ([evidence](evidence/flow.md)) |
 | 4 | k6 runs them on the old build twice and the new build once, so noise is measured; new-feature journeys run in the new build's pass alongside the others, so existing pages are measured while the feature is in use | Verified in the sandbox ([`engine/runner`](engine/runner/), [`engine/k6gen`](engine/k6gen/)) |
-| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Verified: issues opened by the flow; the planted change gives 2 issues for 1 cause (one for the routes that reach the changed function, one for slowed routes outside them) |
+| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Verified: issues opened by the flow; the planted change gives 2 issues for 1 cause (one for the routes that reach the changed function, one for slowed routes outside them). The trade-off question is built (`engine/classify`, flow step R12) but no flow run has produced one yet |
 | 6 | `@handle fix it` (option 1) or `fix option N` commits the option on a new branch, opens a merge request mentioning the requester and re-runs the issue's journey on it; `verify` reruns after merge | `fix it` verified (!13, [evidence](evidence/flow.md)); `verify` written, not run |
 
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
@@ -182,7 +182,8 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | A mention on a merge request runs the whole flow in the Duo sandbox: build both versions, model-written journeys, k6, the engine's report, issues | Verified, sessions 9999905 and 10000162 | `flows/downstream.yml` | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701, L785, L987, L1071; [job log](evidence/flow/session-9999905/job-log.txt) L808 |
 | `fix it` on an issue commits the fix on a new branch, opens a merge request for the requester, re-measures it and does not merge | Verified, session 10000200 (!13: 16 metrics improved, 0 regressed) | `flows/downstream.yml` | [issue-6-notes.json](evidence/flow/session-10000200/issue-6-notes.json) L151, L235; [mr-13.json](evidence/flow/session-10000200/mr-13.json) L16, L33; [mr-13-notes.json](evidence/flow/session-10000200/mr-13-notes.json) L33 |
 | The same flow runs on another project, NewGit, with app notes and control journeys | Verified, session 10000842 (10 steps regressed; control pages slowed too) | NewGit `downstream.yml`, `downstream.md` | [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L757, L785; [job log](evidence/flow/newgit-session-10000842/job-log.txt) L697 |
-| A clean change comes out clean on the GitLab runner | Verified, 22 of 22 runs on `saas-linux-small-amd64`; 6 of 12 local WSL2 runs were false positives; the Duo sandbox is not measured | `engine/classify` | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) 20 runs; [summary](evidence/runs.md) |
+| A clean change comes out clean on the GitLab runner and in the flow | Verified, 22 of 22 CI runs on `saas-linux-small-amd64` and 1 of 1 flow run in the Duo sandbox (session 10001525); 6 of 12 local WSL2 runs were false positives | `engine/classify` | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) 20 runs; [summary](evidence/runs.md); [flow session 10001525](evidence/flow/session-10001525/mr-16-notes.json) L151 |
+| `fix it` refuses an option the issue does not have | Verified, session 10001522 | `engine/issues` (`fixcheck`) | [issue-6-notes.json](evidence/flow/session-10001522/issue-6-notes.json) L409 |
 | A new feature's journeys run on the new build alongside the compared ones, so its cost to existing pages shows | Verified, session 10001024 on !14 (8 existing steps regressed while the new route was in use; the same MR with a separate pass showed 0) | `engine/runner` | [mr-14-notes.json](evidence/flow/mr-14-notes.json) L151, L381 |
 | Journeys are written by the model from the scan and run by k6 against an app | Verified in flow sessions | `engine/journey`, `engine/k6gen` | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701; [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L757 |
 | One issue per cause, starter tagged | Verified that the flow opens the issues; the planted change gives 2 issues for 1 cause | `engine/issues` | [issue-4.json](evidence/flow/session-9999905/issue-4.json) L5; [mr-11-notes.json](evidence/flow/mr-11-notes.json) L785 |
@@ -191,8 +192,8 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 
 ## What is mocked or not built
 
-- **The sandbox's noise is not measured.** No clean-change control has run inside the flow yet,
-  so how often a harmless change is flagged there is unknown.
+- **The sandbox's noise rate is not measured.** One clean-change run inside the flow came out
+  clean (session 10001525); one run is not a rate.
 - **False positives on noisy machines.** Each step's p95 comes from 20 samples, so a short
   stall can pass the 10 ms floor. The clean control was flagged in 6 of 12 local WSL2 runs and
   in 0 of 22 runner runs; the Duo sandbox's noise is not measured ([evidence/runs.md](evidence/runs.md)).
