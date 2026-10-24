@@ -693,7 +693,9 @@ func TestRunIntegration(t *testing.T) {
 			t.Errorf("%s: runtime counters %+v", p.Label, ps)
 		}
 		if _, err := os.Stat("/proc/self/io"); err == nil {
-			if ps.WriteBytes <= 0 || ps.WriteSyscalls <= 0 || ps.WriteBytesPerJourney <= 0 || ps.WriteSyscallsPerJourney <= 0 || len(ps.Unmeasured) != 0 {
+			// The test app writes nothing but its responses, so bytes written net of
+			// the responses k6 received can be zero; the responses themselves are counted.
+			if ps.WriteBytes < 0 || ps.ResponseBytes <= 0 || ps.WriteSyscalls <= 0 || ps.ResponseBytesPerJourney <= 0 || ps.WriteSyscallsPerJourney <= 0 || len(ps.Unmeasured) != 0 {
 				t.Errorf("%s: write counters %+v", p.Label, ps)
 			}
 			if math.Abs(ps.WriteSyscallsPerJourney-ps.WriteSyscalls/60) > 1e-9 {
