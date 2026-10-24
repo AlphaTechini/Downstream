@@ -59,7 +59,7 @@ is a thing users do" or "no, add one for Y" in under a minute.
 
 The engine groups regressed steps by the changed functions on the routes they call and writes
 one issue per group; steps on routes the diff does not reach share one more issue. Titles,
-figures, the repro and the hidden marker come from the engine and are never edited. Post each
+figures, the repro and the "Downstream state" marker come from the engine and are never edited. Post each
 title and body exactly as `downstream issues` prints them.
 
 What you write, in `notes.json`, per finding ID the engine lists in `needs_notes`:

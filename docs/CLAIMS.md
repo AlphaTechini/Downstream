@@ -22,8 +22,8 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
   message are included. --> <message id=... author="@AlphaTechini"> @ai-downstream-probe-...`.
   Each log ends `Job succeeded`.
 - **Check:** `grep -n "^Input:" evidence/day0/run2-probe-v2-job-log.txt`
-- **Does not show:** that a mention inside an **issue** works (T-09), or that someone without
-  Developer role can trigger it (they cannot, per platform rules; not tested).
+- **Does not show:** that someone without Developer role can trigger it (they cannot, per
+  platform rules; not tested). A mention inside an issue is shown later, in C-13.
 
 ## C-2. The goal contains the thread through the trigger, with authors, and the MR IID
 

@@ -129,9 +129,9 @@ Each issue (FR-32). **UNVERIFIED** until T-08 passes.
 > 2. `<option 2>`
 > 3. `<option 3>`
 >
-> Reply `@ai-downstream-<topgroup> fix option N` to apply one.
+> Reply `@ai-downstream-<topgroup> fix it` to apply option 1, or `fix option N` for another.
 >
-> `<!-- downstream:v1 {...} -->` (hidden)
+> Downstream state, read by fix it and verify (collapsed): `downstream:v1 {...}`
 
 ### A7. Trade-offs: a question, not an issue
 
@@ -146,33 +146,30 @@ Each issue (FR-32). **UNVERIFIED** until T-08 passes.
 
 The Maintainer replies in the issue thread:
 
-> `@ai-downstream-<topgroup>` fix option 2
+> `@ai-downstream-<topgroup>` fix it
 
-**UNVERIFIED (T-09):** a mention inside an issue starting the flow, the goal format for
-issues, and the flow reading the issue body.
+`fix it` applies option 1; `fix option N` picks another. Verified in session 10000200
+(`evidence/flow.md`).
 
 ### B2. What Downstream does
 
-1. Reads the hidden marker to rebuild state: merge request, commits, the one journey, the
-   metric and the figures. It does not rely on any earlier session.
-2. Checks that option 2 is something it can apply on the merge request source branch.
-3. Applies it. **UNVERIFIED (T-10).** If it cannot commit, it posts the change as a unified
-   diff and says a human must apply it.
-4. Reruns that journey against the baseline (twice) and the new head.
+1. Reads the "Downstream state" marker to rebuild state: merge request, commits, the one
+   journey and the fix options. It does not rely on any earlier session.
+2. Checks with `downstream fixcheck` that option N exists; if not, it says so and stops.
+3. Posts "Applying option N for @<requester>", reads the files involved, and commits the
+   change on a new branch `downstream/fix-<issue>-option-<N>`.
+4. Opens a merge request from that branch into the original merge request's branch, mentions
+   the requester and requests their review.
+5. Re-runs the issue's journey with the original merge request's head as the baseline (twice)
+   and the fix as the candidate, and posts the engine's report on the fix merge request.
 
 ### B3. Result note in the issue
 
-> **Option 2 applied** in commit `<sha>` (or: posted below as a diff).
->
-> | Metric | Baseline | Before fix | After fix | Noise band |
-> |---|---|---|---|---|
-> | `<metric>` | `<b>` | `<c_old>` | `<c_new>` | `<band>` |
->
-> Verdict: `<resolved | reduced but outside noise | not resolved>`. This is one run per
-> side; a close result should be rerun before it is trusted.
+> @<requester> the fix is in !<fix MR>, with the re-measure posted there. Review and merge it
+> if it holds up; Downstream does not merge.
 
-If it does not apply, the note says why and stops. It never claims a fix it did not make
-(FR-41).
+If a step fails (no marker, option out of range, the fix does not build), the note says which
+step and quotes the error. It never claims a fix it did not make (FR-41).
 
 ---
 
@@ -238,12 +235,12 @@ required by the cut rule in requirements.md.
 
 | What you type | Where | Effect | Status |
 |---|---|---|---|
-| `@ai-downstream-<topgroup>` | Merge request | Plan, run, investigate, report | Design; mention trigger verified (T-02) |
-| `@… fix option N` | Issue | Apply option N, rerun that journey | Design; needs T-09, T-10 |
-| `@… verify` | Issue or merge request | Rerun stored journeys on the merged build | Design; needs T-09 |
+| `@ai-downstream-<topgroup>` | Merge request | Plan, run, investigate, report | Verified (`evidence/flow.md`) |
+| `@… fix it` / `@… fix option N` | Issue | Commit option 1 (or N) on a new branch, open a merge request for the requester, re-measure it | Verified (session 10000200) |
+| `@… verify` | Issue | Rerun the issue's journey on the merged build | Written in the flow, not run |
 | `@… correction: <text>` | Merge request or issue | Redo a step with the correction | Stretch |
 | `@… publish report` | Merge request | Pages before/after page | Stretch; needs T-13 |
 
 The handle format `ai-<flow>-<topgroup>` is verified for the probe flow
-(`ai-downstream-probe-gitlab-ai-hackathon`); the final handle depends on the name the
-Downstream flow is created under.
+(`ai-downstream-probe-gitlab-ai-hackathon`); the Downstream flow's handle is
+`ai-downstream-gitlab-ai-hackathon`.

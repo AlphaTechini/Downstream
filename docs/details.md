@@ -73,11 +73,14 @@ All from the Showcase project, Free tier, role Developer, hosted runners. Raw lo
 | `run_command` accepts a timeout argument; a 150 s command completed (11:31:48 to 11:34:18). | `probe-notes.txt` step D; run3 line 599 |
 | The session UI only shows "Ran tool" with no detail. The flow's own merge request notes are the real visibility, so Downstream posts everything it does as notes. | user observation, 2026-10-22 |
 
-### Not yet verified (each is a numbered test)
+### Verified later in flow sessions (2026-10-24, `evidence/flow.md`)
 
 - Reading the diff and files from the flow (T-07), creating issues and tagging the starter
-  (T-08), mention-in-an-issue and replying in an issue thread (T-09), committing to the
-  merge request source branch (T-10).
+  (T-08), mention-in-an-issue and replying in an issue thread (T-09), and committing a fix on a
+  new branch with a merge request (T-10).
+
+### Not yet verified (each is a numbered test)
+
 - Credit cost of one full run (T-11). The dashboard lagged hours behind during day 0.
 - Public visibility, licence and what "deployment" means for a flow-based entry in the
   official brief (T-12).
@@ -108,8 +111,8 @@ Three rules shape everything:
    a prior Transcend entry (Kassandra, self-reported) found the model produced broken
    Mermaid charts in about one run in five, so rendering is a script's job.
 2. **The flow is stateless.** Every reply (`fix option 2`, `verify`) is a fresh
-   mention-triggered session. It rebuilds state from the issue body and a hidden marker in
-   it, never from memory.
+   mention-triggered session. It rebuilds state from the issue body and the "Downstream
+   state" block at its end, never from memory.
 3. **The engine only talks to loopback.** The target app and k6 both run inside the flow's
    container. Nothing leaves the sandbox except GitLab API calls made by the flow's own tools.
 
@@ -117,12 +120,12 @@ Three rules shape everything:
 
 | Component | What it is | Status |
 |---|---|---|
-| Flow | `flows/downstream.yml`, one `AgentComponent`, one mention trigger | Written, not yet run on the platform |
-| Engine | Go program `engine/` with subcommands below. Standard library only. | Built and tested (`make test`); no logged run |
-| k6 | v0.56.0 installed by `setup_script` | Installed and version-checked (day 0); never yet run against an app |
+| Flow | `flows/downstream.yml`, one `AgentComponent`, one mention trigger | Verified in flow sessions (`evidence/flow.md`) |
+| Engine | Go program `engine/` with subcommands below. Standard library only. | Built and tested (`make test`); logged runs in CI (`evidence/runs.md`) and in the flow (`evidence/flow.md`) |
+| k6 | v0.56.0 installed by `setup_script` | Verified against apps in CI and in the flow |
 | Target app | The project under test, with a small `downstream.yml` describing how to build and start it | Demo target `examples/shelf` and root `downstream.yml` written (section 9) |
 | Agent instructions | `AGENTS.md`, `agentnotes.md` | Written |
-| Report | MR notes (tables + Mermaid), issues; optional Pages page | Report and issue bodies built (`engine/report`, `engine/issues`); posting them from the flow not yet run; Pages not built |
+| Report | MR notes (tables + Mermaid), issues; optional Pages page | Posted by the flow (`evidence/flow.md`); Pages not built |
 
 ### 3.2 Engine interface
 
@@ -357,12 +360,15 @@ Title: `[Downstream] <journey>: <metric> <direction> <amount>` for a single step
 `[Downstream] <N> steps slower via <changed functions>: worst <step> ...` for a group. Body, in
 order: who started the run (tagged with `@username` so they are notified), the changed
 functions, the figures for every step in the group with the noise band, the repro, a likely
-cause, numbered fix options, how to reply. The last
-line is a hidden marker:
+cause, numbered fix options, how to reply. It ends with a collapsed "Downstream state"
+section holding one marker line in a fenced block:
 
-```html
-<!-- downstream:v1 {"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95","step":"..."} -->
+```text
+downstream:v1 {"v":1,"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95_ms","step":"..."}
 ```
+
+The marker was first a hidden HTML comment; GitLab's issue tools drop HTML comments, so issue
+#4 lost it (`evidence/flow.md`). The engine still reads the old comment form.
 
 Implemented in `engine/issues`. One change usually slows many steps for one reason, so
 issues are grouped by cause rather than opened per step: regressed steps are keyed by the
@@ -537,7 +543,7 @@ AGENTS.md              rules for agents working in this repo
 agentnotes.md          operating notes the flow reads each run
 .gitlab/duo/           agent-config.yml (verified)
 .gitlab/CODEOWNERS     protects the files above
-flows/                 probe.yml (verified), downstream.yml (not yet run)
+flows/                 probe.yml (verified), downstream.yml (verified, evidence/flow.md)
 docs/                  details.md, requirements.md, userflow.md
 evidence/              raw logs and the results table
 scripts/               validate_yaml.py, check_evidence.py

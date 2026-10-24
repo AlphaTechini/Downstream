@@ -63,7 +63,7 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 |---|---|---|---|
 | FR-30 | MUST | Tables and Mermaid are rendered by the engine, not the model. | Code path in `engine/report`; model has no table-writing step. |
 | FR-31 | MUST | The report lists discarded journeys, what was not measured, and that a three-run design gives no confidence interval. | Report text. |
-| FR-32 | MUST | One issue per regression: repro, figures with noise band, likely cause, numbered fix options, reply instructions, hidden marker. | Issue in the evidence run. **T-08** |
+| FR-32 | MUST | One issue per regression: repro, figures with noise band, likely cause, numbered fix options, reply instructions, the "Downstream state" marker. | Issue in the evidence run. **T-08** |
 | FR-33 | MUST | The user who started the run is tagged in each issue. | Issue body; notification observed. **T-08** |
 | FR-34 | MUST | Trade-offs become a question on the merge request, not an issue. | Evidence run with a seeded trade-off. |
 | FR-35 | SHOULD | If issue creation does not work from a custom flow, fall back to merge request threads, one per regression, and say so in the README. | Decided after T-08. |
@@ -138,10 +138,10 @@ and in [details.md](details.md).
 | T-04 | A flow chains five or more tool calls and posts a note after each. | **Done** | run2 (session 9881417), notes pasted in `probe-notes.txt` |
 | T-05 | `run_command` runs shell, a loopback server answers, a 150 s command completes. | **Done** | run3 (session 9883560), `probe-notes.txt` steps C and D |
 | T-06 | `setup_script` installs k6; allowlist reaches GitHub, npm, PyPI, Go proxy. | **Done** | run3 lines 42-45, 91; `probe-notes.txt` steps A and B |
-| T-07 | Read repository files and the diff from the flow (`read_file`, `list_merge_request_diffs`, or `git diff` through `run_command`). | Open | |
-| T-08 | `create_issue` works from a custom flow; labels and assignee; the starter's `@mention` notifies them. | Open | |
-| T-09 | Mention inside an issue starts the flow; the goal format for issues; the flow can read the issue body and reply in the thread (`create_issue_note`). | Open | |
-| T-10 | `create_commit` (or equivalent) to the merge request source branch from a custom flow. | Open | |
+| T-07 | Read repository files and the diff from the flow (`read_file`, `list_merge_request_diffs`, or `git diff` through `run_command`). | **Done**: `git diff` through `run_command` (`downstream scan`) and `get_repository_file` | `evidence/flow.md` (sessions 9999905, 10000200) |
+| T-08 | `create_issue` works from a custom flow; labels and assignee; the starter's `@mention` notifies them. | **Done** for `create_issue` and the starter mention; labels and assignee not used | `evidence/flow/session-9999905/issue-4.json` |
+| T-09 | Mention inside an issue starts the flow; the goal format for issues; the flow can read the issue body and reply in the thread (`create_issue_note`). | **Done** | `evidence/flow/session-10000200/issue-6-notes.json` |
+| T-10 | `create_commit` (or equivalent) to the merge request source branch from a custom flow. | **Done**, on a new `downstream/fix-*` branch with a merge request into the source branch rather than a commit onto it | `evidence/flow/session-10000200/mr-13.json` |
 | T-11 | Credit cost of one full run; re-read the credits dashboard after the first full engine run. | Open | |
 | T-12 | Official brief: re-read the live Devpost Rules. Earlier research (2026-10-21/22, not re-read since) lists as hard gates: genuine Duo Agent Platform use, a public MIT-licensed GitLab project, visible CI/CD pipeline history, a demo video under three minutes. Done: the showcase project is public (GitLab API, `evidence/gitlab-project-2026-10-22.json`). Still to verify: the live Rules text, the licence shown by GitLab after the MIT `LICENSE` merges, and what "deployment" means for a flow-based entry. | Partly done | `evidence/gitlab-project-2026-10-22.json` |
 | T-13 | Pages publishing on the Free tier (default branch only). | Open, optional | |
