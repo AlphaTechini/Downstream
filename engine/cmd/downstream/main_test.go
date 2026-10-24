@@ -143,7 +143,8 @@ func TestLegacyRunKeepsCommittedVerdict(t *testing.T) {
 	writeSummary(&out, run, scan)
 	var got []string
 	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
-		if !strings.HasPrefix(line, "advisory=") { // the committed file predates this line
+		// the committed file predates these lines
+		if !strings.HasPrefix(line, "advisory=") && !strings.HasPrefix(line, "new_failures=") {
 			got = append(got, line)
 		}
 	}

@@ -76,7 +76,7 @@ func TestThoroughJourneysLint(t *testing.T) {
 	scanned.Changed = append(scanned.Changed, cannotFail...)
 	want := []string{
 		"changed route GET /books is covered only by steps that expect a 2xx status; add a negative or edge-input step",
-		"changed route GET /health is not covered by any journey",
+		"changed route GET /health is covered only by steps that expect a 2xx status; add a negative or edge-input step",
 	}
 	got := journey.Lint(jf, scanned)
 	if len(got) != len(want) {
