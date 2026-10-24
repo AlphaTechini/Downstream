@@ -152,6 +152,19 @@ func jsLiteral(v any) (string, error) {
 	return s, nil
 }
 
+// ParseReceived returns the bytes k6 received from the app in the pass, as
+// steps.json records them. ok is false for a steps.json written before the
+// field existed, or with a negative value.
+func ParseReceived(data []byte) (received float64, ok bool) {
+	var doc struct {
+		Received *float64 `json:"received"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil || doc.Received == nil || *doc.Received < 0 {
+		return 0, false
+	}
+	return *doc.Received, true
+}
+
 // ParseSummary reads steps.json as written by the script's handleSummary: an
 // object {"steps": [...], "journeys": [{"journey", "completed"}]}. The older
 // form, a bare array of steps, is accepted too; it carries no completed counts,
@@ -163,6 +176,7 @@ func ParseSummary(data []byte) ([]model.StepMetrics, map[string]int, error) {
 			Journey   string `json:"journey"`
 			Completed int    `json:"completed"`
 		} `json:"journeys"`
+		Received *float64 `json:"received"`
 	}
 	var completed map[string]int
 	trimmed := bytes.TrimLeft(data, " \t\r\n")

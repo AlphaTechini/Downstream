@@ -303,6 +303,12 @@ func (r *renderer) processTable() {
 	}
 	r.line("| CPU time, 10 ms ticks" + cells(func(p model.Pass) float64 { return p.Process.CPUSeconds }, "s") + " |")
 	r.line("| Peak RSS" + cells(func(p model.Pass) float64 { return p.Process.PeakRSSMB }, "MB") + " |")
+	for _, p := range pass {
+		if p.Process.ResponseBytesPerJourney > 0 {
+			r.line("| Response bytes per journey (advisory, not in bytes written)" + cells(func(p model.Pass) float64 { return p.Process.ResponseBytesPerJourney }, "B/journey") + " |")
+			break
+		}
+	}
 	r.rawCounterRows(pass)
 	r.blank()
 }

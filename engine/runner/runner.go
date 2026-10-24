@@ -463,7 +463,7 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 		s.sched0, s.schedErr = readSchedstat(dir)
 	}
 	started := time.Now()
-	steps, completed, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration, p.log)
+	steps, completed, received, kerr := runK6(ctx, p.k6, p.tmp, script, p.cfg.Duration, p.log)
 	ended := time.Now()
 	if a.exited() {
 		return res, nil, fmt.Errorf("%w; output tail:\n%s", errAppDied, a.out.String())
@@ -491,6 +491,7 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 	if s.rssMB, err = readPeakRSSMB(dir); err != nil {
 		return res, nil, fmt.Errorf("reading app peak memory: %w", err)
 	}
+	s.received = received
 	for _, n := range completed {
 		s.completed += n
 	}

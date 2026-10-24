@@ -257,6 +257,7 @@ func TestBuildProcess(t *testing.T) {
 		ticks0: 10, ticks1: 24, rssMB: 21.5,
 		io0: procIO{WChar: 1000, SyscW: 10}, io1: procIO{WChar: 41000, SyscW: 110},
 		threads: 8, fds: 12, exactCPU: 0.1375, haveExact: true, completed: 20,
+		received:  ptrFloat(30000), // of the 40000 bytes written, 30000 were responses
 		rt0:       runtimeCounters{AllocObjects: 1000, AllocBytes: 50000, GCCycles: 3, Goroutines: 6},
 		rt1:       runtimeCounters{AllocObjects: 41000, AllocBytes: 250000, GCCycles: 5, Goroutines: 14},
 		rtDrained: runtimeCounters{Goroutines: 7},
@@ -264,8 +265,9 @@ func TestBuildProcess(t *testing.T) {
 	ps, notes := buildProcess(full)
 	want := model.ProcessStats{
 		CPUSeconds: 0.14, PeakRSSMB: 21.5, CPUSecondsExact: 0.1375, CPUSource: "rusage",
-		WriteBytes: 40000, WriteSyscalls: 100, OpenFDs: 12, Threads: 8,
-		CompletedJourneys: 20, CPUMsPerJourney: 6.875, WriteBytesPerJourney: 2000, WriteSyscallsPerJourney: 5,
+		WriteBytes: 10000, WriteSyscalls: 100, OpenFDs: 12, Threads: 8,
+		CompletedJourneys: 20, CPUMsPerJourney: 6.875, WriteBytesPerJourney: 500, WriteSyscallsPerJourney: 5,
+		ResponseBytes: 30000, ResponseBytesPerJourney: 1500,
 		AllocObjectsPerJourney: 2000, AllocBytesPerJourney: 10000, GCCycles: 2, GCCyclesPerJourney: 0.1, Goroutines: 7,
 	}
 	if len(notes) != 0 || !reflect.DeepEqual(ps, want) {
@@ -359,7 +361,7 @@ func TestBuildProcess(t *testing.T) {
 				"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey"}) {
 			t.Errorf("%+v notes %v", ps, notes)
 		}
-		if ps.WriteBytes != 40000 || ps.CPUSecondsExact != 0.1375 {
+		if ps.WriteBytes != 10000 || ps.ResponseBytes != 30000 || ps.CPUSecondsExact != 0.1375 {
 			t.Errorf("pass totals lost: %+v", ps)
 		}
 	})
@@ -368,7 +370,8 @@ func TestBuildProcess(t *testing.T) {
 func TestBuildProcessRuntimeCounters(t *testing.T) {
 	base := procSample{
 		ticks0: 10, ticks1: 24, rssMB: 21.5, exactCPU: 0.1, haveExact: true, completed: 10,
-		rt0: runtimeCounters{AllocObjects: 100, AllocBytes: 1000, GCCycles: 2}, rt1: runtimeCounters{AllocObjects: 600, AllocBytes: 6000, GCCycles: 4},
+		received: ptrFloat(0),
+		rt0:      runtimeCounters{AllocObjects: 100, AllocBytes: 1000, GCCycles: 2}, rt1: runtimeCounters{AllocObjects: 600, AllocBytes: 6000, GCCycles: 4},
 		rtDrained: runtimeCounters{Goroutines: 5},
 	}
 	allFour := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles", "gc_cycles_per_journey", "goroutines"}
@@ -883,7 +886,7 @@ const fakeSteps = `printf '%s' '{"steps":[{"journey":"j","step":"s","count":4,"f
 
 func TestRunK6KeepsStepsWhenK6ExitsNonZero(t *testing.T) {
 	var log bytes.Buffer
-	steps, completed, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\necho boom >&2\nexit 3"), t.TempDir(), "x", time.Second, logger{&log})
+	steps, completed, _, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\necho boom >&2\nexit 3"), t.TempDir(), "x", time.Second, logger{&log})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -901,7 +904,7 @@ func TestRunK6KeepsStepsWhenK6IsKilled(t *testing.T) {
 	defer func() { k6Slack = old }()
 	var log bytes.Buffer
 	start := time.Now()
-	steps, _, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\nsleep 60"), t.TempDir(), "x", 0, logger{&log})
+	steps, _, _, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\nsleep 60"), t.TempDir(), "x", 0, logger{&log})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -914,11 +917,11 @@ func TestRunK6KeepsStepsWhenK6IsKilled(t *testing.T) {
 }
 
 func TestRunK6ErrorsWithoutStepsFile(t *testing.T) {
-	_, _, err := runK6(context.Background(), fakeK6(t, "echo nope >&2\nexit 2"), t.TempDir(), "x", time.Second, logger{})
+	_, _, _, err := runK6(context.Background(), fakeK6(t, "echo nope >&2\nexit 2"), t.TempDir(), "x", time.Second, logger{})
 	if err == nil || !strings.Contains(err.Error(), "k6 failed") || !strings.Contains(err.Error(), "nope") {
 		t.Errorf("err = %v", err)
 	}
-	_, _, err = runK6(context.Background(), fakeK6(t, "exit 0"), t.TempDir(), "x", time.Second, logger{})
+	_, _, _, err = runK6(context.Background(), fakeK6(t, "exit 0"), t.TempDir(), "x", time.Second, logger{})
 	if err == nil || !strings.Contains(err.Error(), "no steps.json") {
 		t.Errorf("err = %v", err)
 	}
@@ -926,7 +929,7 @@ func TestRunK6ErrorsWithoutStepsFile(t *testing.T) {
 
 func TestRunK6AcceptsArrayStepsFile(t *testing.T) {
 	old := `printf '%s' '[{"journey":"j","step":"s","count":4,"failures":0,"p50_ms":2,"p95_ms":9,"mean_ms":3}]' > steps.json`
-	steps, completed, err := runK6(context.Background(), fakeK6(t, old), t.TempDir(), "x", time.Second, logger{})
+	steps, completed, _, err := runK6(context.Background(), fakeK6(t, old), t.TempDir(), "x", time.Second, logger{})
 	if err != nil || len(steps) != 1 || completed != nil {
 		t.Errorf("steps %+v completed %v err %v", steps, completed, err)
 	}
@@ -940,3 +943,5 @@ func TestK6Timeout(t *testing.T) {
 
 // selfProcDir is this test process's /proc directory, for the readers that take one.
 func selfProcDir() string { return fmt.Sprintf("/proc/%d", os.Getpid()) }
+
+func ptrFloat(v float64) *float64 { return &v }

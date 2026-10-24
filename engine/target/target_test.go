@@ -26,7 +26,8 @@ func TestParseGood(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Config{
-		Root: "examples/shelf", Build: "go build -o {out} ./examples/shelf/cmd/shelf",
+		Root: "examples/shelf", MainDir: "examples/shelf/cmd/shelf", // worked out from the build command
+		Build: "go build -o {out} ./examples/shelf/cmd/shelf",
 		Start: "{out}", PortEnv: "PORT", ReadyPath: "/health", VUs: 2, Iterations: 20, Duration: 60 * time.Second,
 	}
 	if got != want {

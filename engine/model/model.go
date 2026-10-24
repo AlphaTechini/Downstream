@@ -205,14 +205,17 @@ type ProcessStats struct {
 	// /proc/<pid>/task/*/schedstat. It is 0 unless CPUSource is "schedstat".
 	CPUSecondsWindow float64 `json:"cpu_seconds_window"`
 
-	WriteBytes    float64 `json:"write_bytes"`    // wchar delta over the k6 run
+	WriteBytes    float64 `json:"write_bytes"`    // wchar delta over the k6 run minus the bytes k6 received (the responses)
 	WriteSyscalls float64 `json:"write_syscalls"` // syscw delta over the k6 run
 	OpenFDs       int     `json:"open_fds"`       // after k6 exited and idle connections drained
 	Threads       int     `json:"threads"`        // same moment as OpenFDs
 
-	CompletedJourneys       int     `json:"completed_journeys"` // iterations that finished every step without a failure
-	CPUMsPerJourney         float64 `json:"cpu_ms_per_journey"`
-	WriteBytesPerJourney    float64 `json:"write_bytes_per_journey"`
+	CompletedJourneys    int     `json:"completed_journeys"` // iterations that finished every step without a failure
+	CPUMsPerJourney      float64 `json:"cpu_ms_per_journey"`
+	WriteBytesPerJourney float64 `json:"write_bytes_per_journey"`
+	// ResponseBytes is what k6 received from the app; advisory, never a verdict.
+	ResponseBytes           float64 `json:"response_bytes,omitempty"`
+	ResponseBytesPerJourney float64 `json:"response_bytes_per_journey,omitempty"`
 	WriteSyscallsPerJourney float64 `json:"write_syscalls_per_journey"`
 
 	// Go runtime counters, read from the app over a loopback side port during

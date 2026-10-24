@@ -31,7 +31,8 @@ type procSample struct {
 	// exactCPU is user+system seconds from the exited process's rusage.
 	exactCPU  float64
 	haveExact bool
-	completed int // journey iterations that finished every step
+	completed int      // journey iterations that finished every step
+	received  *float64 // bytes k6 received from the app; nil when k6 did not report them
 
 	// rt0 and rt1 bracket the k6 window; rtDrained is read after the drain.
 	// rtErr is why they are unusable; with rtQuiet set the reason is already
@@ -83,8 +84,20 @@ func buildProcess(s procSample) (model.ProcessStats, []string) {
 		unmeasured(model.UnmeasuredWriteBytes, model.UnmeasuredWriteSyscalls)
 		notes = append(notes, fmt.Sprintf("write bytes and write syscalls: not measured; /proc/<pid>/io was not readable (%s)", errText(ioErr)))
 	} else {
-		ps.WriteBytes = float64(s.io1.WChar - s.io0.WChar)
 		ps.WriteSyscalls = float64(s.io1.SyscW - s.io0.SyscW)
+		// wchar also counts the responses the app sends, so a change that makes a
+		// response bigger would look like extra writing. The bytes k6 received are
+		// those responses; what is left is logs, files and other output.
+		if s.received == nil {
+			unmeasured(model.UnmeasuredWriteBytes)
+			notes = append(notes, "write bytes: not measured; k6 did not report the bytes it received, so responses cannot be told apart from other writes")
+		} else {
+			ps.ResponseBytes = *s.received
+			ps.WriteBytes = float64(s.io1.WChar-s.io0.WChar) - *s.received
+			if ps.WriteBytes < 0 {
+				ps.WriteBytes = 0
+			}
+		}
 	}
 	if s.fdsErr != nil {
 		unmeasured(model.UnmeasuredOpenFDs)
@@ -140,7 +153,12 @@ func buildProcess(s procSample) (model.ProcessStats, []string) {
 	}
 	ps.CPUMsPerJourney = ps.CPUSecondsExact * 1000 / n
 	if ioErr == nil {
-		ps.WriteBytesPerJourney = ps.WriteBytes / n
+		if s.received == nil {
+			unmeasured(model.UnmeasuredWriteBytesPerJourney)
+		} else {
+			ps.WriteBytesPerJourney = ps.WriteBytes / n
+			ps.ResponseBytesPerJourney = ps.ResponseBytes / n
+		}
 		ps.WriteSyscallsPerJourney = ps.WriteSyscalls / n
 	} else {
 		unmeasured(model.UnmeasuredWriteBytesPerJourney, model.UnmeasuredWriteSyscallsPerJourney)

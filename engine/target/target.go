@@ -148,7 +148,39 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, fmt.Errorf("line %d: ready_path must start with /", seen["ready_path"])
 	}
 	cfg.VUs, cfg.Iterations, cfg.Duration = vus, iterations, duration
+	if cfg.MainDir == "" {
+		cfg.MainDir = mainDirFromBuild(cfg.Build)
+	}
 	return cfg, nil
+}
+
+// mainDirFromBuild finds the package a plain `go build` command builds, such as
+// examples/shelf/cmd/shelf in "go build -o {out} ./examples/shelf/cmd/shelf", so
+// the runtime counters work without a main_dir line. It returns "" for any other
+// command, for several packages, or for a pattern with "...".
+func mainDirFromBuild(build string) string {
+	f := strings.Fields(build)
+	if len(f) < 3 || f[0] != "go" || f[1] != "build" {
+		return ""
+	}
+	pkg := ""
+	for i := 2; i < len(f); i++ {
+		a := f[i]
+		switch {
+		case a == "-o":
+			i++ // the output path
+		case strings.HasPrefix(a, "-"):
+		case strings.HasPrefix(a, "./") && pkg == "":
+			pkg = a
+		default:
+			return ""
+		}
+	}
+	pkg = strings.TrimSuffix(strings.TrimPrefix(pkg, "./"), "/")
+	if pkg == "" || strings.Contains(pkg, "...") || strings.Contains(pkg, "..") || strings.ContainsAny(pkg, "{}$`'\"") {
+		return ""
+	}
+	return pkg
 }
 
 // parseValue handles the text after the first colon: optional quotes, trailing

@@ -138,5 +138,7 @@ export function handleSummary(data) {
       });
     }
   }
-  return { 'steps.json': JSON.stringify({ steps: out, journeys: journeys }) };
+  // data_received is every byte the app sent back: the engine subtracts it from the
+  // app's write counter so bigger responses are not counted as extra writes.
+  return { 'steps.json': JSON.stringify({ steps: out, journeys: journeys, received: num(vals('data_received').count) }) };
 }
