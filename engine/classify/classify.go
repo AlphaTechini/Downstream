@@ -77,6 +77,9 @@ import (
 // 2 cycles is chosen, not derived. It lets one cycle of jitter pass and still
 // flags a pass with three or more cycles beyond the worse baseline.
 //
+// Peak RSS also needs 10 MB, the memory minimum the latency rule used: on a 6 MB app,
+// 5% is 0.3 MB, and the live flow flagged a clean change for exactly that rise.
+//
 // Bytes written per journey has an absolute floor of 1 KB: net of the responses
 // it is close to zero for an app that writes nothing else, and 1% of almost
 // nothing flagged a clean change in CI (pipeline 2984592625).
@@ -104,7 +107,7 @@ func DefaultThresholds() model.Thresholds {
 			model.MetricOpenFDs:                 {Absolute: 1},
 			model.MetricThreads:                 {Absolute: 2},
 			model.MetricCPUPerJourney:           {Relative: 0.20},
-			model.MetricRSS:                     {Relative: 0.05},
+			model.MetricRSS:                     {Relative: 0.05, Absolute: 10},
 			model.MetricAllocObjectsPerJourney:  {Relative: 0.10, Absolute: 100},
 			model.MetricAllocBytesPerJourney:    {Relative: 0.05, Absolute: 16 << 10},
 			model.MetricGCCycles:                {Absolute: 2},
