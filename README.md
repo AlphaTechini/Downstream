@@ -59,6 +59,94 @@ to routes the author never opened. That gap is what Downstream targets.
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
 chooses journeys and writes sentences; code produces every number, table and chart.
 Design: [`docs/details.md`](docs/details.md). What reviewers see: [`docs/userflow.md`](docs/userflow.md).
+Entry points: the flow is [`flows/downstream.yml`](flows/downstream.yml); the engine's CLI is
+[`engine/cmd/downstream/main.go`](engine/cmd/downstream/main.go); the demo app starts from
+[`examples/shelf/cmd/shelf/main.go`](examples/shelf/cmd/shelf/main.go).
+
+## 30-second check
+
+```bash
+git clone https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git && cd showcase
+python3 -m venv .venv && . .venv/bin/activate
+pip install pyyaml
+make verify
+```
+
+The virtualenv keeps `pip` working on systems that refuse system-wide installs (PEP 668, for
+example Ubuntu 24.04). Without `make`, run the two lines `make verify` runs:
+`python3 scripts/validate_yaml.py && python3 scripts/check_evidence.py`.
+
+Expected output:
+
+```text
+python3 scripts/validate_yaml.py
+ok: 2 flow file(s), 1 agent config file(s)
+python3 scripts/check_evidence.py
+ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
+```
+
+With Go 1.22 or newer and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
+including the integration tests that start an app and run k6 (they skip without k6).
+
+`make verify` validates the flow and config YAML, checks that docs links resolve, that every Verified
+row above links to committed evidence, that logs hold no unredacted email, and that the
+evidence files match the checksums in `evidence/SHA256SUMS`. It does not run
+Downstream; the logs in `evidence/` show the platform behaviour. Flow runs happen in this
+project; their pipelines are under CI/CD > Pipelines.
+
+## Measured results
+
+Flow sessions on GitLab, from [`evidence/flow/`](evidence/flow/) (details in
+[evidence/flow.md](evidence/flow.md)):
+
+| Measurement | Value | Source |
+|---|---|---|
+| Planted `hashSecret` change (!11): regressed steps, app CPU time B1 / C / B2 | 16 of 16; 0.11 / 17.69 / 0.12 s | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701 |
+| `fix it` re-measure (!13 against !11): logged-in steps p95, app CPU time | about 66 ms to 0.2-0.6 ms; 8.80 / 2.37 / 8.86 s, 0 regressions | [mr-13-notes.json](evidence/flow/session-10000200/mr-13-notes.json) L33 |
+| New similar-books route (!14): existing steps regressed while it is in use; app CPU time | 8 (`shelf_list` 2.1 ms to 129.4 ms p95); 0.10 / 1.72 / 0.11 s | [mr-14-notes.json](evidence/flow/mr-14-notes.json) L381 |
+| NewGit avatar change (NewGit !3): regressed steps, app CPU time | 10, controls included; 0.32 / 1.50 / 0.37 s | [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L785 |
+
+Engine runs in GitLab CI on the demo app, from [`evidence/runs/`](evidence/runs/) (one run per
+row unless stated; details in [evidence/runs.md](evidence/runs.md)):
+
+| Measurement | Value | Source |
+|---|---|---|
+| Planted change: regressed steps | 22 of 22, in 2 issue groups | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5 |
+| Planted change: `log_in` p95, B1 / B2 / candidate | 2.8 / 1.6 / 537.9 ms | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L12 |
+| Planted change: app CPU time, B1 / candidate / B2 | 0.16 / 27.10 / 0.16 s | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L53 |
+| Clean change: runs flagged as regression | 0 of 22 (pipelines 63 and 66) | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) |
+| Clean change: largest step p95 increase over 20 runs | 4.6 ms (regression floor 10 ms) | `evidence/runs/ci-66-engine-noise/noise-*/report-*.md` |
+
+The platform, from the logs in `evidence/day0/`:
+
+| Measurement | Value | Source |
+|---|---|---|
+| Runner | `saas-linux-small-amd64`, 2 CPUs, 8145540 kB memory, 18G free in `/tmp` | [run1](evidence/day0/run1-probe-v1-job-log.txt) L1-2; [probe-notes](evidence/day0/probe-notes.txt) |
+| Probe v1 (stopped after one action), whole CI job | 45.4 s | [run1](evidence/day0/run1-probe-v1-job-log.txt) L1, L564 |
+| Probe v2, sandbox start to FINISHED | 21.5 s | [run2](evidence/day0/run2-probe-v2-job-log.txt) L114, L529 |
+| Probe v3 (four commands, one a deliberate 150 s sleep), sandbox start to FINISHED | 221.8 s | [run3](evidence/day0/run3-probe-v3-job-log.txt) L118, L599 |
+| Sandbox network allowlist with our config | 175 entries (the default list has 5) | [run3](evidence/day0/run3-probe-v3-job-log.txt) L91 |
+
+## Architecture and file paths
+
+```text
+mention on an MR
+ -> flows/downstream.yml              one AgentComponent, one prompt (verified in flow sessions)
+     fetches a pinned commit          of this repo (GitHub mirror tarball), builds the engine,
+                                      reads agentnotes.md; one flow serves any project
+     calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
+                                      summary, issues, marker, fixcheck (CI runs in
+                                      evidence/runs.md, flow runs in evidence/flow.md)
+       builds base and head from git, runs the app on 127.0.0.1
+       k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
+       Go 1.22.12                     already in the sandbox image (verified), nothing to install
+ -> MR notes and issues; each issue ends with a "Downstream state" block so a reply
+    (fix it, verify) rebuilds its state from the issue
+ -> fix it: create_commit on downstream/fix-*, create_merge_request, re-measure on that MR
+```
+
+The model never writes shell for the engine and never writes a number. Details and the
+engine's interface: [`docs/details.md`](docs/details.md) sections 3 to 8.
 
 ## Duo Agent Platform features used
 
@@ -163,86 +251,6 @@ pin the application to the sandbox's versions or install the missing tool in the
 4. Optional: `downstream.md` describing the app's test data and key pages, for the journey
    writer. Start the app with its test data in `downstream.yml`'s `start` command.
 5. Mention the flow's account on a merge request.
-
-## 30-second check
-
-```bash
-git clone https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git && cd showcase
-pip install pyyaml
-make verify
-```
-
-Expected output:
-
-```text
-python3 scripts/validate_yaml.py
-ok: 2 flow file(s), 1 agent config file(s)
-python3 scripts/check_evidence.py
-ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
-```
-
-With Go 1.22 or newer and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
-including the integration tests that start an app and run k6 (they skip without k6).
-
-`make verify` validates the flow and config YAML, checks that docs links resolve, that every Verified
-row above links to committed evidence, that logs hold no unredacted email, and that the
-evidence files match the checksums in `evidence/SHA256SUMS`. It does not run
-Downstream; the logs in `evidence/` show the platform behaviour. Flow runs happen in this
-project; their pipelines are under CI/CD > Pipelines.
-
-## Architecture and file paths
-
-```text
-mention on an MR
- -> flows/downstream.yml              one AgentComponent, one prompt (verified in flow sessions)
-     fetches a pinned commit          of this repo (GitHub mirror tarball), builds the engine,
-                                      reads agentnotes.md; one flow serves any project
-     calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
-                                      summary, issues, marker, fixcheck (CI runs in
-                                      evidence/runs.md, flow runs in evidence/flow.md)
-       builds base and head from git, runs the app on 127.0.0.1
-       k6 v0.56.0                     installed by .gitlab/duo/agent-config.yml (verified)
-       Go 1.22.12                     already in the sandbox image (verified), nothing to install
- -> MR notes and issues; each issue ends with a "Downstream state" block so a reply
-    (fix it, verify) rebuilds its state from the issue
- -> fix it: create_commit on downstream/fix-*, create_merge_request, re-measure on that MR
-```
-
-The model never writes shell for the engine and never writes a number. Details and the
-engine's interface: [`docs/details.md`](docs/details.md) sections 3 to 8.
-
-## Measured results
-
-Flow sessions on GitLab, from [`evidence/flow/`](evidence/flow/) (details in
-[evidence/flow.md](evidence/flow.md)):
-
-| Measurement | Value | Source |
-|---|---|---|
-| Planted `hashSecret` change (!11): regressed steps, app CPU time B1 / C / B2 | 16 of 16; 0.11 / 17.69 / 0.12 s | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701 |
-| `fix it` re-measure (!13 against !11): logged-in steps p95, app CPU time | about 66 ms to 0.2-0.6 ms; 8.80 / 2.37 / 8.86 s, 0 regressions | [mr-13-notes.json](evidence/flow/session-10000200/mr-13-notes.json) L33 |
-| New similar-books route (!14): existing steps regressed while it is in use; app CPU time | 8 (`shelf_list` 2.1 ms to 129.4 ms p95); 0.10 / 1.72 / 0.11 s | [mr-14-notes.json](evidence/flow/mr-14-notes.json) L381 |
-| NewGit avatar change (NewGit !3): regressed steps, app CPU time | 10, controls included; 0.32 / 1.50 / 0.37 s | [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L785 |
-
-Engine runs in GitLab CI on the demo app, from [`evidence/runs/`](evidence/runs/) (one run per
-row unless stated; details in [evidence/runs.md](evidence/runs.md)):
-
-| Measurement | Value | Source |
-|---|---|---|
-| Planted change: regressed steps | 22 of 22, in 2 issue groups | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5 |
-| Planted change: `log_in` p95, B1 / B2 / candidate | 2.8 / 1.6 / 537.9 ms | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L12 |
-| Planted change: app CPU time, B1 / candidate / B2 | 0.16 / 27.10 / 0.16 s | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L53 |
-| Clean change: runs flagged as regression | 0 of 22 (pipelines 63 and 66) | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) |
-| Clean change: largest step p95 increase over 20 runs | 4.6 ms (regression floor 10 ms) | `evidence/runs/ci-66-engine-noise/noise-*/report-*.md` |
-
-The platform, from the logs in `evidence/day0/`:
-
-| Measurement | Value | Source |
-|---|---|---|
-| Runner | `saas-linux-small-amd64`, 2 CPUs, 8145540 kB memory, 18G free in `/tmp` | [run1](evidence/day0/run1-probe-v1-job-log.txt) L1-2; [probe-notes](evidence/day0/probe-notes.txt) |
-| Probe v1 (stopped after one action), whole CI job | 45.4 s | [run1](evidence/day0/run1-probe-v1-job-log.txt) L1, L564 |
-| Probe v2, sandbox start to FINISHED | 21.5 s | [run2](evidence/day0/run2-probe-v2-job-log.txt) L114, L529 |
-| Probe v3 (four commands, one a deliberate 150 s sleep), sandbox start to FINISHED | 221.8 s | [run3](evidence/day0/run3-probe-v3-job-log.txt) L118, L599 |
-| Sandbox network allowlist with our config | 175 entries (the default list has 5) | [run3](evidence/day0/run3-probe-v3-job-log.txt) L91 |
 
 ## Built during the hackathon, and what is not
 
