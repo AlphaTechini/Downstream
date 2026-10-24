@@ -77,6 +77,9 @@ import (
 // 2 cycles is chosen, not derived. It lets one cycle of jitter pass and still
 // flags a pass with three or more cycles beyond the worse baseline.
 //
+// Write syscalls per journey also need 1 call: at about 5 calls a journey, 4% is 0.2,
+// and the live flow flagged a clean change for a 0.35 rise.
+//
 // Peak RSS also needs 10 MB, the memory minimum the latency rule used: on a 6 MB app,
 // 5% is 0.3 MB, and the live flow flagged a clean change for exactly that rise.
 //
@@ -103,7 +106,7 @@ func DefaultThresholds() model.Thresholds {
 		MaxBaselineSpread: 0.5,
 		Tolerances: map[string]model.Tolerance{
 			model.MetricWriteBytesPerJourney:    {Relative: 0.01, Absolute: 1 << 10},
-			model.MetricWriteSyscallsPerJourney: {Relative: 0.04},
+			model.MetricWriteSyscallsPerJourney: {Relative: 0.04, Absolute: 1},
 			model.MetricOpenFDs:                 {Absolute: 1},
 			model.MetricThreads:                 {Absolute: 2},
 			model.MetricCPUPerJourney:           {Relative: 0.20},

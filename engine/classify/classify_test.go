@@ -225,7 +225,7 @@ func TestDefaults(t *testing.T) {
 	}
 	want := map[string]model.Tolerance{
 		"write_bytes_per_journey":    {Relative: 0.01, Absolute: 1 << 10},
-		"write_syscalls_per_journey": {Relative: 0.04},
+		"write_syscalls_per_journey": {Relative: 0.04, Absolute: 1},
 		"open_fds":                   {Absolute: 1},
 		"threads":                    {Absolute: 2},
 		"cpu_ms_per_journey":         {Relative: 0.20},
@@ -387,7 +387,8 @@ func TestGatedRule(t *testing.T) {
 		{"bytes regression", model.MetricWriteBytesPerJourney, vals{200000, 206000, 200800}, model.ClassRegression, 2008, 2008, "more than the allowed"},
 		{"bytes noise", model.MetricWriteBytesPerJourney, vals{200000, 201600, 200800}, model.ClassNoise, 2008, 2008, "not more than the allowed"},
 		{"bytes near zero under the 1 KB floor is noise", model.MetricWriteBytesPerJourney, vals{10, 12, 10}, model.ClassNoise, 1024, 1024, "not more than the allowed"},
-		{"syscalls regression", model.MetricWriteSyscallsPerJourney, vals{5, 5.5, 5.1}, model.ClassRegression, 0.204, 0.204, "more than the allowed"},
+		{"syscalls regression", model.MetricWriteSyscallsPerJourney, vals{50, 55, 51}, model.ClassRegression, 2.04, 2.04, "more than the allowed"},
+		{"syscalls rise under the 1 call floor is noise", model.MetricWriteSyscallsPerJourney, vals{4.85, 5.2, 4.83}, model.ClassNoise, 1, 1, "not more than the allowed"},
 		// peak memory
 		{"memory regression", model.MetricRSS, vals{300, 318, 301}, model.ClassRegression, 15.05, 15.05, "more than the allowed"},
 		{"memory noise", model.MetricRSS, vals{300, 315, 301}, model.ClassNoise, 15.05, 15.05, "not more than the allowed"},
@@ -537,7 +538,7 @@ func TestGatedTradeOff(t *testing.T) {
 // A small improvement must not hide a large regression.
 func TestSmallImprovementDoesNotExcuseLargeRegression(t *testing.T) {
 	ps := gatedPasses(model.MetricCPUPerJourney, vals{10, 100, 10.2})
-	for i, v := range []float64{5, 4.5, 5} { // syscalls improve by 10%
+	for i, v := range []float64{50, 45, 50} { // syscalls improve by 10%, above the 1 call floor
 		ps[i].Process.WriteSyscallsPerJourney = v
 	}
 	fs := Classify(ps, DefaultThresholds())

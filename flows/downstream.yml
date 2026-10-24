@@ -96,7 +96,7 @@ prompts:
 
         SETUP (first command of every procedure; run it exactly)
         S1. run_command:
-            export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=b35813145f99 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
+            export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=22a453ca55e6 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
         Every later command starts with:
             export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp &&
 
