@@ -173,6 +173,19 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 - **Does not show:** how the cost splits between CPU and lock waiting; C's CPU time includes
   the new feature's own work, as the report says.
 
+## C-17. Under the gated rule a clean change opens no issue, and real regressions are caught
+
+- **File:** `engine/classify` (tolerances), `engine/runner` (process counters), engine commit
+  `84e61cb` as pinned in `flows/downstream.yml`
+- **Proof:** [gated/mr-16-notes.json](../evidence/flow/gated/mr-16-notes.json) lines 1273,
+  1475 and 1677: three clean-change runs with 0 regressed metrics.
+  [gated/mr-11-notes.json](../evidence/flow/gated/mr-11-notes.json) line 1991: the planted
+  change, CPU per completed journey 2.87 / 2.91 / 451.25 ms (B1 / B2 / C).
+  [gated/mr-14-notes.json](../evidence/flow/gated/mr-14-notes.json) line 1211: the new feature,
+  3.09 / 3.04 / 94.96 ms. Earlier rounds, with their false alarms, are in `evidence/flow.md`.
+- **Does not show:** a false-alarm rate (three runs); that an allocation-only rise under 100
+  objects or 16 KB per journey is caught (it is treated as noise by design).
+
 ## C-16. GitLab shows the MIT licence, and the flow is public in the AI Catalog
 
 - **File:** `LICENSE`; the catalog item built from `flows/downstream.yml`
@@ -236,10 +249,10 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
 | N-8 | A clean change comes out clean inside the Duo sandbox, as a rate | `flows/downstream.yml` | repeated clean-change sessions (one so far, clean: [mr-16-notes.json](../evidence/flow/session-10001525/mr-16-notes.json) line 151) |
-| N-9 | The flow's model writes negative, edge-input, repeated, page-size and cross-user steps | `flows/downstream.yml` R6, `agentnotes.md` | T-16; no flow session has run, and `downstream validate` warnings are the only check |
 
 N-1 to N-4 (regressions found in a flow run, model-written journeys, issues opened by the
-flow, fixes applied) moved to C-12 to C-15; N-7 (licence shown by GitLab) moved to C-16.
+flow, fixes applied) moved to C-12 to C-15; N-7 (licence shown by GitLab) moved to C-16. N-9 (negative and edge-input journey steps) is shown in session 10002586
+([gated/mr-11-notes.json](../evidence/flow/gated/mr-11-notes.json) line 1705).
 
 When one of these gets proof, move it to a numbered claim above, add the evidence file under
 `evidence/`, and flip its README row to Verified in the same commit.
