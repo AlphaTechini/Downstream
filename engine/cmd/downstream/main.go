@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -36,11 +37,13 @@ const usage = `usage:
   downstream schema   journeys
   downstream validate --journeys journeys.json --scan scan.json
   downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
-  downstream report   --run run.json [--scan scan.json] --out report.md
+  downstream report   [--run run.json] [--scan scan.json] [--frontend frontend.json] --out report.md
   downstream summary  --run run.json --scan scan.json
   downstream files    --scan scan.json
   downstream show     --scan scan.json --head <sha> --file N [--repo .]
-  downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <username> --out issues.json
+  downstream issues   [--run run.json] [--scan scan.json] [--notes notes.json] [--frontend frontend.json] --mr <iid> --starter <username> --out issues.json
+  downstream frontend --base <sha> --head <sha> --journeys fe-journeys.json --fecheck <dir> [--repo .] --out frontend.json
+  downstream frontend --detect --base <sha> --head <sha> [--repo .]
   downstream marker   parse [--journeys-out journeys.json] < issue_body.md
   downstream fixcheck --marker marker.json --option N
 `
@@ -65,6 +68,7 @@ func main() {
 		"issues":   cmdIssues,
 		"marker":   cmdMarker,
 		"fixcheck": cmdFixcheck,
+		"frontend": cmdFrontend,
 	}
 	cmd, ok := cmds[os.Args[1]]
 	if !ok {
@@ -100,6 +104,9 @@ func cmdScan(args []string) error {
 	cfg, err := target.Load(*repo, *base)
 	if err != nil {
 		return err
+	}
+	if !cfg.HasBackend() {
+		return errors.New("downstream.yml declares only a frontend, so there are no backend routes to scan; use the frontend command")
 	}
 	s, err := scan.Run(scan.Options{Repo: *repo, Base: *base, Head: *head, Root: cfg.Root})
 	if err != nil {
@@ -203,19 +210,39 @@ func cmdReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	rpath := fs.String("run", "", "run.json")
 	spath := fs.String("scan", "", "scan.json")
+	fpath := fs.String("frontend", "", "frontend.json; adds the Frontend section")
 	out := fs.String("out", "", "output file")
-	if err := parse(fs, args, "run", "out"); err != nil {
+	if err := parse(fs, args, "out"); err != nil {
 		return err
 	}
-	var run model.Run
-	if err := readJSON(*rpath, &run); err != nil {
-		return err
+	if *rpath == "" && *fpath == "" {
+		return errors.New("need --run, --frontend or both")
 	}
-	s, err := optionalScan(*spath)
-	if err != nil {
-		return err
+	var text string
+	if *rpath != "" {
+		var run model.Run
+		if err := readJSON(*rpath, &run); err != nil {
+			return err
+		}
+		s, err := optionalScan(*spath)
+		if err != nil {
+			return err
+		}
+		text = report.Render(run, s)
 	}
-	return os.WriteFile(*out, []byte(report.Render(run, s)), 0o644)
+	if *fpath != "" {
+		var f model.Frontend
+		if err := readJSON(*fpath, &f); err != nil {
+			return err
+		}
+		if text != "" {
+			text += "\n"
+		} else {
+			text = "### Downstream report\n\n"
+		}
+		text += report.RenderFrontend(f)
+	}
+	return os.WriteFile(*out, []byte(text), 0o644)
 }
 
 // cmdSummary prints one count per line so the flow and CI can branch on it
@@ -367,11 +394,29 @@ func cmdIssues(args []string) error {
 	rpath := fs.String("run", "", "run.json")
 	spath := fs.String("scan", "", "scan.json")
 	npath := fs.String("notes", "", "notes.json written by the model")
+	fpath := fs.String("frontend", "", "frontend.json; adds one issue per frontend root cause")
 	mr := fs.Int("mr", 0, "merge request IID")
 	starter := fs.String("starter", "", "username of whoever started the run")
 	out := fs.String("out", "", "output file")
-	if err := parse(fs, args, "run", "mr", "starter", "out"); err != nil {
+	if err := parse(fs, args, "mr", "starter", "out"); err != nil {
 		return err
+	}
+	if *rpath == "" && *fpath == "" {
+		return errors.New("need --run, --frontend or both")
+	}
+	var fe []issues.Issue
+	if *fpath != "" {
+		var f model.Frontend
+		if err := readJSON(*fpath, &f); err != nil {
+			return err
+		}
+		fe = issues.FrontendIssues(f, *mr, *starter)
+	}
+	if *rpath == "" {
+		if fe == nil {
+			fe = []issues.Issue{}
+		}
+		return writeJSON(*out, issuesOut{Issues: fe, Questions: []string{}, NeedsNotes: []string{}})
 	}
 	var run model.Run
 	if err := readJSON(*rpath, &run); err != nil {
@@ -402,7 +447,7 @@ func cmdIssues(args []string) error {
 	if err != nil {
 		return err
 	}
-	res := issuesOut{Issues: built, Questions: issues.Questions(run), NeedsNotes: []string{}}
+	res := issuesOut{Issues: append(built, fe...), Questions: issues.Questions(run), NeedsNotes: []string{}}
 	if res.Issues == nil {
 		res.Issues = []issues.Issue{}
 	}
@@ -418,6 +463,64 @@ func cmdIssues(args []string) error {
 	}
 	sort.Strings(res.NeedsNotes)
 	return writeJSON(*out, res)
+}
+
+// cmdFrontend runs the frontend check. It writes frontend.json and exits 0
+// whatever the outcome, so a frontend failure never stops the backend report;
+// a failed stage shows as withheld. The last stdout line is for the flow.
+func cmdFrontend(args []string) error {
+	fs := flag.NewFlagSet("frontend", flag.ContinueOnError)
+	base := fs.String("base", "", "baseline commit SHA")
+	head := fs.String("head", "", "candidate commit SHA")
+	jpath := fs.String("journeys", "", "frontend journeys JSON")
+	fecheck := fs.String("fecheck", "", "directory holding fecheck.mjs with its node_modules installed")
+	repo := fs.String("repo", ".", "repository root")
+	out := fs.String("out", "", "output file")
+	detect := fs.Bool("detect", false, "only list the changed frontend files and the mode")
+	required := []string{"base", "head", "journeys", "fecheck", "out"}
+	if slices.Contains(args, "--detect") || slices.Contains(args, "-detect") {
+		required = required[:2]
+	}
+	if err := parse(fs, args, required...); err != nil {
+		return err
+	}
+	if err := commits(*repo, *base, *head); err != nil {
+		return err
+	}
+	if *detect {
+		mode, files, err := runner.DetectFrontend(context.Background(), *repo, *base, *head)
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			fmt.Println(f)
+		}
+		if mode == "" {
+			mode = "none"
+		}
+		fmt.Printf("frontend: files=%d mode=%s\n", len(files), mode)
+		return nil
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	f := runner.Frontend(ctx, runner.FrontendOptions{
+		Repo: *repo, Base: *base, Head: *head, Journeys: *jpath, Fecheck: *fecheck, Log: os.Stderr,
+	})
+	if err := writeJSON(*out, f); err != nil {
+		return err
+	}
+	counts := map[string]int{}
+	if f.Compare != nil {
+		for _, j := range f.Compare.Journeys {
+			for _, x := range j.Findings {
+				if x.Metric != "not checked" {
+					counts[x.Verdict]++
+				}
+			}
+		}
+	}
+	fmt.Printf("frontend: status=%s regression=%d improved=%d withheld=%d\n", f.Status, counts["regression"], counts["improved"], counts["withheld"])
+	return nil
 }
 
 func cmdMarker(args []string) error {

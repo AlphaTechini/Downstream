@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "status": "checked",
+  "mode": "static",
+  "base": "25d36ca56b17c37c24f04f75f830d671e6804669",
+  "head": "8518b39fbf5c6e21cdf4aafd1e5f557561fbfcb2",
+  "changed_files": [
+    "src/app-AAAAAAAA.js",
+    "src/app-BBBBBBBB.js",
+    "src/index.html"
+  ],
+  "dropped": [
+    "journey bad step 1: visit must be a path starting with \"/\" on the app origin",
+    "journey bad step 2: selector does not parse: Failed to execute 'querySelectorAll' on 'Element': 'a[[' is not a valid selector.",
+    "journey bad: must start with a valid visit step"
+  ],
+  "journeys": 1,
+  "node_version": "22.23.3",
+  "compare": {
+    "journeys": [
+      {
+        "id": "home",
+        "findings": [
+          {
+            "metric": "js bytes (gzip)",
+            "verdict": "regression",
+            "detail": {
+              "base": 147,
+              "head": 40397,
+              "delta": 40250,
+              "pct": 27381,
+              "culprits": [
+                {
+                  "asset": "/app-BBBBBBBB.js",
+                  "change": "changed",
+                  "base": 147,
+                  "head": 40397,
+                  "delta": 40250
+                }
+              ]
+            }
+          },
+          {
+            "metric": "missing assets",
+            "verdict": "regression",
+            "detail": [
+              {
+                "url": "/banner.png",
+                "status": 404
+              }
+            ]
+          },
+          {
+            "metric": "DOM size",
+            "verdict": "regression",
+            "detail": {
+              "base": 15,
+              "head": 311,
+              "depth": [
+                4,
+                4
+              ],
+              "growth": [
+                [
+                  "li",
+                  295
+                ],
+                [
+                  "img",
+                  1
+                ]
+              ]
+            }
+          },
+          {
+            "metric": "accessibility",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "image-alt",
+                "impact": "critical",
+                "target": "img[src$=\"logo.png\"]",
+                "help": "Images must have alternative text"
+              }
+            ]
+          },
+          {
+            "metric": "markup validity",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "wcag/h37",
+                "selector": "html \u003e body \u003e main \u003e img:nth-child(2)",
+                "message": "\u003cimg\u003e is missing required \"alt\" attribute"
+              }
+            ]
+          },
+          {
+            "metric": "journey steps",
+            "verdict": "regression",
+            "detail": [
+              {
+                "step": {
+                  "expectCount": [
+                    "#list li",
+                    5
+                  ]
+                },
+                "error": "expected 5 x #list li, got 300"
+              }
+            ]
+          }
+        ],
+        "renderMs": {
+          "base": 137,
+          "head": 281
+        }
+      }
+    ],
+    "noise": {
+      "deterministic": true,
+      "unstable": []
+    },
+    "brokenOnBase": []
+  },
+  "not_checked": [
+    "color-contrast",
+    "visual layout",
+    "real paint/CPU timing"
+  ],
+  "started_at": "2026-10-24T14:36:07Z",
+  "ended_at": "2026-10-24T14:36:18Z"
+}

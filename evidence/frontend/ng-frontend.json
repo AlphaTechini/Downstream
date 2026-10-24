@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "status": "checked",
+  "mode": "server",
+  "base": "7f2473276ae80df9e124064ccf5fd0091d5e205e",
+  "head": "e85e350d97d70bb27bd53f37efa3a3f4380c4759",
+  "changed_files": [
+    "internal/web/templates/layout.html"
+  ],
+  "journeys": 3,
+  "node_version": "22.23.3",
+  "compare": {
+    "journeys": [
+      {
+        "id": "home",
+        "findings": [
+          {
+            "metric": "missing assets",
+            "verdict": "regression",
+            "detail": [
+              {
+                "url": "/static/promo-banner.png",
+                "status": 404
+              }
+            ]
+          },
+          {
+            "metric": "accessibility",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "image-alt",
+                "impact": "critical",
+                "target": "img",
+                "help": "Images must have alternative text"
+              }
+            ]
+          },
+          {
+            "metric": "markup validity",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "wcag/h37",
+                "selector": "html \u003e body \u003e header \u003e img",
+                "message": "\u003cimg\u003e is missing required \"alt\" attribute"
+              }
+            ]
+          }
+        ],
+        "renderMs": {
+          "base": 510,
+          "head": 697
+        }
+      },
+      {
+        "id": "repo",
+        "findings": [
+          {
+            "metric": "missing assets",
+            "verdict": "regression",
+            "detail": [
+              {
+                "url": "/static/promo-banner.png",
+                "status": 404
+              }
+            ]
+          },
+          {
+            "metric": "accessibility",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "image-alt",
+                "impact": "critical",
+                "target": "img",
+                "help": "Images must have alternative text"
+              }
+            ]
+          },
+          {
+            "metric": "markup validity",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "wcag/h37",
+                "selector": "html \u003e body \u003e header \u003e img",
+                "message": "\u003cimg\u003e is missing required \"alt\" attribute"
+              }
+            ]
+          }
+        ],
+        "renderMs": {
+          "base": 577,
+          "head": 774
+        }
+      },
+      {
+        "id": "issues",
+        "findings": [
+          {
+            "metric": "missing assets",
+            "verdict": "regression",
+            "detail": [
+              {
+                "url": "/static/promo-banner.png",
+                "status": 404
+              }
+            ]
+          },
+          {
+            "metric": "accessibility",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "image-alt",
+                "impact": "critical",
+                "target": "img",
+                "help": "Images must have alternative text"
+              }
+            ]
+          },
+          {
+            "metric": "markup validity",
+            "verdict": "regression",
+            "detail": [
+              {
+                "rule": "wcag/h37",
+                "selector": "html \u003e body \u003e header \u003e img",
+                "message": "\u003cimg\u003e is missing required \"alt\" attribute"
+              }
+            ]
+          }
+        ],
+        "renderMs": {
+          "base": 842,
+          "head": 970
+        }
+      }
+    ],
+    "noise": {
+      "deterministic": true,
+      "unstable": []
+    },
+    "brokenOnBase": []
+  },
+  "not_checked": [
+    "color-contrast",
+    "visual layout",
+    "real paint/CPU timing"
+  ],
+  "started_at": "2026-10-24T14:36:18Z",
+  "ended_at": "2026-10-24T14:37:07Z"
+}

@@ -140,11 +140,13 @@ downstream scan     --base <sha> --head <sha> [--repo .] --out scan.json
 downstream schema   journeys                    # the JSON schema the model must follow
 downstream validate --journeys journeys.json --scan scan.json
 downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
-downstream report   --run run.json [--scan scan.json] --out report.md
+downstream report   [--run run.json] [--scan scan.json] [--frontend frontend.json] --out report.md
 downstream summary  --run run.json --scan scan.json   # one count per line: regression=N ...
 downstream files    --scan scan.json                 # numbered list of files the model may read
 downstream show     --scan scan.json --head <sha> --file N   # one of them at the head commit
-downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <user> --out issues.json
+downstream issues   [--run run.json] [--scan scan.json] [--notes notes.json] [--frontend frontend.json] --mr <iid> --starter <user> --out issues.json
+downstream frontend --detect --base <sha> --head <sha>   # changed frontend files and the mode
+downstream frontend --base <sha> --head <sha> --journeys fe-journeys.json --fecheck <dir> --out frontend.json
 downstream marker   parse [--journeys-out journeys.json] < issue_body.md
 downstream fixcheck --marker marker.json --option N  # checks option N exists; does not apply it
 ```
@@ -152,6 +154,9 @@ downstream fixcheck --marker marker.json --option N  # checks option N exists; d
 `run` writes `run.json` even when it stops early, with the stage and error, so `report` can
 say where it stopped. `issues` writes the issue titles and bodies, the trade-off questions for
 the merge request, and `needs_notes`: the finding IDs the model must write notes for.
+`frontend` always writes `frontend.json` and exits 0: a stage that fails is recorded as
+withheld, so a frontend problem never stops the backend report. `report` and `issues` need
+`--run`, `--frontend` or both.
 
 The file formats are the Go types in `engine/model/model.go`:
 
@@ -163,6 +168,9 @@ The file formats are the Go types in `engine/model/model.go`:
   order with per-step count, failures, p50, p95 and mean plus app CPU seconds and peak RSS,
   and one finding per metric with B1, C, B2, noise band, delta and class.
 - `notes.json`: per headline finding, a likely cause and fix options, written by the model.
+- `frontend.json` (`engine/model/frontend.go`): status (checked, skipped or withheld), mode
+  (static or server), the changed frontend files, the steps the validator refused, and
+  fecheck's comparison: per journey, each check that moved and its verdict.
 
 ### 3.3 Target config
 
@@ -185,6 +193,39 @@ duration: 60s                             # cap per pass
 Only flat `key: value` lines and comments are accepted; anything else is an error with its
 line number. `{out}` is the binary path the engine chooses. `build` and `start` run with
 `sh -c` and come from a committed file, never from model output.
+
+A frontend build is declared with four more keys (the fixtures in `fixtures/frontend/` use
+them):
+
+```yaml
+frontend_dir: web            # holds package.json and package-lock.json; "." by default
+frontend_build: npm run build
+frontend_out: web/dist       # what the build writes; served as a single-page app
+frontend_node: 20.20.2       # optional exact Node version, fetched from the npm registry
+```
+
+`frontend_build` and `frontend_out` come together. A file with only these keys is a
+frontend-only target: `scan` and `run` refuse it and the flow runs only the frontend stage.
+Once any backend key is present, all of them are required, as before. Without frontend keys,
+the frontend stage checks the pages the backend itself serves (server mode), counting only
+changed templates and assets under `root`.
+
+### 3.4 Frontend stage
+
+`downstream frontend` builds base and head, serves each on loopback and runs
+[fecheck](../tools/fecheck/README.md) on the model's page journeys: base twice, then head.
+
+- Static mode: `npm ci --ignore-scripts` in `frontend_dir`, then `frontend_build`. The head
+  reuses the base's `node_modules` through hard links when the lockfiles are identical. The
+  engine serves `frontend_out` itself: a file that exists is served, a missing path with an
+  extension is a 404 (a broken asset), anything else gets `index.html`. When a backend is
+  also declared, it is built and started and `/api/` is proxied to it.
+- Server mode: the backend is built and started as for a run, and fecheck visits it directly.
+- The stage has 190 s in all and each collection 90 s. Validation drops bad steps with a
+  reason, adds a visit to `/` when no journey has one, and caps the set at 15 journeys of 20
+  steps.
+- Never checked, and said in every report: color contrast, visual layout, real paint and CPU
+  timing. happy-dom runs the app's JavaScript but has no layout engine.
 
 ---
 

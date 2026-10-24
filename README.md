@@ -19,6 +19,14 @@ staging environment that replays real user behaviour.
 > changes were caught. In CI an earlier, latency-based rule passed the clean control in 22 of 22
 > runs ([evidence/runs.md](evidence/runs.md)); the
 > sandbox's own noise rate is not measured yet (one clean run there). The claims table says exactly what has been shown.
+>
+> **Frontend stage (new, 2026-10-24):** when a change touches pages, templates or a frontend
+> build, Downstream also renders the old and new pages in happy-dom (no browser) and reports
+> bundle growth with the asset responsible, missing assets, DOM growth, new accessibility and
+> markup errors, uncaught JavaScript errors and broken page steps. Shown in the Duo sandbox on a
+> NewGit template change, and locally on real React and Svelte (Vite) builds
+> ([evidence/frontend/README.md](evidence/frontend/README.md)). Color contrast, layout and paint
+> are never checked.
 
 ## Built for GitLab Transcend: Life After Code
 
@@ -59,6 +67,7 @@ to routes the author never opened. That gap is what Downstream targets.
 | 4 | k6 runs them on the old build twice and the new build once, so noise is measured; new-feature journeys run in the new build's pass alongside the others, so existing pages are measured while the feature is in use | Verified in the sandbox ([`engine/runner`](engine/runner/), [`engine/k6gen`](engine/k6gen/)) |
 | 5 | Only differences beyond the noise and a per-metric tolerance open issues: failing steps, and process counters (CPU per completed journey, bytes written net of responses, write syscalls, memory, fds, threads, allocations, GC, goroutines). Latency is shown but advisory. One issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Verified: issues opened by the flow. Under the gated rule the planted change gives 1 issue (CPU per journey); the earlier latency rule gave 2 for 1 cause. A trade-off question was posted in session 10002748 ([evidence](evidence/flow.md)) |
 | 6 | `@handle fix it` (option 1) or `fix option N` commits the option on a new branch, opens a merge request mentioning the requester and re-runs the issue's journey on it; `verify` reruns after merge | `fix it` verified (!13, [evidence](evidence/flow.md)); `verify` written, not run |
+| 7 | When frontend files change, the model writes page journeys and the engine builds both versions, renders each page in happy-dom (old build twice, so noise is measured) and adds a Frontend section to the report, with one issue per cause | Verified in the sandbox on a server-rendered app (NewGit !5, [evidence](evidence/flow.md)); React and Svelte builds verified locally only ([evidence](evidence/frontend/README.md)) |
 
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
 chooses journeys and writes sentences; code produces every number, table and chart.
@@ -91,6 +100,9 @@ ok: links resolve, verified claims cite evidence, evidence is clean, checksums m
 
 With Go 1.22 or newer and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
 including the integration tests that start an app and run k6 (they skip without k6).
+On Linux with Node 20.19 or newer and npm, `make verify-frontend` builds the React and Svelte
+fixtures and runs the frontend stage on a planted and a clean change (about 2 minutes; it
+downloads the fixtures' npm packages).
 
 `make verify` validates the flow and config YAML, checks that docs links resolve, that every Verified
 row above links to committed evidence, that logs hold no unredacted email, and that the
@@ -203,6 +215,10 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | A new feature's journeys run on the new build alongside the compared ones, so its cost to existing pages shows | Verified, session 10001024 on !14 (8 existing steps regressed while the new route was in use; the same MR with a separate pass showed 0) | `engine/runner` | [mr-14-notes.json](evidence/flow/mr-14-notes.json) L151, L381 |
 | Journeys are written by the model from the scan and run by k6 against an app | Verified in flow sessions | `engine/journey`, `engine/k6gen` | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701; [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L757 |
 | One issue per cause, starter tagged | Verified that the flow opens the issues; the planted change gives 2 issues for 1 cause | `engine/issues` | [issue-4.json](evidence/flow/session-9999905/issue-4.json) L5; [mr-11-notes.json](evidence/flow/mr-11-notes.json) L785 |
+| Gated rule with floors (flow 1.0.12): a clean change opens no issue; planted and demo-feature changes are caught | Verified in the Duo sandbox: 0 of 3 clean runs flagged; planted CPU per journey 2.87 / 2.79 / 424.64 ms; NewGit feature 10.38 / 9.75 / 32.28 ms | `engine/classify` | [floors/mr-16-notes.json](evidence/flow/floors/mr-16-notes.json) L1127, L1329, L1531; [floors/mr-11-notes.json](evidence/flow/floors/mr-11-notes.json) L667; [floors/newgit-mr-3-notes.json](evidence/flow/floors/newgit-mr-3-notes.json) L409 |
+| A template change on a server-rendered app is caught by the frontend stage in the Duo sandbox, with one issue per cause | Verified, session 10003926 on NewGit !5 (12 page checks regressed on 4 pages; 3 issues) | `engine/runner/frontend.go`, `tools/fecheck/` | [newgit-mr-5-notes.json](evidence/flow/frontend/newgit-mr-5-notes.json) L151; [issues](evidence/flow/frontend/newgit-issues-5-7.json) L6, L79, L152; [job log](evidence/flow/frontend/session-10003926-newgit-mr5-job-log.txt) L641 (npm ci), L659 (frontend), L751 |
+| On real React and Svelte (Vite 8) builds the frontend stage catches every planted kind and passes a clean change | Verified locally (WSL2), not in the Duo sandbox | `fixtures/frontend/`, `scripts/verify_frontend.sh` | [frontend-verify.txt](evidence/frontend-verify.txt) L61, L121, L123 |
+| `frontend_node` fetches an exact Node version from the npm registry | Written, not run | `engine/runner/fe_node.go` | none |
 | `verify` reruns after merge | Written, not run | `flows/downstream.yml` | none |
 | Cost in credits of one run | Not measured | none | none |
 
@@ -217,7 +233,8 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 - **Latency is advisory.** A slower page with no change in failures or process counters is
   shown in the report but opens no issue. Identical code varied far more in latency than in the
   counters (`docs/details.md`).
-- **The gated rule has a small sample.** 3 clean flow runs, 1 planted and 1 new-feature run.
+- **The gated rule has a small sample.** 3 clean flow runs with the current floors (flow
+  1.0.12), and earlier rounds that each needed a floor ([evidence/flow.md](evidence/flow.md)).
   Allocation rises also need 100 objects or 16 KB per journey, bytes written 1 KB per journey,
   write syscalls 1 call per journey and peak memory 10 MB: chosen floors, so a smaller regression of only those kinds passes as
   noise.
@@ -227,8 +244,13 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
   `template.FuncMap` are not linked to routes; a repository's `downstream.md` and the control
   journeys cover those (NewGit, [evidence/flow.md](evidence/flow.md)).
 - **The model posts the engine's report by copying it.** In one session it mistyped the last
-  paragraph of a long report and posted a correction note with the exact text. Figures come
-  from the engine, but a note is only as faithful as that copy.
+  paragraph of a long report and posted a correction note with the exact text. In the first
+  frontend session it reworded one sentence ("the changes above" became "the changed results
+  above"). Figures come from the engine, but a note is only as faithful as that copy.
+- **The frontend stage is new and lightly tested.** One sandbox session, on a server-rendered
+  app. Static frontend builds (`frontend_build`, `npm ci` of the app) have run only locally.
+  `fix it` does not apply to frontend issues. happy-dom has no layout or paint, so color
+  contrast, visual layout and real paint or CPU timing are never checked; every report says so.
 - **Fix merge requests show the requester as author.** GitLab runs the session as the user who
   mentioned the bot; the bot requests the review and posts the notes.
 - **DB time is not measured.** The report says so.

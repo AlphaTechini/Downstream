@@ -119,6 +119,9 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 	if err != nil {
 		return fail("load config", err)
 	}
+	if !cfg.HasBackend() {
+		return fail("load config", errors.New("downstream.yml declares only a frontend; there is no backend to measure, so use the frontend command"))
+	}
 	var compare, fresh []model.Journey
 	for _, j := range o.Journeys.Journeys {
 		if j.IsNew() {

@@ -1,0 +1,16 @@
+{
+  "name": "fecheck",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "happy-dom": "21.0.4",
+    "axe-core": "4.14.0",
+    "html-validate": "10.17.0"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,4 @@
+[
+  { "id": "home", "steps": [{ "visit": "/" }, { "expectText": ["h1", "Fixture shop"] }, { "expectCount": ["#products li", 5] }] },
+  { "id": "reports", "steps": [{ "visit": "/" }, { "click": "#show-reports" }, { "expectText": ["h2", "Reports"] }] }
+]

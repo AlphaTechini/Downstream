@@ -197,6 +197,48 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
   from the GitLab API on 2026-10-24.
 - **Does not show:** that a project outside this group has enabled the flow.
 
+## C-18. With the floors (flow 1.0.12), the live bot passes the clean change and catches the rest
+
+- **File:** `engine/classify/classify.go` (floors: peak memory 10 MB, write syscalls 1 call per
+  journey, bytes written 1 KB, allocations 100 objects or 16 KB)
+- **Proof:** [floors/mr-16-notes.json](../evidence/flow/floors/mr-16-notes.json) lines 1127, 1329
+  and 1531: three clean-change runs with 0 regressed metrics.
+  [floors/mr-11-notes.json](../evidence/flow/floors/mr-11-notes.json) line 667: planted change,
+  CPU per completed journey 2.87 / 2.79 / 424.64 ms.
+  [floors/newgit-mr-3-notes.json](../evidence/flow/floors/newgit-mr-3-notes.json) line 409: the
+  NewGit avatar change, 10.38 / 9.75 / 32.28 ms. The earlier rounds that each needed a floor are
+  in the same files (lines 151, 437, 639, 897 of mr-16) and in `evidence/flow.md`.
+- **Does not show:** a false-alarm rate (three runs). A regression smaller than a floor in only
+  that metric is noise by design; the new feature on !14 raised peak memory by 0.7 MB under
+  1.0.10, which the 10 MB floor now hides (CPU per journey still flags it).
+
+## C-19. A template change on a server-rendered app is caught by the frontend stage in the sandbox
+
+- **File:** `engine/runner/frontend.go`, `engine/report/frontend.go`, `engine/issues/frontend.go`,
+  `tools/fecheck/`, flow step R8F. Engine `831a73e`, flow released privately to NewGit for the test.
+- **Proof:** [newgit-mr-5-notes.json](../evidence/flow/frontend/newgit-mr-5-notes.json) line 151:
+  session 10003926 on NewGit !5, Frontend section with 12 regressions on 4 model-written page
+  journeys (missing asset, image-alt, markup on each page), base against base identical.
+  [newgit-issues-5-7.json](../evidence/flow/frontend/newgit-issues-5-7.json) lines 6, 79, 152:
+  one issue per cause. [Job log](../evidence/flow/frontend/session-10003926-newgit-mr5-job-log.txt)
+  line 641 (`npm ci` of fecheck in the sandbox), line 659 (`downstream frontend`), line 751
+  (`Job succeeded`).
+- **Check:** `grep -n "Frontend (server build" evidence/flow/frontend/newgit-mr-5-notes.json`
+- **Does not show:** a static frontend build in the sandbox (C-20 is local only); a clean
+  frontend change in the sandbox; color contrast, layout or paint, which are never checked. The
+  note was retyped by the model and one sentence was reworded (`evidence/flow.md`).
+
+## C-20. On real React and Svelte builds, every planted frontend regression is caught and a clean change passes
+
+- **File:** `fixtures/frontend/`, `scripts/verify_frontend.sh` (`make verify-frontend`)
+- **Proof:** [frontend-verify.txt](../evidence/frontend-verify.txt) line 61 (React 19.3.1) and
+  line 121 (Svelte 5.57.2), both Vite 8.3.5: bundle bytes, missing asset, DOM size,
+  accessibility, markup and JS error all regress on the planted change, and the clean change
+  has none; line 123 `verify-frontend: PASS`. Lines 23 and 83 name the grown chunk.
+- **Check:** `make verify-frontend` on Linux with Go, Node 20.19+ and npm.
+- **Does not show:** a run in the Duo sandbox (this ran on a local WSL2 machine, Node 22.23.3);
+  Angular, Next.js or server-side rendering frameworks; `frontend_node`, which has not run.
+
 ---
 
 ## C-A1. On identical code the rule reports no regression, and the floor is why
