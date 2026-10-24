@@ -180,57 +180,6 @@ Only flat `key: value` lines and comments are accepted; anything else is an erro
 line number. `{out}` is the binary path the engine chooses. `build` and `start` run with
 `sh -c` and come from a committed file, never from model output.
 
-### 3.4 Failure cases
-
-Situations where the engine stops and says why, instead of guessing a verdict.
-
-**The target needs something the sandbox does not have.** The engine builds and starts the
-target with the `build` and `start` lines from `downstream.yml`, using only what is installed
-in the Duo sandbox (section 2): Go 1.22.12, Node 20.20.2, Python 3.9.25, no docker, no psql,
-2 vCPU, about 7.8 GiB of RAM, and a network allowlist that is GitLab-only unless
-`agent-config.yml` widens it. The flow also sets `GOTOOLCHAIN=local` before every command, so
-Go does not fetch a newer toolchain. Anything the target needs that differs from this fails
-the same way: another version of a language, a build tool that is missing or too old, a
-download the allowlist blocks, or a service the app expects to find running. The engine does
-not compare versions in advance. It tries, and stops at the first stage that fails.
-
-| The target needs | The run stops at | What the note carries |
-|---|---|---|
-| A newer Go: a `go` line in `go.mod` above 1.22.12, or a standard-library API added after 1.22 | `build (base)`, or `build (head)` when only the merge request raises the requirement | The last 4,096 bytes of build output. Go prints `go: go.mod requires go >= X (running go 1.22.12; GOTOOLCHAIN=local)` |
-| Another Node or Python version, or any tool the `build` line calls that is missing or too old | `build (base)` or `build (head)` | The same build output tail |
-| A package download from a host the allowlist blocks | `build (base)` or `build (head)` | The same build output tail |
-| A service the app needs when it starts (a database server, a docker daemon) | `baseline check`, or `pass C` when only the head needs it | `the app exited before it was ready` with the last 4,096 bytes of the app's output, or `the app did not answer 200 on <ready_path> within 30s` |
-| A newer runtime than the sandbox has to run the `start` line | `baseline check`, or `pass C` when only the head needs it | The same as the row above |
-
-The engine's own tool follows the same rule. If k6 is not on PATH the run stops at stage `k6`;
-`setup_script` is what puts it there.
-
-CPU and memory are different. 2 vCPU and 7.8 GiB do not stop a run, but they change the
-numbers: the false-positive rate was measured on the GitLab runner, not in the sandbox
-(README, "False positives on noisy machines").
-
-In every stop-case no journey is measured and no verdict is given. The final merge request
-note (FR-04) names the stage and carries the output tail.
-
-- Covered by tests: a compile error stops at `build (base)` (`TestRunStopsOnBuildFailure`), and
-  a missing k6 stops at `k6` (`TestRunWithoutK6ReportsStage`). Not run inside the sandbox: a
-  version mismatch of any kind, a missing build tool, a blocked download, a missing service.
-  The start-time rows are read from `runPass` and `waitReady` in `engine/runner`, not from a run.
-- Route analysis reads Go `net/http` code only (README), so a Go target is the only kind the
-  engine supports today. The Node and Python rows apply to what a Go target's own `build` line
-  calls, and to any other language added later.
-- This has already happened once. The demo app imported `crypto/pbkdf2`, which exists only
-  from Go 1.24, so it could not build on 1.22.12. The fix was to write the PBKDF2 loop into
-  `examples/shelf/pbkdf2.go` and test it against known vectors (`git log --grep "crypto/pbkdf2"`).
-- Ways out: install the missing runtime or tool in `setup_script` (it runs outside the sandbox
-  and can download; k6 is installed that way), add the download host to `network_policy`, or
-  pin the target to what the sandbox has, as the demo app was. An earlier revision of
-  `agent-config.yml` tried the first for Go with `GOTOOLCHAIN=go1.26.10`; it never ran and was
-  removed in the commit "Target Go 1.22, the version the Duo sandbox already has". A target
-  that needs docker or a database server has no way through today: the sandbox has no docker
-  or psql, and nothing in this repository installs a database server. None of these is
-  automatic.
-
 ---
 
 ## 4. Finding what a change affects (the blast radius)

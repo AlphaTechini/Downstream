@@ -101,11 +101,6 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 - **The product flow has not run.** [`flows/downstream.yml`](flows/downstream.yml) uses tools
   not yet exercised from a custom flow (`create_issue`, `get_issue`, `create_issue_note`;
   T-08, T-09), and the engine has not yet been built inside the sandbox.
-- **Matching the sandbox is not handled.** The engine builds and starts the target with what the
-  sandbox has: Go 1.22.12, Node 20.20.2, Python 3.9.25, no docker, no psql. A target that needs
-  another version, a missing tool or a service stops the run at the build or baseline check
-  stage with a failure note and no verdict. The demo app hit this once (Go 1.24) and was
-  rewritten to avoid it. Details: [`docs/details.md`](docs/details.md) section 3.4.
 - **Static analysis covers Go `net/http` only.** Routes must be registered with string-literal
   patterns on a ServeMux. Other frameworks and languages are not supported.
 - **Fixes are not applied.** `fix option N` checks the option exists; the change itself would
@@ -122,6 +117,21 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 - **Untested platform capabilities** are T-07 to T-15 in [`docs/requirements.md`](docs/requirements.md).
 - **Only project members (Developer or higher) can trigger the flow.** Visitors cannot; `evidence/`
   is the substitute.
+
+## What might fail
+
+Downstream runs inside GitLab's Duo sandbox, so it can only build and run an application with
+what that sandbox has: Go 1.22.12, Node 20.20.2, Python 3.9.25, no docker, no psql, 2 vCPU,
+about 7.8 GiB of RAM, and a network allowlist ([`docs/details.md`](docs/details.md) section 2).
+If an application needs a different version of its language, a tool or service the sandbox
+does not have, or a download the allowlist blocks, it will not build or start. Downstream then
+stops at the step that failed and reports it, with no verdict.
+
+The stop-and-report path is tested with a compile error (`TestRunStopsOnBuildFailure`). A
+version or tool mismatch has not been run inside the sandbox. It has happened once, with the
+demo app, which imported `crypto/pbkdf2` (Go 1.24 or newer) and was rewritten to build on
+Go 1.22 (`git log --grep "crypto/pbkdf2"`). To get past it, pin the application to the
+sandbox's versions or install the missing tool in the agent's `setup_script`.
 
 ## 30-second check
 
