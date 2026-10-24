@@ -1,6 +1,8 @@
 package issues
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -22,11 +24,17 @@ type feCause struct {
 	journeys   []string
 }
 
-// FrontendIssues opens one issue per root cause among the frontend
-// regressions: the same culprit asset, missing URL, accessibility or markup
-// rule, or JS error seen on several journeys is one issue. Withheld and
-// improved checks open none.
-func FrontendIssues(f model.Frontend, mr int, starter string) []Issue {
+// id is the cause's finding ID: short and stable for the same frontend.json,
+// so the model can key its notes on it.
+func (c *feCause) id() string {
+	sum := sha1.Sum([]byte(c.key))
+	return "fe-" + hex.EncodeToString(sum[:4])
+}
+
+// frontendCauses groups the frontend regressions by root cause: the same
+// culprit asset, missing URL, accessibility or markup rule, or JS error seen
+// on several journeys is one cause. Withheld and improved checks are left out.
+func frontendCauses(f model.Frontend) []*feCause {
 	if f.Status != model.FrontendChecked || f.Compare == nil {
 		return nil
 	}
@@ -44,20 +52,101 @@ func FrontendIssues(f model.Frontend, mr int, starter string) []Issue {
 	}
 	for _, j := range f.Compare.Journeys {
 		for _, x := range j.Findings {
-			if x.Verdict != "regression" {
-				continue
+			if x.Verdict == "regression" {
+				feCauses(j.ID, x, add)
 			}
-			feCauses(j.ID, x, add)
 		}
 	}
-	keys := make([]string, 0, len(causes))
-	for k := range causes {
+	out := make([]*feCause, 0, len(causes))
+	for _, c := range causes {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, k int) bool { return out[i].key < out[k].key })
+	return out
+}
+
+// FrontendIDs lists the finding IDs of the frontend issues, the keys the
+// model's notes use for them.
+func FrontendIDs(f model.Frontend) []string {
+	var ids []string
+	for _, c := range frontendCauses(f) {
+		ids = append(ids, c.id())
+	}
+	return ids
+}
+
+// ValidateFrontendNotes checks the notes keyed by frontend finding IDs with the
+// same limits as backend notes.
+func ValidateFrontendNotes(n model.Notes, f model.Frontend) error {
+	ids := FrontendIDs(f)
+	keys := make([]string, 0, len(n.Items))
+	for k := range n.Items {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	var out []Issue
 	for _, k := range keys {
-		c := causes[k]
+		if !slices.Contains(ids, k) {
+			return fmt.Errorf("notes: %q is not a frontend finding ID in this run", k)
+		}
+		if err := checkNote(k, n.Items[k]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// pickJourneys returns the page journeys with the given IDs from fecheck's
+// validated journeys, as a JSON array.
+func pickJourneys(all json.RawMessage, ids []string) json.RawMessage {
+	var js []json.RawMessage
+	if json.Unmarshal(all, &js) != nil {
+		return nil
+	}
+	var keep []json.RawMessage
+	for _, j := range js {
+		var head struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(j, &head) == nil && slices.Contains(ids, head.ID) {
+			keep = append(keep, j)
+		}
+	}
+	if len(keep) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(keep)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// FrontendIssues opens one issue per root cause among the frontend
+// regressions. With notes, an issue carries the likely cause, numbered fix
+// options and a state block that fix it reads.
+func FrontendIssues(f model.Frontend, notes *model.Notes, mr int, starter string) ([]Issue, error) {
+	var out []Issue
+	for _, c := range frontendCauses(f) {
+		id := c.id()
+		var note *model.Note
+		if notes != nil {
+			if n, ok := notes.Items[id]; ok {
+				note = &n
+			}
+		}
+		fix := []string{}
+		if note != nil {
+			fix = note.FixOptions
+		}
+		marker := model.Marker{
+			Version: 1, MR: mr, Base: f.Base, Head: f.Head, FindingID: id, Metric: c.title,
+			FixOptions: fix, Kind: model.MarkerFrontend,
+			FEJourneys: pickJourneys(f.JourneysUsed, c.journeys), Files: f.ChangedFiles,
+		}
+		mline, err := encodeMarker(marker)
+		if err != nil {
+			return nil, err
+		}
 		var b strings.Builder
 		w := func(s string) { b.WriteString(s + "\n") }
 		w(fmt.Sprintf("Downstream's frontend check on !%d found this on the head build (%s) and not on the base build (%s). Started by @%s.", mr, short(f.Head), short(f.Base), starter))
@@ -70,12 +159,57 @@ func FrontendIssues(f model.Frontend, mr int, starter string) []Issue {
 		w("")
 		w("Pages were rendered in happy-dom with the app's own JavaScript, three times: base twice, then head. A check that moved between the two base runs is withheld, not reported here.")
 		w("")
+		if len(f.ChangedFiles) > 0 {
+			w("**Frontend files changed**")
+			w("")
+			for _, p := range f.ChangedFiles {
+				w("- " + code(p))
+			}
+			w("")
+		}
 		w("Not checked: " + strings.Join(f.NotChecked, ", ") + ".")
 		w("")
-		w("The `fix it` reply works on backend issues only; this one needs a human change.")
-		out = append(out, Issue{FindingID: "fe:" + c.key, Title: "[Downstream] frontend: " + c.title, Body: b.String(), Steps: c.journeys})
+		w("**Likely cause**")
+		w("")
+		if note == nil {
+			w("Not written: no notes were supplied for this finding.")
+		} else {
+			lc := oneLine(note.LikelyCause)
+			if !strings.HasPrefix(strings.ToLower(lc), "likely") {
+				lc = "Likely: " + lc
+			}
+			w(lc)
+		}
+		w("")
+		w("**Fix options**")
+		w("")
+		if len(fix) == 0 {
+			w("None supplied.")
+		}
+		for i, o := range fix {
+			w(fmt.Sprintf("%d. %s", i+1, oneLine(o)))
+		}
+		w("")
+		w("**How to reply**")
+		w("")
+		if len(fix) == 0 {
+			w("No fix options were supplied, so there is nothing to apply.")
+		} else {
+			w("Reply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. " +
+				"Downstream commits the change on a new branch, opens a merge request for it against the original branch, " +
+				"and re-runs the page check on it. It never merges.")
+		}
+		w("")
+		w("<details><summary>Downstream state, read by fix it. Do not edit.</summary>")
+		w("")
+		w("```text")
+		w(mline)
+		w("```")
+		w("")
+		w("</details>")
+		out = append(out, Issue{FindingID: id, Title: "[Downstream] frontend: " + c.title, Body: b.String(), Steps: c.journeys})
 	}
-	return out
+	return out, nil
 }
 
 // feCauses splits one finding into its root causes.

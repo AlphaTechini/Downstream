@@ -324,3 +324,29 @@ func TestShowCommandValidatesHeadAndNumber(t *testing.T) {
 		t.Errorf("files without --scan: %v", err)
 	}
 }
+
+func TestWriteMarkerJourneys(t *testing.T) {
+	dir := t.TempDir()
+	// App-wide backend finding: all of the run's journeys, new ones compared.
+	app := model.Marker{Journeys: []model.Journey{{ID: "a"}, {ID: "b", Kind: model.KindNew}}}
+	p := filepath.Join(dir, "j.json")
+	if err := writeMarkerJourneys(p, app); err != nil {
+		t.Fatal(err)
+	}
+	var jf model.JourneyFile
+	b, _ := os.ReadFile(p)
+	if err := json.Unmarshal(b, &jf); err != nil || len(jf.Journeys) != 2 || jf.Journeys[1].Kind != "" {
+		t.Fatalf("journeys = %+v (%v)", jf.Journeys, err)
+	}
+	// Frontend finding: the page journeys as fecheck reads them.
+	fe := model.Marker{Kind: model.MarkerFrontend, FEJourneys: json.RawMessage(`[{"id":"home","steps":[{"visit":"/"}]}]`)}
+	if err := writeMarkerJourneys(p, fe); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != `[{"id":"home","steps":[{"visit":"/"}]}]` {
+		t.Fatalf("page journeys = %s", b)
+	}
+	if err := writeMarkerJourneys(p, model.Marker{}); err == nil {
+		t.Fatal("an empty marker wrote journeys")
+	}
+}

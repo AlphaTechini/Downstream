@@ -177,6 +177,9 @@ func frontend(ctx context.Context, o FrontendOptions, res *model.Frontend) error
 		return fail("validate journeys", fmt.Errorf("unexpected validator output: %w", err))
 	}
 	res.Journeys, res.Dropped = v.Journeys, v.Dropped
+	if b, err := os.ReadFile(journeys); err == nil && json.Valid(b) {
+		res.JourneysUsed = b
+	}
 	log.printf("frontend: %d journeys, %d steps dropped by validation", v.Journeys, len(v.Dropped))
 
 	sides := []*side{{name: "base", sha: baseSHA}, {name: "head", sha: headSHA}}

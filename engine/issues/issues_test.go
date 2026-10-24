@@ -126,6 +126,16 @@ func TestBuild(t *testing.T) {
 		t.Errorf("title = %q, want %q", app.Title, wantTitle)
 	}
 
+	// An app-wide finding has no single journey, so its marker carries all of
+	// the run's journeys for fix it's re-measure.
+	am, err := ParseMarker(app.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if am.Journey.ID != "" || len(am.Journeys) != len(fixture().Journeys) || len(am.Journeys) == 0 {
+		t.Errorf("app-wide marker journeys = %d (single %q), want all %d", len(am.Journeys), am.Journey.ID, len(fixture().Journeys))
+	}
+
 	body := app.Body
 	order := []string{
 		"Run started by @alice on !12.",
@@ -205,7 +215,10 @@ func TestAdvisoryGoesWithItsJourney(t *testing.T) {
 		t.Errorf("a step is listed twice in the advisory table:\n%s", step)
 	}
 	app := byID["app.cpu_ms_per_journey"].Body
-	if strings.Contains(app, "add_book") {
+	// The hidden state block carries every journey for fix it; only the
+	// visible text must not repeat the step issue's journey.
+	visible, _, _ := strings.Cut(app, "<details>")
+	if strings.Contains(visible, "add_book") {
 		t.Errorf("the journey shown in the step issue is repeated in the app issue:\n%s", app)
 	}
 	assertInOrder(t, app, []string{"**Latency on the same run (advisory)**", "*App process*", "| - | CPU time | 2.31 s | 2.35 s | 4.87 s | 0.04 s | +2.52 s (+107%) |"})
