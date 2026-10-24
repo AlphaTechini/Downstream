@@ -180,6 +180,31 @@ Only flat `key: value` lines and comments are accepted; anything else is an erro
 line number. `{out}` is the binary path the engine chooses. `build` and `start` run with
 `sh -c` and come from a committed file, never from model output.
 
+### 3.4 Failure cases
+
+Situations where the engine stops and says why, instead of guessing a verdict.
+
+**The target needs a newer toolchain than the sandbox has.** The engine builds base, then head,
+with the `build` line from `downstream.yml`, using the `go` on PATH. In the Duo sandbox that is
+Go 1.22.12 (section 2), and the flow sets `GOTOOLCHAIN=local` before every command, so Go does
+not fetch a newer one. A Go target fails to build there when its `go.mod` asks for a newer Go
+(Go prints `go: go.mod requires go >= X (running go 1.22.12; GOTOOLCHAIN=local)`), or when its
+code uses something added to the standard library after 1.22.
+
+- The run stops at stage `build (base)`, or `build (head)` when only the merge request raises
+  the requirement. No journey runs and no verdict is given. The final merge request note
+  (FR-04) names the stage and carries the last 4,096 bytes of build output.
+- The build-failure path is covered by `TestRunStopsOnBuildFailure`, which uses a compile
+  error. A toolchain mismatch has not been run inside the sandbox.
+- This has already happened once. The demo app imported `crypto/pbkdf2`, which exists only
+  from Go 1.24, so it could not build on 1.22.12. The fix was to write the PBKDF2 loop into
+  `examples/shelf/pbkdf2.go` and test it against known vectors (`git log --grep "crypto/pbkdf2"`).
+- Ways out for a target that cannot move to Go 1.22: install a newer Go in `setup_script`
+  (it runs outside the sandbox and can download; k6 is installed that way), or pin the target
+  to the sandbox's Go as the demo app was. An earlier revision of `agent-config.yml` tried the
+  first with `GOTOOLCHAIN=go1.26.10`; it never ran and was removed in the commit "Target Go
+  1.22, the version the Duo sandbox already has". Neither way is automatic today.
+
 ---
 
 ## 4. Finding what a change affects (the blast radius)
