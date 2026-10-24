@@ -119,6 +119,27 @@ Notes from 13:55 UTC on, in [flow/floors/](flow/floors/).
 The 10 MB floor also hides the new feature's peak memory rise of 0.7 MB (+8%) that 1.0.10 flagged on
 !14; CPU per journey still flags that change.
 
+## NewGit, frontend stage on test MR !5 (session 10003926, private experiment flow)
+
+The test MR adds `<img src="/static/promo-banner.png">` to the top bar template: no alt text,
+and the file is not in the build. The flow came from branch `frontend-stage` (engine
+`831a73e`), released as a private flow owned by NewGit for this test.
+
+- The journeys note says no Go route changed, so the backend part ran control journeys only
+  ([newgit-mr-5-notes.json](flow/frontend/newgit-mr-5-notes.json) L123) and found 0
+  regressions (L151).
+- The frontend stage installed fecheck with `npm ci` in the sandbox
+  ([job log](flow/frontend/session-10003926-newgit-mr5-job-log.txt) L641) and ran
+  `downstream frontend` (L659), 14:46:27 to 14:46:51.
+- The report's Frontend section (L151): server mode, 4 model-written page journeys, Node
+  20.20.2, 12 regressions (missing asset, image-alt and markup on each page), base against base
+  identical.
+- 3 issues, one per cause ([newgit-issues-5-7.json](flow/frontend/newgit-issues-5-7.json) L6,
+  L79, L152). The session ended with `Job succeeded` (job log L751).
+- The model reworded one sentence of the report when posting it: the engine prints "so the
+  changes above are not noise" (`engine/report/frontend.go`); the note says "so the changed
+  results above are not noise".
+
 ## Not shown here
 
 - Noise of the Duo sandbox as a rate: one clean-change run (10001525) came out clean.
