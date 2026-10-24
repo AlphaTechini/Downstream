@@ -290,7 +290,7 @@ At least one journey must avoid the changed route and share only a dependency wi
 is the point of the product: finding the thing nobody was looking at.
 
 Implemented in `engine/journey` (schema and validation) and `engine/k6gen` (script). Limits:
-1 to 6 journeys, 1 to 12 steps each, bodies up to 4 KiB, methods GET, POST, PUT, PATCH,
+1 to 20 journeys, 1 to 12 steps each, bodies up to 4 KiB, methods GET, POST, PUT, PATCH,
 DELETE, header names limited to Authorization, Content-Type, Accept and `X-*`. Each path must
 match a route in the head build's route table. Values carry between steps as `{{name}}`
 placeholders filled from an earlier step's `extract` (an RFC 6901 JSON pointer into the
