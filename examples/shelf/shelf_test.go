@@ -283,7 +283,7 @@ func TestExampleJourneys(t *testing.T) {
 	if err := json.Unmarshal(raw, &jf); err != nil {
 		t.Fatal(err)
 	}
-	if jf.Version != 1 || len(jf.Journeys) != 4 {
+	if jf.Version != 1 || len(jf.Journeys) != 5 {
 		t.Fatalf("version %d, %d journeys", jf.Version, len(jf.Journeys))
 	}
 	c := newClient(t)
