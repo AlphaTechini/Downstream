@@ -366,7 +366,11 @@ func toleranceLine(t model.Thresholds) string {
 		if name == "" {
 			name = m
 		}
-		parts = append(parts, name+" "+strings.Join(how, ", the larger of the two, "))
+		if len(how) == 2 {
+			parts = append(parts, name+" the larger of "+how[0]+" and "+how[1])
+		} else {
+			parts = append(parts, name+" "+strings.Join(how, ""))
+		}
 	}
 	return strings.Join(parts, "; ")
 }

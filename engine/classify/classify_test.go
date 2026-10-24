@@ -231,8 +231,8 @@ func TestDefaults(t *testing.T) {
 		"cpu_ms_per_journey":         {Relative: 0.20},
 		"peak_rss_mb":                {Relative: 0.05},
 
-		"alloc_objects_per_journey": {Relative: 0.10},
-		"alloc_bytes_per_journey":   {Relative: 0.05},
+		"alloc_objects_per_journey": {Relative: 0.10, Absolute: 100},
+		"alloc_bytes_per_journey":   {Relative: 0.05, Absolute: 16 << 10},
 		"gc_cycles":                 {Absolute: 2},
 		"goroutines":                {Absolute: 1},
 	}
@@ -757,10 +757,12 @@ func TestRuntimeCounterRule(t *testing.T) {
 		class  string
 		unit   string
 	}{
-		{"objects: 8% is noise", model.MetricAllocObjectsPerJourney, vals{200, 216, 202}, model.ClassNoise, "objects/journey"},
-		{"objects: 15% is a regression", model.MetricAllocObjectsPerJourney, vals{200, 232, 202}, model.ClassRegression, "objects/journey"},
-		{"bytes: 3% is noise", model.MetricAllocBytesPerJourney, vals{20000, 20700, 20100}, model.ClassNoise, "B/journey"},
-		{"bytes: 10% is a regression", model.MetricAllocBytesPerJourney, vals{20000, 22300, 20100}, model.ClassRegression, "B/journey"},
+		{"objects: 8% is noise", model.MetricAllocObjectsPerJourney, vals{2000, 2160, 2020}, model.ClassNoise, "objects/journey"},
+		{"objects: 15% is a regression", model.MetricAllocObjectsPerJourney, vals{2000, 2320, 2020}, model.ClassRegression, "objects/journey"},
+		{"objects: 15% under the 100-object floor is noise", model.MetricAllocObjectsPerJourney, vals{200, 232, 202}, model.ClassNoise, "objects/journey"},
+		{"bytes: 3% is noise", model.MetricAllocBytesPerJourney, vals{200000, 207000, 201000}, model.ClassNoise, "B/journey"},
+		{"bytes: 10% is a regression", model.MetricAllocBytesPerJourney, vals{200000, 223000, 201000}, model.ClassRegression, "B/journey"},
+		{"bytes: 10% under the 16 KB floor is noise", model.MetricAllocBytesPerJourney, vals{20000, 22300, 20100}, model.ClassNoise, "B/journey"},
 		{"gc: no cycle in any pass is noise", model.MetricGCCycles, vals{0, 0, 0}, model.ClassNoise, "cycles"},
 		{"gc: one extra cycle is noise", model.MetricGCCycles, vals{0, 1, 0}, model.ClassNoise, "cycles"},
 		{"gc: two extra cycles are inside the tolerance", model.MetricGCCycles, vals{0, 2, 0}, model.ClassNoise, "cycles"},

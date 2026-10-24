@@ -77,6 +77,11 @@ import (
 // 2 cycles is chosen, not derived. It lets one cycle of jitter pass and still
 // flags a pass with three or more cycles beyond the worse baseline.
 //
+// The allocation tolerances also have an absolute floor, 100 objects and 16 KB
+// per journey, chosen rather than derived: a change that adds a field to one
+// response raised heap objects by 26 per journey (14%) on a health-heavy run of
+// the clean control, which the relative tolerance alone flagged.
+//
 // The CPU figures in those sets are process-lifetime rusage readings. The
 // engine now reads CPU over the k6 window from schedstat (model.ProcessStats);
 // no committed A/A set has been run on that figure, so the 20% is not yet
@@ -96,8 +101,8 @@ func DefaultThresholds() model.Thresholds {
 			model.MetricThreads:                 {Absolute: 2},
 			model.MetricCPUPerJourney:           {Relative: 0.20},
 			model.MetricRSS:                     {Relative: 0.05},
-			model.MetricAllocObjectsPerJourney:  {Relative: 0.10},
-			model.MetricAllocBytesPerJourney:    {Relative: 0.05},
+			model.MetricAllocObjectsPerJourney:  {Relative: 0.10, Absolute: 100},
+			model.MetricAllocBytesPerJourney:    {Relative: 0.05, Absolute: 16 << 10},
 			model.MetricGCCycles:                {Absolute: 2},
 			model.MetricGoroutines:              {Absolute: 1},
 		},
