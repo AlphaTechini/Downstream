@@ -85,7 +85,7 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 |---|---|---|---|
 | FR-50 | MUST | The flow reads `agentnotes.md` explicitly at the start of each run and does not rely on automatic loading. | Prompt text plus a run that shows the file was read. **T-07** |
 | FR-51 | MUST | `AGENTS.md`, `agentnotes.md`, `flows/` and `.gitlab/duo/` are protected by CODEOWNERS and never edited by the flow. | `.gitlab/CODEOWNERS`; no flow tool writes them. |
-| FR-52 | SHOULD | The flow reads `agentnotes.md` from the target branch, not the merge request's own copy. | Test with a merge request that changes the file. Unverified. |
+| FR-52 | SHOULD | The flow reads `agentnotes.md` and builds the engine from this repo at a pinned commit (GitHub mirror tarball), not from the merge request's own copy. | `ENGINE_SHA` in the SETUP step of `flows/downstream.yml`. Unverified on the platform. |
 
 ---
 

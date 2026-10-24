@@ -158,10 +158,14 @@ func TestReadSelfProc(t *testing.T) {
 	if _, err := os.Stat("/proc/self/stat"); err != nil {
 		t.Skip("no /proc")
 	}
-	if _, err := readCPUTicks(os.Getpid()); err != nil {
+	dir, err := procDir(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readCPUTicks(dir); err != nil {
 		t.Error(err)
 	}
-	rss, err := readPeakRSSMB(os.Getpid())
+	rss, err := readPeakRSSMB(dir)
 	if err != nil || rss <= 0 {
 		t.Errorf("rss %v err %v", rss, err)
 	}

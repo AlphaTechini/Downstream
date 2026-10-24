@@ -444,8 +444,8 @@ is loaded automatically. So:
 
 - `AGENTS.md`: conventions and hard rules for any agent touching this repo.
 - `agentnotes.md`: operating notes for the Downstream flow. The flow prompt reads it
-  explicitly at the start of every run (`read_file` once T-07 passes, otherwise
-  `cat agentnotes.md` through `run_command`). Nothing depends on automatic loading.
+  explicitly at the start of every run (`cat /tmp/ds-engine/agentnotes.md` through
+  `run_command`, from the pinned engine download). Nothing depends on automatic loading.
 - Both are protected by CODEOWNERS and are never edited by the flow.
 
 ---
@@ -459,12 +459,14 @@ is loaded automatically. So:
   output cannot contain the terminator line. A model that ignored the prompt could still
   write a terminator line; the platform's sandbox and the CODEOWNERS rules are the remaining
   limits. A flow file-writing tool would close this gap; none is used yet.
-- The engine is built from the merge request's own checkout, so a merge request could change
-  the engine that measures it. Reviewers see engine changes in the diff; building the engine
-  from the target branch is not done yet.
-- `agentnotes.md` and `downstream.yml` are read from the **base** commit (`git show
-  <base>:agentnotes.md`, `target.Load`), so a merge request cannot change them for its own
-  run. That needs the base commit in the flow's workspace; the engine fetches it from `origin`
+- The engine and `agentnotes.md` come from this repo at the commit pinned as `ENGINE_SHA` in
+  the flow's SETUP step, not from the merge request's checkout, so a merge request cannot
+  change the engine that measures it, and one flow works in any project. SETUP downloads that
+  commit's tarball from the public GitHub mirror, because the sandbox refused an
+  unauthenticated `git clone` from gitlab.com (session 9999625). The mirror must hold the
+  commit before `ENGINE_SHA` is bumped.
+- `downstream.yml` is read from the **base** commit (`target.Load`), so a merge request cannot
+  change it for its own run. That needs the base commit in the flow's workspace; the engine fetches it from `origin`
   if the clone lacks it (untested on the platform).
 - The engine sends traffic only to `127.0.0.1`. No absolute URLs are accepted in journeys,
   and redirects are never followed (k6 `maxRedirects: 0`; the readiness check refuses them).
