@@ -166,8 +166,8 @@ project; their pipelines are under CI/CD > Pipelines.
 ```text
 mention on an MR
  -> flows/downstream.yml              one AgentComponent, one prompt (written, not yet run)
-     clones this repo at a pinned SHA builds the engine, reads agentnotes.md (journey style,
-                                      issue format); one flow serves any project it is enabled in
+     fetches a pinned commit          of this repo (GitHub mirror tarball), builds the engine,
+                                      reads agentnotes.md; one flow serves any project
      calls fixed engine commands      engine/cmd/downstream: scan, schema, validate, run, report,
                                       summary, issues, marker, fixcheck (built; CI runs in
                                       evidence/runs.md, not yet run from the flow)

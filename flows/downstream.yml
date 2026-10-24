@@ -13,10 +13,13 @@
 # quoted heredoc, which the engine then validates.
 #
 # One flow serves every project it is enabled in. The engine and agentnotes.md
-# come from the public showcase repo at the commit pinned in SETUP, not from the
-# merge request's repo, so the target repo only needs downstream.yml and
+# come from this repo at the commit pinned in SETUP, not from the merge
+# request's repo, so the target repo only needs downstream.yml and
 # .gitlab/duo/agent-config.yml, and a merge request cannot change the engine that
-# measures it. Bump ENGINE_SHA in S1 to ship an engine change.
+# measures it. The sandbox refuses an unauthenticated git clone from gitlab.com
+# (session 9999625), so SETUP downloads the commit's tarball from the public
+# GitHub mirror instead. To ship an engine change, push it to the mirror, then
+# bump ENGINE_SHA in S1.
 #
 # Toolset status
 #   verified in a custom flow on 2026-10-22 (flows/probe.yml):
@@ -83,7 +86,7 @@ prompts:
 
         SETUP (first command of every procedure; run it exactly)
         S1. run_command:
-            export GOCACHE=/tmp/gocache GOTOOLCHAIN=local PATH=/tmp/bin:$PATH ENGINE_SHA=1e86e1172b3d696996b67da875239b28baba7f26 && mkdir -p /tmp/ds /tmp/bin && (test -d /tmp/ds-engine || git clone --quiet --filter=blob:none --no-checkout https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git /tmp/ds-engine) && git -C /tmp/ds-engine checkout --quiet "$ENGINE_SHA" && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
+            export GOCACHE=/tmp/gocache GOTOOLCHAIN=local PATH=/tmp/bin:$PATH ENGINE_SHA=1e86e1172b3d && mkdir -p /tmp/ds /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
         Every later command starts with:
             export GOCACHE=/tmp/gocache GOTOOLCHAIN=local PATH=/tmp/bin:$PATH &&
 
