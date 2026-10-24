@@ -255,8 +255,11 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
   app-wide CPU issue #12 parsed the marker's journeys and ran them;
   [newgit-mr-7-notes.json](../evidence/flow/fix-it-frontend/newgit-mr-7-notes.json) line 33: CPU per completed
   journey 32.11 / 32.22 ms on the MR to 9.63 ms on the fix (-70%), improved.
-- **Does not show:** more than one run of each; a frontend fix on a static (React or Svelte)
-  build in the sandbox. The model set the requester as reviewer on !7 but not on !8.
+  On the live bot (flow 1.0.14) the CPU path ran again on the demo MR:
+  [live-1.0.14-mr-9-notes.json](../evidence/flow/fix-it-frontend/live-1.0.14-mr-9-notes.json)
+  line 33, 27.76 / 27.95 ms to 6.84 ms.
+- **Does not show:** more than one frontend fix; a frontend fix on a static (React or Svelte)
+  build in the sandbox. The model set the requester as reviewer on !7 and !9 but not on !8.
 
 ---
 

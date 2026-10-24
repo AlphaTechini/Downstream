@@ -168,6 +168,12 @@ A private experiment flow on NewGit ran the new engine. Raw files are in
   ([newgit-mr-7-notes.json](flow/fix-it-frontend/newgit-mr-7-notes.json) L33;
   [job log](flow/fix-it-frontend/fix-job-17439456063-issue-12.txt) L585, L603, L668).
 - Neither fix was merged. The model set the requester as reviewer on !7 but not on !8.
+- After release to the live bot (flow 1.0.14), the same path on the demo MR !3: CPU issue #16,
+  then `fix it`, fix MR !9 with the requester as reviewer, CPU per completed journey 27.76 /
+  27.95 ms to 6.84 ms, improved
+  ([live-1.0.14-mr-9-notes.json](flow/fix-it-frontend/live-1.0.14-mr-9-notes.json) L33;
+  [live-1.0.14-issue-16-notes.json](flow/fix-it-frontend/live-1.0.14-issue-16-notes.json) L235).
+  The test issues and fix merge requests were closed afterwards.
 
 ## Not shown here
 
