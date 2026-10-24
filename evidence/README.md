@@ -10,6 +10,8 @@ Raw material behind the claims in the top-level README. Nothing here is a mock-u
 | [day0/run3-probe-v3-job-log.txt](day0/run3-probe-v3-job-log.txt) | Probe v3, k6 install, network and timeout checks |
 | [day0/probe-notes.txt](day0/probe-notes.txt) | Transcription of the notes the probe posted (owner's copy-paste, not a raw log) |
 | [gitlab-project-2026-10-22.json](gitlab-project-2026-10-22.json) | GitLab API record of the showcase project (visibility, default branch) |
+| [gitlab-project-2026-10-24.json](gitlab-project-2026-10-24.json) | GitLab API record with the licence GitLab detects (MIT) |
+| [ai-catalog-downstream-2026-10-24.json](ai-catalog-downstream-2026-10-24.json) | GitLab GraphQL record of the `downstream` AI Catalog item (public, released version) |
 | [runs.md](runs.md) | Results of the engine runs below, with line references |
 | [runs/ci-63-engine-e2e/](runs/ci-63-engine-e2e/) | Pipeline 63 `engine-e2e` job logs and `out/` artifacts for the planted and the clean change |
 | [runs/ci-66-engine-noise/](runs/ci-66-engine-noise/) | Pipeline 66 `engine-noise`: 5 job logs, 20 clean-change runs |

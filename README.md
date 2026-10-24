@@ -24,7 +24,7 @@ have not been re-read against the live page since and are to be re-checked befor
 | Brief requirement | Where in this repo | Status |
 |---|---|---|
 | Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/downstream.yml`](flows/downstream.yml), a public custom flow in the AI Catalog with a mention trigger; [`flows/probe.yml`](flows/probe.yml) was the day-0 feasibility flow | Verified: full sessions on two projects ([evidence/flow.md](evidence/flow.md)) |
-| Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public per the GitLab API on 2026-10-22 ([record](evidence/gitlab-project-2026-10-22.json)). MIT `LICENSE` committed |
+| Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public, and GitLab detects the MIT licence, per the GitLab API on 2026-10-24 ([record](evidence/gitlab-project-2026-10-24.json)) |
 | Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/). [`.gitlab-ci.yml`](.gitlab-ci.yml) runs `make verify`, the Go tests, and `engine-e2e`, which runs the engine end to end on the demo app for the planted and the clean change; `engine-noise` repeats the clean change on the `measure-noise` branch | 3 probe sessions; engine CI runs from pipelines 63 and 66 in [`evidence/runs/`](evidence/runs/); flow sessions in [`evidence/flow/`](evidence/flow/) |
 | Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
 | One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option, the flow opens a merge request for it, and a human reviews and merges | Verified: `fix it` opened !13 with the requester as reviewer and did not merge ([evidence/flow.md](evidence/flow.md)) |
@@ -88,6 +88,8 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | A server on 127.0.0.1 inside the sandbox answers | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L545-550 |
 | A 150 s command completes | Verified | `flows/probe.yml` | [run3](evidence/day0/run3-probe-v3-job-log.txt) L561-586 |
 | This GitLab project is public | Verified | GitLab project settings | [API record](evidence/gitlab-project-2026-10-22.json) |
+| GitLab shows the project's licence as MIT | Verified, 2026-10-24 | `LICENSE` | [API record](evidence/gitlab-project-2026-10-24.json) L8-11 |
+| The flow is public in GitLab's AI Catalog, so any project can enable it | Verified, 2026-10-24 (version 1.0.8) | `flows/downstream.yml` | [catalog record](evidence/ai-catalog-downstream-2026-10-24.json) L6-7 |
 | The engine finds a planted regression between two builds and traces it to the changed function | Verified in GitLab CI and inside the flow on the demo app | `engine/` | [CI job log](evidence/runs/ci-63-engine-e2e/raise-hash-cost-job-log.txt) L77; [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L5, L12, L53, L90-96; [flow session 9999905](evidence/flow/mr-11-notes.json) L701 |
 | A mention on a merge request runs the whole flow in the Duo sandbox: build both versions, model-written journeys, k6, the engine's report, issues | Verified, sessions 9999905 and 10000162 | `flows/downstream.yml` | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701, L785, L987, L1071; [job log](evidence/flow/session-9999905/job-log.txt) L808 |
 | `fix it` on an issue commits the fix on a new branch, opens a merge request for the requester, re-measures it and does not merge | Verified, session 10000200 (!13: 16 metrics improved, 0 regressed) | `flows/downstream.yml` | [issue-6-notes.json](evidence/flow/session-10000200/issue-6-notes.json) L151, L235; [mr-13.json](evidence/flow/session-10000200/mr-13.json) L16, L33; [mr-13-notes.json](evidence/flow/session-10000200/mr-13-notes.json) L33 |
@@ -152,8 +154,8 @@ pin the application to the sandbox's versions or install the missing tool in the
 
 ## Use Downstream on your project
 
-1. Enable the public `downstream` flow from GitLab's AI Catalog in your project and choose the
-   mention trigger. GitLab adds the flow's service account to the project.
+1. Enable the public [`downstream` flow](https://gitlab.com/explore/ai-catalog/flows/1019478) from GitLab's AI Catalog in your project and
+   choose the mention trigger. GitLab adds the flow's service account to the project.
 2. Add `downstream.yml` at the repository root: how to build and start the app on a loopback
    port (this repo's [`downstream.yml`](downstream.yml) is an example).
 3. Add `.gitlab/duo/agent-config.yml` on the default branch to install k6 (copy
