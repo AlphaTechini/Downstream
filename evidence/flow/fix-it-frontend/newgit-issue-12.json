@@ -1,0 +1,73 @@
+{
+  "id": 207784817,
+  "iid": 12,
+  "project_id": 88032755,
+  "title": "[Downstream] app: CPU per journey up 22.54 ms/journey (+211%)",
+  "description": "Run started by @AlphaTechini on !3.\n\n**Changed functions**\n\nNone: no changed function is on the call path of the routes these steps call.\n\n**Measured**\n\n| Metric | B1 | B2 | C | Change | Allowed | Noise band | Smallest detectable |\n|---|---|---|---|---|---|---|---|\n| CPU per journey | 10.18 ms/journey | 10.70 ms/journey | 33.24 ms/journey | +22.54 ms/journey (+211%) | 2.14 ms/journey | 0.52 ms/journey | 2.14 ms/journey (20.0%) |\n\nThese are measured on the whole app process, not per journey. Change is against the worse baseline run. Allowed is the tolerance for the metric. A rise counts only when it is more than both the allowed figure and the noise band. Smallest detectable is the larger of the two: the smallest change this run could have told apart from noise.\n\n**Latency on the same run (advisory)**\n\nLatency is not used for verdicts: it varies too much between runs of identical code. These figures rose on this run and are listed for context only. Each step shows one figure: p95, else mean, else p50.\n\n*App process*\n\n| Step | Metric | B1 | B2 | C | Noise band | Change | Smallest detectable |\n|---|---|---|---|---|---|---|---|\n| - | CPU time | 0.61 s | 0.64 s | 1.99 s | 0.03 s | +1.35 s (+211%) | 0.50 s (78.1%) |\n\n*Visitor browses home, explore, a profile and the demo repository pages that show avatars*\n\n| Step | Metric | B1 | B2 | C | Noise band | Change | Smallest detectable |\n|---|---|---|---|---|---|---|---|\n| commits | p95 latency | 19.8 ms | 31.4 ms | 60.4 ms | 11.6 ms | +29.0 ms (+92%) | 23.1 ms (73.6%) |\n| explore | p95 latency | 10.1 ms | 3.2 ms | 27.2 ms | 6.9 ms | +17.2 ms (+171%) | 13.8 ms (137.2%) |\n| profile | p95 latency | 7.0 ms | 5.8 ms | 26.9 ms | 1.2 ms | +19.9 ms (+282%) | 10.0 ms (141.9%) |\n| repo_home | p95 latency | 35.2 ms | 46.8 ms | 98.7 ms | 11.6 ms | +51.9 ms (+111%) | 23.2 ms (49.5%) |\n\n*Visitor opens the file tree, a file and the raw file, then checks health*\n\n| Step | Metric | B1 | B2 | C | Noise band | Change | Smallest detectable |\n|---|---|---|---|---|---|---|---|\n| blob | p95 latency | 56.7 ms | 55.5 ms | 97.1 ms | 1.2 ms | +40.5 ms (+71%) | 11.3 ms (20.0%) |\n| health | p95 latency | 3.2 ms | 3.0 ms | 17.4 ms | 0.2 ms | +14.3 ms (+446%) | 10.0 ms (313.0%) |\n| raw | p95 latency | 28.6 ms | 28.6 ms | 67.8 ms | 0.0 ms | +39.2 ms (+137%) | 10.0 ms (34.9%) |\n| tree | p95 latency | 27.1 ms | 36.0 ms | 66.0 ms | 8.9 ms | +30.1 ms (+84%) | 17.7 ms (49.2%) |\n\n*Visitor reads the issue list, an issue, the merge request list and a merge request*\n\n| Step | Metric | B1 | B2 | C | Noise band | Change | Smallest detectable |\n|---|---|---|---|---|---|---|---|\n| issue_list | p95 latency | 17.2 ms | 22.9 ms | 38.8 ms | 5.6 ms | +15.9 ms (+69%) | 11.2 ms (49.2%) |\n| mr_list | p95 latency | 17.1 ms | 16.6 ms | 28.4 ms | 0.5 ms | +11.2 ms (+66%) | 10.0 ms (58.4%) |\n| one_issue | p95 latency | 15.8 ms | 16.9 ms | 70.4 ms | 1.1 ms | +53.5 ms (+316%) | 10.0 ms (59.2%) |\n| one_mr | p95 latency | 54.0 ms | 57.0 ms | 103.3 ms | 3.0 ms | +46.3 ms (+81%) | 11.4 ms (20.0%) |\n\nRule for the headline (`app.cpu_ms_per_journey`): worse than the worse baseline by 22.54 ms/journey (210.6%), more than the allowed 2.14 ms/journey (20% of the worse baseline) and more than the noise band of 0.52 ms/journey\n\n**Repro**\n\nThis figure covers the whole app process across every journey of the run, so the marker holds all of the run's journeys. Recover them with `downstream marker parse --journeys-out journeys.json < issue.md`.\n\n```\ndownstream run --base 7f2473276ae80df9e124064ccf5fd0091d5e205e --head 2893f09986e85f279941e8e04f1deffd8c55c632 --journeys journeys.json --out run.json\n```\n\n**Likely cause**\n\nLikely the changed avatarHue function in internal/web/funcs.go, which now runs a hash in a long loop for every name, so each page that renders avatars spends far more CPU; the static scan did not trace it to a route, so this is a hypothesis based on the diff.\n\n**Fix options**\n\n1. Replace the repeated hashing in avatarHue with a single hash of the name, which still spreads similar names across hues at the cost of a different colour for some names.\n2. Keep the repeated hashing but memoize the result per name in a concurrency-safe cache inside avatarHue, which costs a little memory that grows with the number of distinct names.\n3. Restore the original cheap rolling hash in avatarHue and spread hues by mixing in a multiplier or a final scramble step, which costs a slightly weaker spread than a cryptographic hash.\n\n**How to reply**\n\nReply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. Downstream commits the change on a new branch, opens a merge request for it against the original branch, and re-runs this journey on it. It never merges.\n\n<details><summary>Downstream state, read by fix it and verify. Do not edit.</summary>\n\n```text\ndownstream:v1 {\"v\":1,\"mr\":3,\"base\":\"7f2473276ae80df9e124064ccf5fd0091d5e205e\",\"head\":\"2893f09986e85f279941e8e04f1deffd8c55c632\",\"finding\":\"app.cpu_ms_per_journey\",\"metric\":\"cpu_ms_per_journey\",\"step\":\"\",\"journey\":{\"id\":\"\",\"goal\":\"\",\"why_included\":\"\",\"steps\":null},\"b1\":10.177893733333333,\"c\":33.23970873333333,\"b2\":10.700370933333334,\"band\":0.5224772000000009,\"fix_options\":[\"Replace the repeated hashing in avatarHue with a single hash of the name, which still spreads similar names across hues at the cost of a different colour for some names.\",\"Keep the repeated hashing but memoize the result per name in a concurrency-safe cache inside avatarHue, which costs a little memory that grows with the number of distinct names.\",\"Restore the original cheap rolling hash in avatarHue and spread hues by mixing in a multiplier or a final scramble step, which costs a slightly weaker spread than a cryptographic hash.\"],\"journeys\":[{\"id\":\"visitor_browses_repo\",\"kind\":\"existing\",\"goal\":\"Visitor browses home, explore, a profile and the demo repository pages that show avatars\",\"why_included\":\"Pages render avatars through the changed avatarHue helper; statuses from app_notes (route handler in server.go, funcs.go changed)\",\"steps\":[{\"name\":\"home\",\"method\":\"GET\",\"path\":\"/\",\"expect_status\":200},{\"name\":\"explore\",\"method\":\"GET\",\"path\":\"/explore\",\"expect_status\":200},{\"name\":\"profile\",\"method\":\"GET\",\"path\":\"/demo\",\"expect_status\":200},{\"name\":\"repo_home\",\"method\":\"GET\",\"path\":\"/demo/storefront\",\"expect_status\":200},{\"name\":\"commits\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/commits/main\",\"expect_status\":200}]},{\"id\":\"visitor_reads_issues_and_mrs\",\"kind\":\"existing\",\"goal\":\"Visitor reads the issue list, an issue, the merge request list and a merge request\",\"why_included\":\"Issue and merge request pages with comments render avatars via the changed helper; statuses from app_notes\",\"steps\":[{\"name\":\"issue_list\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/issues\",\"expect_status\":200},{\"name\":\"one_issue\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/issues/1\",\"expect_status\":200},{\"name\":\"mr_list\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/merge_requests\",\"expect_status\":200},{\"name\":\"one_mr\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/merge_requests/1\",\"expect_status\":200}]},{\"id\":\"visitor_reads_code\",\"kind\":\"control\",\"goal\":\"Visitor opens the file tree, a file and the raw file, then checks health\",\"why_included\":\"Control: pages that do not render avatars, to catch app-wide slowdowns; statuses from app_notes\",\"steps\":[{\"name\":\"tree\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/tree/main\",\"expect_status\":200},{\"name\":\"blob\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/blob/main/cart.go\",\"expect_status\":200},{\"name\":\"raw\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/raw/main/cart.go\",\"expect_status\":200},{\"name\":\"health\",\"method\":\"GET\",\"path\":\"/-/health\",\"expect_status\":200}]}]}\n```\n\n</details>",
+  "state": "opened",
+  "created_at": "2026-10-24T16:08:06.198Z",
+  "updated_at": "2026-10-24T16:11:54.668Z",
+  "closed_at": null,
+  "closed_by": null,
+  "labels": [],
+  "milestone": null,
+  "assignees": [],
+  "author": {
+    "id": 43699135,
+    "username": "ai-downstream-frontend-experiment-gitlab-ai-hackathon",
+    "public_email": null,
+    "name": "downstream-frontend-experiment",
+    "state": "active",
+    "locked": false,
+    "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43699135/custom-flow-1.png?v=1792853102",
+    "web_url": "https://gitlab.com/ai-downstream-frontend-experiment-gitlab-ai-hackathon"
+  },
+  "type": "ISSUE",
+  "assignee": null,
+  "user_notes_count": 4,
+  "merge_requests_count": 0,
+  "upvotes": 0,
+  "downvotes": 0,
+  "start_date": null,
+  "due_date": null,
+  "confidential": false,
+  "discussion_locked": null,
+  "issue_type": "issue",
+  "web_url": "https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/newgit/-/work_items/12",
+  "time_stats": {
+    "time_estimate": 0,
+    "total_time_spent": 0,
+    "human_time_estimate": null,
+    "human_total_time_spent": null
+  },
+  "task_completion_status": {
+    "count": 0,
+    "completed_count": 0
+  },
+  "weight": null,
+  "blocking_issues_count": 0,
+  "has_tasks": true,
+  "task_status": "0 of 0 checklist items completed",
+  "_links": {
+    "self": "https://gitlab.com/api/v4/projects/88032755/issues/12",
+    "notes": "https://gitlab.com/api/v4/projects/88032755/issues/12/notes",
+    "award_emoji": "https://gitlab.com/api/v4/projects/88032755/issues/12/award_emoji",
+    "project": "https://gitlab.com/api/v4/projects/88032755",
+    "closed_as_duplicate_of": null
+  },
+  "references": {
+    "short": "#12",
+    "relative": "#12",
+    "full": "gitlab-ai-hackathon/transcend-october-2026/35141659/newgit#12"
+  },
+  "severity": "UNKNOWN",
+  "subscribed": true,
+  "moved_to_id": null,
+  "imported": false,
+  "imported_from": "none",
+  "service_desk_reply_to": null,
+  "epic_iid": null,
+  "epic": null,
+  "iteration": null,
+  "health_status": null
+}

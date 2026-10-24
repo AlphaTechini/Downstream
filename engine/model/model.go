@@ -372,4 +372,16 @@ type Marker struct {
 	B2         float64  `json:"b2"`
 	Band       float64  `json:"band"`
 	FixOptions []string `json:"fix_options"`
+	// Journeys holds every journey of the run when the finding is app-wide (no
+	// single journey), so fix it can re-measure with the same traffic.
+	Journeys []Journey `json:"journeys,omitempty"`
+	// Kind is "frontend" for a page finding; empty for a backend finding.
+	Kind string `json:"kind,omitempty"`
+	// FEJourneys are the page journeys that showed a frontend finding, in
+	// fecheck's format, and Files the changed frontend files.
+	FEJourneys json.RawMessage `json:"fe_journeys,omitempty"`
+	Files      []string        `json:"files,omitempty"`
 }
+
+// MarkerFrontend is Marker.Kind for a frontend finding.
+const MarkerFrontend = "frontend"

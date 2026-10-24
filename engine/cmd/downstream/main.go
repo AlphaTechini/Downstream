@@ -404,28 +404,6 @@ func cmdIssues(args []string) error {
 	if *rpath == "" && *fpath == "" {
 		return errors.New("need --run, --frontend or both")
 	}
-	var fe []issues.Issue
-	if *fpath != "" {
-		var f model.Frontend
-		if err := readJSON(*fpath, &f); err != nil {
-			return err
-		}
-		fe = issues.FrontendIssues(f, *mr, *starter)
-	}
-	if *rpath == "" {
-		if fe == nil {
-			fe = []issues.Issue{}
-		}
-		return writeJSON(*out, issuesOut{Issues: fe, Questions: []string{}, NeedsNotes: []string{}})
-	}
-	var run model.Run
-	if err := readJSON(*rpath, &run); err != nil {
-		return err
-	}
-	s, err := optionalScan(*spath)
-	if err != nil {
-		return err
-	}
 	var notes *model.Notes
 	if *npath != "" {
 		data, err := os.ReadFile(*npath)
@@ -438,31 +416,88 @@ func cmdIssues(args []string) error {
 		if err := dec.Decode(&n); err != nil {
 			return fmt.Errorf("%s: %w", *npath, err)
 		}
-		if err := issues.ValidateNotes(n, run, s); err != nil {
-			return err
-		}
 		notes = &n
 	}
-	built, err := issues.Build(run, s, notes, *mr, *starter)
-	if err != nil {
-		return err
-	}
-	res := issuesOut{Issues: append(built, fe...), Questions: issues.Questions(run), NeedsNotes: []string{}}
-	if res.Issues == nil {
-		res.Issues = []issues.Issue{}
-	}
-	if res.Questions == nil {
-		res.Questions = []string{}
-	}
-	for _, h := range issues.Headlines(run, s) {
-		if notes == nil {
-			res.NeedsNotes = append(res.NeedsNotes, h.ID)
-		} else if _, ok := notes.Items[h.ID]; !ok {
-			res.NeedsNotes = append(res.NeedsNotes, h.ID)
+	// One notes file serves both kinds: frontend finding IDs start with "fe-".
+	backendNotes, frontendNotes := splitNotes(notes)
+
+	res := issuesOut{Issues: []issues.Issue{}, Questions: []string{}, NeedsNotes: []string{}}
+	if *rpath != "" {
+		var run model.Run
+		if err := readJSON(*rpath, &run); err != nil {
+			return err
 		}
+		s, err := optionalScan(*spath)
+		if err != nil {
+			return err
+		}
+		if backendNotes != nil {
+			if err := issues.ValidateNotes(*backendNotes, run, s); err != nil {
+				return err
+			}
+		}
+		built, err := issues.Build(run, s, backendNotes, *mr, *starter)
+		if err != nil {
+			return err
+		}
+		res.Issues = append(res.Issues, built...)
+		if q := issues.Questions(run); q != nil {
+			res.Questions = q
+		}
+		for _, h := range issues.Headlines(run, s) {
+			if backendNotes == nil {
+				res.NeedsNotes = append(res.NeedsNotes, h.ID)
+			} else if _, ok := backendNotes.Items[h.ID]; !ok {
+				res.NeedsNotes = append(res.NeedsNotes, h.ID)
+			}
+		}
+	} else if backendNotes != nil && len(backendNotes.Items) > 0 {
+		return errors.New("notes: backend finding IDs need --run")
+	}
+	if *fpath != "" {
+		var f model.Frontend
+		if err := readJSON(*fpath, &f); err != nil {
+			return err
+		}
+		if frontendNotes != nil {
+			if err := issues.ValidateFrontendNotes(*frontendNotes, f); err != nil {
+				return err
+			}
+		}
+		fe, err := issues.FrontendIssues(f, frontendNotes, *mr, *starter)
+		if err != nil {
+			return err
+		}
+		res.Issues = append(res.Issues, fe...)
+		for _, id := range issues.FrontendIDs(f) {
+			if frontendNotes == nil {
+				res.NeedsNotes = append(res.NeedsNotes, id)
+			} else if _, ok := frontendNotes.Items[id]; !ok {
+				res.NeedsNotes = append(res.NeedsNotes, id)
+			}
+		}
+	} else if frontendNotes != nil && len(frontendNotes.Items) > 0 {
+		return errors.New("notes: frontend finding IDs need --frontend")
 	}
 	sort.Strings(res.NeedsNotes)
 	return writeJSON(*out, res)
+}
+
+// splitNotes separates frontend notes (IDs starting "fe-") from backend ones.
+func splitNotes(n *model.Notes) (backend, frontend *model.Notes) {
+	if n == nil {
+		return nil, nil
+	}
+	b := &model.Notes{Version: n.Version, Items: map[string]model.Note{}}
+	f := &model.Notes{Version: n.Version, Items: map[string]model.Note{}}
+	for k, v := range n.Items {
+		if strings.HasPrefix(k, "fe-") {
+			f.Items[k] = v
+		} else {
+			b.Items[k] = v
+		}
+	}
+	return b, f
 }
 
 // cmdFrontend runs the frontend check. It writes frontend.json and exits 0
@@ -523,6 +558,35 @@ func cmdFrontend(args []string) error {
 	return nil
 }
 
+// writeMarkerJourneys writes the journeys a marker carries, in the format the
+// re-measure needs: page journeys for a frontend finding, otherwise a
+// journeys.json with the headline journey or, for an app-wide finding, all of
+// the run's journeys. New-feature journeys become compared ones, because in a
+// re-measure the feature exists on both sides.
+func writeMarkerJourneys(path string, m model.Marker) error {
+	if m.Kind == model.MarkerFrontend {
+		if len(m.FEJourneys) == 0 || !json.Valid(m.FEJourneys) {
+			return errors.New("the frontend marker holds no page journeys")
+		}
+		return os.WriteFile(path, m.FEJourneys, 0o644)
+	}
+	js := m.Journeys
+	if m.Journey.ID != "" {
+		js = []model.Journey{m.Journey}
+	}
+	if len(js) == 0 {
+		return errors.New("the marker holds no journey; rerun with the run's journeys.json")
+	}
+	out := make([]model.Journey, len(js))
+	for i, j := range js {
+		if j.Kind == model.KindNew {
+			j.Kind = ""
+		}
+		out[i] = j
+	}
+	return writeJSON(path, model.JourneyFile{Version: model.FormatVersion, Journeys: out})
+}
+
 func cmdMarker(args []string) error {
 	if len(args) < 1 || args[0] != "parse" {
 		return errors.New("usage: downstream marker parse [--journeys-out journeys.json] < issue_body.md")
@@ -541,11 +605,7 @@ func cmdMarker(args []string) error {
 		return err
 	}
 	if *jout != "" {
-		if m.Journey.ID == "" {
-			return errors.New("the marker holds no journey (app-wide finding); rerun with the run's journeys.json")
-		}
-		f := model.JourneyFile{Version: model.FormatVersion, Journeys: []model.Journey{m.Journey}}
-		if err := writeJSON(*jout, f); err != nil {
+		if err := writeMarkerJourneys(*jout, m); err != nil {
 			return err
 		}
 	}

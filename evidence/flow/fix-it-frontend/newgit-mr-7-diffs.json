@@ -1,0 +1,15 @@
+[
+  {
+    "diff": "@@ -214,13 +214,10 @@ func initials(s string) string {\n \treturn strings.ToUpper(s[:1])\n }\n \n-// avatarHue gives each name a stable colour. The name is hashed repeatedly so\n+// avatarHue gives each name a stable colour. The name is hashed once so\n // similar names still land on well-spread hues.\n func avatarHue(s string) int {\n \tsum := sha256.Sum256([]byte(s))\n-\tfor i := 0; i < 20000; i++ {\n-\t\tsum = sha256.Sum256(sum[:])\n-\t}\n \treturn int(binary.BigEndian.Uint16(sum[:2])) % 360\n }\n \n",
+    "collapsed": false,
+    "too_large": false,
+    "new_path": "internal/web/funcs.go",
+    "old_path": "internal/web/funcs.go",
+    "a_mode": "100644",
+    "b_mode": "100644",
+    "new_file": false,
+    "renamed_file": false,
+    "deleted_file": false,
+    "generated_file": false
+  }
+]

@@ -19,19 +19,22 @@ type Frontend struct {
 	Reason  string `json:"reason,omitempty"`
 	// Mode is "static" for a declared frontend build served by the engine, or
 	// "server" for pages the backend renders itself.
-	Mode          string     `json:"mode,omitempty"`
-	Base          string     `json:"base,omitempty"`
-	Head          string     `json:"head,omitempty"`
-	ChangedFiles  []string   `json:"changed_files,omitempty"`
-	Dropped       []string   `json:"dropped,omitempty"` // journey steps the validator refused, with reasons
-	Journeys      int        `json:"journeys,omitempty"`
-	NodeVersion   string     `json:"node_version,omitempty"`
-	Compare       *FECompare `json:"compare,omitempty"`
-	NotChecked    []string   `json:"not_checked"`
-	StartedAt     string     `json:"started_at"`
-	EndedAt       string     `json:"ended_at"`
-	FailedStage   string     `json:"failed_stage,omitempty"`
-	FailedMessage string     `json:"failed_message,omitempty"`
+	Mode         string   `json:"mode,omitempty"`
+	Base         string   `json:"base,omitempty"`
+	Head         string   `json:"head,omitempty"`
+	ChangedFiles []string `json:"changed_files,omitempty"`
+	Dropped      []string `json:"dropped,omitempty"` // journey steps the validator refused, with reasons
+	Journeys     int      `json:"journeys,omitempty"`
+	NodeVersion  string   `json:"node_version,omitempty"`
+	// JourneysUsed are the page journeys after validation, in fecheck's format,
+	// so an issue can carry the ones that showed its finding.
+	JourneysUsed  json.RawMessage `json:"journeys_used,omitempty"`
+	Compare       *FECompare      `json:"compare,omitempty"`
+	NotChecked    []string        `json:"not_checked"`
+	StartedAt     string          `json:"started_at"`
+	EndedAt       string          `json:"ended_at"`
+	FailedStage   string          `json:"failed_stage,omitempty"`
+	FailedMessage string          `json:"failed_message,omitempty"`
 }
 
 // FENotChecked is printed with every frontend result, whatever its status.

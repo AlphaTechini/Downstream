@@ -104,6 +104,9 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 		FindingID: f.ID, Metric: f.Metric, Step: f.Step, Journey: j,
 		B1: f.B1, C: f.C, B2: f.B2, Band: f.Band, FixOptions: fix,
 	}
+	if f.Journey == "" {
+		marker.Journeys = run.Journeys
+	}
 	if marker.FixOptions == nil {
 		marker.FixOptions = []string{}
 	}
@@ -177,8 +180,8 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 			w("Other steps in the table belong to other journeys of the run; their definitions are in `run.json` under `journeys`.")
 		}
 	} else {
-		w("This figure covers the whole app process across every journey of the run, so the marker holds no single journey. " +
-			"The journeys that were run are listed in `run.json` under `journeys`.")
+		w("This figure covers the whole app process across every journey of the run, so the marker holds all of the run's journeys. " +
+			"Recover them with `downstream marker parse --journeys-out journeys.json < issue.md`.")
 		w("")
 		w("```")
 		w("downstream run --base " + run.Base + " --head " + run.Head + " --journeys journeys.json --out run.json")
@@ -654,23 +657,31 @@ func ValidateNotes(n model.Notes, run model.Run, scan *model.Scan) error {
 		case !headline[k]:
 			return fmt.Errorf("notes: %q is not a headline finding; issues are opened per group of regressed steps and notes are keyed by the group's headline finding (see Headlines)", k)
 		}
-		if l := utf8.RuneCountInString(strings.TrimSpace(note.LikelyCause)); l < 1 || l > 600 {
-			return fmt.Errorf("notes: %q: likely_cause must be 1 to 600 characters, got %d", k, l)
-		}
-		if err := checkText(k, "likely_cause", note.LikelyCause); err != nil {
+		if err := checkNote(k, note); err != nil {
 			return err
 		}
-		if len(note.FixOptions) < 1 || len(note.FixOptions) > 5 {
-			return fmt.Errorf("notes: %q: fix_options must have 1 to 5 entries, got %d", k, len(note.FixOptions))
+	}
+	return nil
+}
+
+// checkNote applies the length and content limits to one note.
+func checkNote(k string, note model.Note) error {
+	if l := utf8.RuneCountInString(strings.TrimSpace(note.LikelyCause)); l < 1 || l > 600 {
+		return fmt.Errorf("notes: %q: likely_cause must be 1 to 600 characters, got %d", k, l)
+	}
+	if err := checkText(k, "likely_cause", note.LikelyCause); err != nil {
+		return err
+	}
+	if len(note.FixOptions) < 1 || len(note.FixOptions) > 5 {
+		return fmt.Errorf("notes: %q: fix_options must have 1 to 5 entries, got %d", k, len(note.FixOptions))
+	}
+	for i, o := range note.FixOptions {
+		where := "fix_options[" + strconv.Itoa(i) + "]"
+		if l := utf8.RuneCountInString(strings.TrimSpace(o)); l < 1 || l > 400 {
+			return fmt.Errorf("notes: %q: %s must be 1 to 400 characters, got %d", k, where, l)
 		}
-		for i, o := range note.FixOptions {
-			where := "fix_options[" + strconv.Itoa(i) + "]"
-			if l := utf8.RuneCountInString(strings.TrimSpace(o)); l < 1 || l > 400 {
-				return fmt.Errorf("notes: %q: %s must be 1 to 400 characters, got %d", k, where, l)
-			}
-			if err := checkText(k, where, o); err != nil {
-				return err
-			}
+		if err := checkText(k, where, o); err != nil {
+			return err
 		}
 	}
 	return nil
