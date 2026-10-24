@@ -4,6 +4,7 @@
 package report
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,9 +21,17 @@ func Render(run model.Run, scan *model.Scan) string {
 	r.order()
 	r.header()
 	r.runError()
-	r.summary()
-	r.journeyTables()
-	r.appTable()
+	if r.legacy {
+		r.summary()
+		r.journeyTables()
+		r.appTable()
+	} else {
+		r.gatedSummary()
+		r.gatedTable()
+		r.failuresSection()
+		r.advisorySection()
+		r.processTable()
+	}
 	r.newFeature()
 	r.chart()
 	r.issuesToOpen()
@@ -44,6 +53,10 @@ type renderer struct {
 	steps     map[string][]string // journey ID -> step names in display order
 	byID      map[string]model.Finding
 	completed bool // B1, C and B2 are all present
+
+	// legacy marks a run.json from before findings carried a Kind: it is
+	// rendered the way it was then, with latency as the verdict.
+	legacy bool
 }
 
 func (r *renderer) line(s string) { r.b.WriteString(s + "\n") }
@@ -123,6 +136,8 @@ func (r *renderer) order() {
 		labels[p.Label] = true
 	}
 	r.completed = labels["B1"] && labels["C"] && labels["B2"]
+
+	r.legacy = issues.Legacy(r.run)
 }
 
 func (r *renderer) goal(id string) string {
@@ -223,6 +238,9 @@ func (r *renderer) issuesToOpen() {
 		if n := len(g.Steps); n > 1 {
 			suffix = " (" + strconv.Itoa(n) + " steps)"
 		}
+		if g.AppIssue && !r.legacy {
+			suffix = " (" + strconv.Itoa(len(g.App)) + " app-wide gated metrics)"
+		}
 		r.line("- " + code(g.Headline.ID) + suffix)
 	}
 	if plan.RegressedSteps > 0 {
@@ -233,6 +251,10 @@ func (r *renderer) issuesToOpen() {
 			r.line("The " + strconv.Itoa(len(plan.Groups)) + " largest groups are listed. " + strconv.Itoa(plan.LeftOutGroups) +
 				" other groups (" + strconv.Itoa(plan.LeftOutSteps) + " steps) are left out; their steps are in the tables above.")
 		}
+	}
+	if plan.AppRegressions > 0 && !r.legacy {
+		r.blank()
+		r.line(strconv.Itoa(plan.AppRegressions) + " app-wide gated regressions are measured per process, not per journey; they share one issue.")
 	}
 	r.blank()
 }
@@ -313,7 +335,69 @@ func (r *renderer) appTable() {
 		}
 		r.line("| " + m.name + cells(m.get, m.unit) + " | " + chg + " | " + band + " | " + verdict + " |")
 	}
+	r.counterRows(pass)
 	r.blank()
+}
+
+// counterRows adds the exact process counters. A run.json written before they
+// existed has no CPU source in any pass, and gets none of these rows.
+func (r *renderer) counterRows(pass map[string]model.Pass) {
+	has := false
+	for _, p := range pass {
+		if p.Process.CPUSource != "" {
+			has = true
+		}
+	}
+	if !has {
+		return
+	}
+	for _, m := range counterSpecs {
+		line := "| " + m.name
+		for _, l := range []string{"B1", "C", "B2"} {
+			p, ok := pass[l]
+			switch {
+			case !ok:
+				line += " | not run"
+			case m.unmeasured != "" && slices.Contains(p.Process.Unmeasured, m.unmeasured):
+				line += " | not measured"
+			default:
+				line += " | " + m.format(m.get(p.Process)) + m.unit
+			}
+		}
+		chg, band, verdict := "-", "-", "-"
+		if f, ok := r.byID["app."+m.metric]; m.metric != "" && ok {
+			chg, band, verdict = change(f), val(f.Band, f.Unit)+unitSuffix(f.Unit), cell(f.Class)
+		}
+		r.line(line + " | " + chg + " | " + band + " | " + verdict + " |")
+	}
+	for _, l := range []string{"B1", "C", "B2"} {
+		if pass[l].Process.CPUSource == model.CPUSourceProcStat {
+			r.blank()
+			r.line("CPU time (exact) is the 10 ms /proc tick count in at least one pass, because the kernel gave no resource usage for the exited process.")
+			break
+		}
+	}
+}
+
+// counterSpec is one row of the process counters table.
+type counterSpec struct {
+	name, metric, unmeasured, unit string
+	format                         func(float64) string
+	get                            func(model.ProcessStats) float64
+}
+
+func dec(n int) func(float64) string {
+	return func(v float64) string { return strconv.FormatFloat(v, 'f', n, 64) }
+}
+
+var counterSpecs = []counterSpec{
+	{"CPU time (exact)", "", "", " s", dec(3), func(p model.ProcessStats) float64 { return p.CPUSecondsExact }},
+	{"CPU per completed journey", model.MetricCPUPerJourney, model.UnmeasuredCPUPerJourney, " ms", dec(2), func(p model.ProcessStats) float64 { return p.CPUMsPerJourney }},
+	{"Bytes written per journey", model.MetricWriteBytesPerJourney, model.UnmeasuredWriteBytesPerJourney, " B", dec(0), func(p model.ProcessStats) float64 { return p.WriteBytesPerJourney }},
+	{"Write syscalls per journey", model.MetricWriteSyscallsPerJourney, model.UnmeasuredWriteSyscallsPerJourney, "", dec(2), func(p model.ProcessStats) float64 { return p.WriteSyscallsPerJourney }},
+	{"Open fds", model.MetricOpenFDs, model.UnmeasuredOpenFDs, "", dec(0), func(p model.ProcessStats) float64 { return float64(p.OpenFDs) }},
+	{"Threads", model.MetricThreads, model.UnmeasuredThreads, "", dec(0), func(p model.ProcessStats) float64 { return float64(p.Threads) }},
+	{"Completed journeys", "", "", "", dec(0), func(p model.ProcessStats) float64 { return float64(p.CompletedJourneys) }},
 }
 
 type point struct {
@@ -361,7 +445,11 @@ func (r *renderer) chart() {
 		charted[p.jn] = true
 	}
 
-	r.line("**p95 per step**")
+	if r.legacy {
+		r.line("**p95 per step**")
+	} else {
+		r.line("**p95 per step (advisory)**")
+	}
 	r.blank()
 	r.line("```mermaid")
 	r.line("xychart-beta")
@@ -450,29 +538,54 @@ func (r *renderer) method() {
 		"sequentially on one machine. Three runs give no confidence interval; treat verdicts near the thresholds as uncertain.")
 	r.blank()
 	t := r.run.Settings.Thresholds
-	if t == (model.Thresholds{}) {
+	if t.BandMultiplier == 0 && t.MinRelative == 0 && t.MinLatencyMS == 0 && t.MinMemoryMB == 0 &&
+		t.MinCPUSeconds == 0 && t.MaxBaselineSpread == 0 && len(t.Tolerances) == 0 {
 		r.line("Thresholds were not recorded in this run.")
 		return
 	}
-	r.line("Thresholds in effect: a metric is a regression when the candidate is worse than the worse baseline run by more than " +
+	latency := "a latency or total CPU figure is called slower when the candidate is worse than the worse baseline run by more than " +
 		fixed(t.BandMultiplier) + " times the noise band (the difference between B1 and B2), by at least " +
-		fixed(t.MinRelative*100) + "%, and by at least " + fixed(t.MinLatencyMS) + " ms (latency), " +
-		fixed(t.MinMemoryMB) + " MB (memory) or " + fixed(t.MinCPUSeconds) + " s (CPU). A step that passed on both baseline runs and failed on the candidate is a regression. " +
-		"The verdict is withheld when the baseline runs differ by more than " + fixed(t.MaxBaselineSpread*100) +
-		"% of the smaller one and by at least the same minimum, unless the candidate is clearly worse or better than both. A journey with a latency regression and a latency improvement is reported as a trade-off.")
+		fixed(t.MinRelative*100) + "%, and by at least " + fixed(t.MinLatencyMS) + " ms (latency) or " +
+		fixed(t.MinCPUSeconds) + " s (CPU)."
+	if len(t.Tolerances) == 0 {
+		r.line("Thresholds in effect: a metric is a regression when the candidate is worse than the worse baseline run by more than " +
+			fixed(t.BandMultiplier) + " times the noise band (the difference between B1 and B2), by at least " +
+			fixed(t.MinRelative*100) + "%, and by at least " + fixed(t.MinLatencyMS) + " ms (latency), " +
+			fixed(t.MinMemoryMB) + " MB (memory) or " + fixed(t.MinCPUSeconds) + " s (CPU). A step that passed on both baseline runs and failed on the candidate is a regression. " +
+			"The verdict is withheld when the baseline runs differ by more than " + fixed(t.MaxBaselineSpread*100) +
+			"% of the smaller one and by at least the same minimum, unless the candidate is clearly worse or better than both. A journey with a latency regression and a latency improvement is reported as a trade-off.")
+		return
+	}
+	r.line("Gated metrics decide the verdict. For each, the worse baseline is the larger of B1 and B2, the noise band is the difference between them, " +
+		"and the allowed rise is the larger of a fraction of the worse baseline and an absolute figure. A metric is a regression when the candidate is above the worse baseline " +
+		"by more than the allowed rise and by more than the noise band, and improved by the opposite rule against the better baseline. " +
+		"When neither holds and the noise band is larger than the allowed rise, no verdict is given (withheld): a change of the allowed size could not be seen in this run. " +
+		"Smallest detectable is the larger of the allowed rise and the noise band. A step that passed on both baseline runs and failed on the candidate is a regression. " +
+		"One gated app metric clearly better and another clearly worse is reported as a trade-off.")
+	r.blank()
+	r.line("Allowed rise by metric: " + toleranceLine(t) + ".")
+	r.blank()
+	r.line("Latency is advisory: " + latency + " It never opens an issue.")
 }
 
 // Formatting helpers.
 
-// val formats a figure with fixed decimals: ms 1, s 2, MB 1, count 0.
+// val formats a figure with fixed decimals: ms 1, s 2, MB 1, count 0, and per
+// journey: CPU ms 2, bytes 0, write syscalls 2.
 func val(v float64, unit string) string {
+	return strconv.FormatFloat(v, 'f', places(unit), 64)
+}
+
+func places(unit string) int {
 	switch unit {
-	case "s":
-		return strconv.FormatFloat(v, 'f', 2, 64)
-	case "count":
-		return strconv.FormatFloat(v, 'f', 0, 64)
+	case "s", "ms/journey", "calls/journey":
+		return 2
+	case "GC cycles/journey":
+		return 4
+	case "count", "B/journey", "objects/journey", "cycles":
+		return 0
 	}
-	return strconv.FormatFloat(v, 'f', 1, 64)
+	return 1
 }
 
 func unitSuffix(unit string) string {
@@ -500,14 +613,7 @@ func change(f model.Finding) string {
 	if f.Class == model.ClassNotReached {
 		return "n/a"
 	}
-	dec := 1
-	switch f.Unit {
-	case "s":
-		dec = 2
-	case "count":
-		dec = 0
-	}
-	s := signed(f.Delta, dec) + unitSuffix(f.Unit)
+	s := signed(f.Delta, places(f.Unit)) + unitSuffix(f.Unit)
 	if max(f.B1, f.B2) != 0 {
 		s += " (" + signed(f.DeltaPct, 0) + "%)"
 	}

@@ -1,0 +1,935 @@
+{
+  "version": 1,
+  "journeys": [
+    {
+      "id": "signup_rejects_bad_input",
+      "goal": "A visitor tries to sign up with empty, oversized and wrong-type input, signs up twice, and logs in with wrong details",
+      "why_included": "Adds edge-input, negative and repeated-request steps to sign-up and login; statuses read from handlers.go",
+      "steps": [
+        {
+          "name": "signup_empty_username",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "signup_oversized_username",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "signup_wrong_type",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": 42,
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "signup_short_password",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "edge_{{uniq}}",
+            "password": "short"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "edge_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "sign_up_again",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "edge_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 409
+        },
+        {
+          "name": "login_wrong_password",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "edge_{{uniq}}",
+            "password": "not-the-password"
+          },
+          "expect_status": 401
+        },
+        {
+          "name": "login_unknown_user",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "nobody_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 401
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "edge_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        }
+      ]
+    },
+    {
+      "id": "protected_routes_refuse_anonymous",
+      "goal": "A reader works normally, then the same calls are sent without a token and with a bad token",
+      "why_included": "Adds negative steps for every route behind the token check; 401 for a missing or bad token read from auth.go",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "tok_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "tok_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Token Test",
+            "author": "A. Writer"
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "add_book_no_token",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "title": "No Token",
+            "author": "A. Writer"
+          },
+          "expect_status": 401
+        },
+        {
+          "name": "add_book_bad_token",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer 0000.deadbeef"
+          },
+          "body": {
+            "title": "Bad Token",
+            "author": "A. Writer"
+          },
+          "expect_status": 401
+        },
+        {
+          "name": "add_book_wrong_scheme",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Basic {{token}}"
+          },
+          "body": {
+            "title": "Wrong Scheme",
+            "author": "A. Writer"
+          },
+          "expect_status": 401
+        },
+        {
+          "name": "review_no_token",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "rating": 5
+          },
+          "expect_status": 401
+        },
+        {
+          "name": "shelf_add_no_token",
+          "method": "PUT",
+          "path": "/me/shelf/{{book_id}}",
+          "expect_status": 401
+        },
+        {
+          "name": "shelf_list_no_token",
+          "method": "GET",
+          "path": "/me/shelf",
+          "expect_status": 401
+        },
+        {
+          "name": "shelf_remove_no_token",
+          "method": "DELETE",
+          "path": "/me/shelf/{{book_id}}",
+          "expect_status": 401
+        }
+      ]
+    },
+    {
+      "id": "reviewer_sends_bad_reviews",
+      "goal": "A reader reviews a book, then sends out-of-range, wrong-type and oversized reviews, a review for a missing book and the same review twice",
+      "why_included": "Adds edge-input, negative and repeated-request steps to reviews; 400, 404 and 201 read from handlers.go",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "rev_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "rev_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Review Target",
+            "author": "A. Writer"
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "review_ok",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": 4,
+            "text": "Good"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "review_rating_zero",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": 0,
+            "text": "Too low"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "review_rating_high",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": 6,
+            "text": "Too high"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "review_wrong_type",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": "five"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "review_text_oversized",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": 3,
+            "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "review_unknown_book",
+          "method": "POST",
+          "path": "/books/0/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": 3
+          },
+          "expect_status": 404
+        },
+        {
+          "name": "review_again",
+          "method": "POST",
+          "path": "/books/{{book_id}}/reviews",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "rating": 4,
+            "text": "Good"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "list_reviews",
+          "method": "GET",
+          "path": "/books/{{book_id}}/reviews",
+          "expect_status": 200
+        },
+        {
+          "name": "list_reviews_unknown_book",
+          "method": "GET",
+          "path": "/books/0/reviews",
+          "expect_status": 404
+        }
+      ]
+    },
+    {
+      "id": "contributor_adds_books_with_bad_input",
+      "goal": "A reader adds books with empty, oversized, too many and wrong-type fields, adds the same book twice, and opens a book that does not exist",
+      "why_included": "Adds edge-input, negative and repeated-request steps to book create and get; 400, 201 and 404 read from handlers.go",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "bk_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "bk_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "book_empty_title",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "",
+            "author": "A. Writer"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "book_oversized_title",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+            "author": "A. Writer"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "book_empty_author",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "No Author",
+            "author": "  "
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "book_too_many_tags",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Tagged",
+            "author": "A. Writer",
+            "tags": [
+              "t0",
+              "t1",
+              "t2",
+              "t3",
+              "t4",
+              "t5",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ]
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "book_bad_tag",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Tagged",
+            "author": "A. Writer",
+            "tags": [
+              "Bad Tag"
+            ]
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "book_wrong_type",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Tagged",
+            "author": "A. Writer",
+            "tags": "travel"
+          },
+          "expect_status": 400
+        },
+        {
+          "name": "add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Twice Added",
+            "author": "A. Writer",
+            "tags": [
+              "travel"
+            ]
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "add_book_again",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Twice Added",
+            "author": "A. Writer",
+            "tags": [
+              "travel"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "get_book",
+          "method": "GET",
+          "path": "/books/{{book_id}}",
+          "expect_status": 200
+        },
+        {
+          "name": "get_unknown_book",
+          "method": "GET",
+          "path": "/books/0",
+          "expect_status": 404
+        }
+      ]
+    },
+    {
+      "id": "catalogue_grows_past_one_page",
+      "goal": "A reader adds many books and lists the catalogue, so the list has to cut off at its page size",
+      "why_included": "Adds enough created data for the book list to pass its page size by accumulating over the iterations of a pass; page size read from handlers.go",
+      "steps": [
+        {
+          "name": "sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "pg_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "pg_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token": "/token"
+          }
+        },
+        {
+          "name": "add_book_1",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 1 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "add_book_2",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 2 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "add_book_3",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 3 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "add_book_4",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 4 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "add_book_5",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 5 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "add_book_6",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 6 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "add_book_7",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token}}"
+          },
+          "body": {
+            "title": "Page Filler 7 {{uniq}}",
+            "author": "A. Writer",
+            "tags": [
+              "filler"
+            ]
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "list_books",
+          "method": "GET",
+          "path": "/books",
+          "expect_status": 200
+        },
+        {
+          "name": "list_unknown_tag",
+          "method": "GET",
+          "path": "/books?tag=no_such_tag",
+          "expect_status": 200
+        }
+      ]
+    },
+    {
+      "id": "second_reader_cannot_touch_first_shelf",
+      "goal": "One reader shelves a book; a second reader views a shelf, shelves a missing book and removes the same book id, and the first shelf is unchanged",
+      "why_included": "Adds a second user, repeated-request and negative steps to the owner-scoped shelf; 200 and 404 read from handlers.go, 401 from auth.go",
+      "steps": [
+        {
+          "name": "a_sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "own_a_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "a_log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "own_a_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token_a": "/token"
+          }
+        },
+        {
+          "name": "b_sign_up",
+          "method": "POST",
+          "path": "/users",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "own_b_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 201
+        },
+        {
+          "name": "b_log_in",
+          "method": "POST",
+          "path": "/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "own_b_{{uniq}}",
+            "password": "correct-horse-battery"
+          },
+          "expect_status": 200,
+          "extract": {
+            "token_b": "/token"
+          }
+        },
+        {
+          "name": "a_add_book",
+          "method": "POST",
+          "path": "/books",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{token_a}}"
+          },
+          "body": {
+            "title": "Shelved By First",
+            "author": "A. Writer"
+          },
+          "expect_status": 201,
+          "extract": {
+            "book_id": "/id"
+          }
+        },
+        {
+          "name": "a_shelf_add",
+          "method": "PUT",
+          "path": "/me/shelf/{{book_id}}",
+          "headers": {
+            "Authorization": "Bearer {{token_a}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "a_shelf_add_again",
+          "method": "PUT",
+          "path": "/me/shelf/{{book_id}}",
+          "headers": {
+            "Authorization": "Bearer {{token_a}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "a_shelf_list",
+          "method": "GET",
+          "path": "/me/shelf",
+          "headers": {
+            "Authorization": "Bearer {{token_a}}"
+          },
+          "expect_status": 200,
+          "extract": {
+            "shelved_id": "/books/0/id"
+          }
+        },
+        {
+          "name": "b_shelf_list",
+          "method": "GET",
+          "path": "/me/shelf",
+          "headers": {
+            "Authorization": "Bearer {{token_b}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "b_shelf_add_unknown",
+          "method": "PUT",
+          "path": "/me/shelf/0",
+          "headers": {
+            "Authorization": "Bearer {{token_b}}"
+          },
+          "expect_status": 404
+        },
+        {
+          "name": "b_shelf_remove_a_book",
+          "method": "DELETE",
+          "path": "/me/shelf/{{book_id}}",
+          "headers": {
+            "Authorization": "Bearer {{token_b}}"
+          },
+          "expect_status": 200
+        },
+        {
+          "name": "a_shelf_still_has_book",
+          "method": "GET",
+          "path": "/me/shelf",
+          "headers": {
+            "Authorization": "Bearer {{token_a}}"
+          },
+          "expect_status": 200,
+          "extract": {
+            "still_id": "/books/0/id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "monitor_checks_health",
+      "kind": "control",
+      "goal": "An uptime monitor checks that the service is healthy.",
+      "why_included": "Control journey outside most changes, to catch app-wide slowdowns.",
+      "steps": [
+        {
+          "name": "health",
+          "method": "GET",
+          "path": "/health",
+          "expect_status": 200
+        }
+      ]
+    }
+  ]
+}

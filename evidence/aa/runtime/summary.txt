@@ -1,0 +1,33 @@
+runs: 20 (stopped early: 0)
+runs with at least one false regression (any metric): 0 of 20
+runs with at least one false regression if the absolute floor were removed: 17 of 20
+
+metric	findings	regression	rate	runs>=1	improved	withheld	noise	other	no floor	spread p50	spread p90	spread max
+alloc_bytes_per_journey	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	1.3%	2.8%	3.9%
+alloc_objects_per_journey	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	2.0%	4.2%	7.6%
+cpu_ms_per_journey	20	0	0.0%	0 of 20	1	2	17	0	0 (0.0%)	6.5%	22.2%	33.0%
+cpu_seconds	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	6.5%	26.9%	37.5%
+failures	440	0	0.0%	0 of 20	0	0	440	0	-	-	-	-
+gc_cycles_per_journey	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	-	-	-
+goroutines	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	0.0%	0.0%	0.0%
+mean_ms	440	0	0.0%	0 of 20	0	0	440	0	36 (8.2%)	17.7%	53.8%	135.2%
+open_fds	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	0.0%	0.0%	0.0%
+p50_ms	440	0	0.0%	0 of 20	0	0	440	0	26 (5.9%)	14.4%	54.6%	172.0%
+p95_ms	440	0	0.0%	0 of 20	0	0	440	0	38 (8.6%)	35.6%	109.3%	266.5%
+peak_rss_mb	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	0.4%	1.1%	1.4%
+threads	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	11.1%	11.1%	11.1%
+write_bytes_per_journey	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	0.3%	0.6%	0.7%
+write_syscalls_per_journey	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	1.9%	2.9%	3.5%
+
+counter	runs	spread p50	spread max	excess p50	excess p90	excess max
+cpu_ms_per_journey	20	6.46%	32.96%	-6.83%	8.13%	16.85%
+write_bytes_per_journey	20	0.26%	0.70%	-0.22%	0.22%	0.63%
+write_syscalls_per_journey	20	1.93%	3.46%	-0.95%	1.72%	3.18%
+open_fds	20	0.00%	0.00%	0.00%	0.00%	0.00%
+threads	20	11.11%	11.11%	0.00%	11.11%	11.11%
+peak_rss_mb	20	0.37%	1.36%	-0.06%	0.67%	1.23%
+cpu_seconds_exact	20	6.46%	32.96%	-6.83%	8.13%	16.85%
+cpu_seconds	20	6.46%	37.50%	-5.88%	6.25%	17.65%
+alloc_objects_per_journey	20	1.97%	7.55%	-1.66%	2.32%	4.18%
+alloc_bytes_per_journey	20	1.31%	3.93%	-0.83%	0.92%	1.70%
+goroutines	20	0.00%	0.00%	0.00%	0.00%	0.00%

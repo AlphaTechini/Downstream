@@ -1,0 +1,4 @@
+run	finding	metric	b1	c	b2	band	delta_pct	class
+run-02	app.cpu_ms_per_journey	cpu_ms_per_journey	2.1873	2.0289	2.9081	0.7208	-30.23	withheld
+run-07	app.cpu_ms_per_journey	cpu_ms_per_journey	1.9203	2.2150	2.4223	0.5020	-8.56	withheld
+run-15	app.cpu_ms_per_journey	cpu_ms_per_journey	2.4745	1.9374	2.4297	0.0448	-21.71	improved

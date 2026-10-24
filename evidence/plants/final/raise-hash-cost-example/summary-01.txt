@@ -1,0 +1,7 @@
+regression=1
+trade-off=0
+improved=1
+withheld=0
+advisory=60
+discarded=0
+passes=3

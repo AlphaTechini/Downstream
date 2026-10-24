@@ -74,6 +74,34 @@ The engine's static analysis did not link `avatarHue` to any route: NewGit calls
 templates through a `template.FuncMap`, which the call graph does not follow. The journeys came
 from NewGit's `downstream.md` and the control journeys.
 
+## Gated rule (adopted 2026-10-24)
+
+The engine now decides regressions on step failures and process counters, each with a
+tolerance, and reports latency as advisory (`engine/classify`, `docs/details.md`). It was tried
+first as a separate private flow, `downstream-experiment`, on the same three merge requests.
+Raw notes: [gated/mr-11-notes.json](flow/gated/mr-11-notes.json),
+[gated/mr-14-notes.json](flow/gated/mr-14-notes.json),
+[gated/mr-16-notes.json](flow/gated/mr-16-notes.json).
+
+| Round | Engine | Clean change !16 | Planted !11 | New feature !14 | What it showed | Source |
+|---|---|---|---|---|---|---|
+| 1 | 99a308c | 1 regression: bytes written per journey +5% | CPU per journey 2.82 / 2.96 / 466.78 ms | CPU per journey and bytes written | `wchar` counts the responses, so a bigger `/health` answer looked like extra writing; allocation, GC and goroutine counters were not measured because the base `downstream.yml` had no `main_dir` | mr-16 L353, mr-11 L1301, mr-14 L695 |
+| 2 | 455a56b, b2e30fd | 1 of 3 flagged: heap objects per journey 181 / 175 / 208 | first try stopped: the handler files were not readable; then CPU per journey 2.41 / 2.28 / 358.93 ms | CPU per journey and allocations | responses subtracted and counters measured; the journey writer needed the handler and middleware files | mr-16 L611, L869, L1071; mr-11 L1531, L1733; mr-14 L953 |
+| 3 (adopted) | 84e61cb | **0 of 3 flagged** | **caught**: CPU per journey 2.87 / 2.91 / 451.25 ms, one issue | **caught**: CPU per journey 3.09 / 3.04 / 94.96 ms, one issue and one trade-off question | allocation rises need 100 objects or 16 KB per journey as well as the percentage | mr-16 L1273, L1475, L1677; mr-11 L1991; mr-14 L1211 |
+
+Round 3 job logs: [10002744](flow/gated/session-10002744-mr16-job-log.txt) L702,
+[10002775](flow/gated/session-10002775-mr16-job-log.txt) L703,
+[10002817](flow/gated/session-10002817-mr16-job-log.txt) L717 (clean),
+[10002746](flow/gated/session-10002746-mr11-job-log.txt) L774 (planted),
+[10002748](flow/gated/session-10002748-mr14-job-log.txt) L806 (new feature).
+
+After round 3, the clean change in CI (pipeline 2984592625) flagged bytes written per journey
+rising from a near-zero baseline (0 B/journey, +17%). Bytes written now also needs 1 KB per
+journey, as the allocations need 100 objects or 16 KB.
+
+Three clean runs are a small sample. Under the floor, the new feature's heap objects rise of
+70 per journey (16%) is noise; CPU per journey still flags that change.
+
 ## Not shown here
 
 - Noise of the Duo sandbox as a rate: one clean-change run (10001525) came out clean.

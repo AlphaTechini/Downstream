@@ -147,17 +147,43 @@ func TestScriptRejectsBadOptionsAndNames(t *testing.T) {
 }
 
 func TestParseSummary(t *testing.T) {
-	good := `[{"journey":"a","step":"b","count":4,"failures":1,"p50_ms":1.5,"p95_ms":2.5,"mean_ms":1.75}]`
-	got, err := ParseSummary([]byte(good))
+	want := model.StepMetrics{Journey: "a", Step: "b", Count: 4, Failures: 1, P50: 1.5, P95: 2.5, Mean: 1.75}
+	step := `{"journey":"a","step":"b","count":4,"failures":1,"p50_ms":1.5,"p95_ms":2.5,"mean_ms":1.75}`
+
+	// The older array form has no completed counts.
+	got, done, err := ParseSummary([]byte("\n [" + step + "]"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := model.StepMetrics{Journey: "a", Step: "b", Count: 4, Failures: 1, P50: 1.5, P95: 2.5, Mean: 1.75}
-	if len(got) != 1 || got[0] != want {
-		t.Fatalf("got %+v", got)
+	if len(got) != 1 || got[0] != want || done != nil {
+		t.Fatalf("array form: got %+v, %v", got, done)
 	}
-	for _, bad := range []string{``, `[]`, `{}`, `[{"journey":"a","step":"b","extra":1}]`, `[{"journey":"","step":"b"}]`, `[{"journey":"a","step":"b","count":-1}]`, `[{"journey":"a"`} {
-		if _, err := ParseSummary([]byte(bad)); err == nil {
+
+	got, done, err = ParseSummary([]byte(`{"steps":[` + step + `],"journeys":[{"journey":"a","completed":3},{"journey":"c","completed":0}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != want || len(done) != 2 || done["a"] != 3 || done["c"] != 0 {
+		t.Fatalf("object form: got %+v, %v", got, done)
+	}
+
+	got, done, err = ParseSummary([]byte(`{"steps":[` + step + `]}`))
+	if err != nil || len(got) != 1 || len(done) != 0 {
+		t.Fatalf("object without journeys: %+v %v %v", got, done, err)
+	}
+
+	for _, bad := range []string{
+		``, `[]`, `{}`, `null`, `7`,
+		`[{"journey":"a","step":"b","extra":1}]`, `[{"journey":"","step":"b"}]`, `[{"journey":"a","step":"b","count":-1}]`, `[{"journey":"a"`,
+		`{"steps":[],"journeys":[]}`,
+		`{"steps":[` + step + `],"extra":1}`,
+		`{"steps":[` + step + `],"journeys":[{"journey":"","completed":1}]}`,
+		`{"steps":[` + step + `],"journeys":[{"journey":"a","completed":-1}]}`,
+		`{"steps":[` + step + `],"journeys":[{"journey":"a","completed":1},{"journey":"a","completed":2}]}`,
+		`{"steps":[` + step + `],"journeys":[{"journey":"a","completed":"x"}]}`,
+		`{"steps":[{"journey":"a","step":"","count":1}]}`,
+	} {
+		if _, _, err := ParseSummary([]byte(bad)); err == nil {
 			t.Errorf("accepted %q", bad)
 		}
 	}
@@ -252,9 +278,13 @@ func TestK6Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	steps, err := ParseSummary(data)
+	steps, completed, err := ParseSummary(data)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Only signup finishes every step of an iteration: 2 VUs x 3 iterations.
+	if len(completed) != 3 || completed["signup"] != 6 || completed["1numeric"] != 0 || completed["missing"] != 0 {
+		t.Errorf("completed = %v, want signup 6 and the others 0", completed)
 	}
 	by := map[string]model.StepMetrics{}
 	for _, s := range steps {
@@ -352,9 +382,12 @@ func TestK6DoesNotFollowRedirects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	steps, err := ParseSummary(data)
+	steps, completed, err := ParseSummary(data)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if completed["r"] != 0 {
+		t.Errorf("a failed iteration counted as completed: %v", completed)
 	}
 	if steps[0].Count == 0 || steps[0].Failures != steps[0].Count {
 		t.Errorf("a redirect should be a failed step: %+v", steps[0])

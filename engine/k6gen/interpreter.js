@@ -1,6 +1,9 @@
 const OPTIONS_SCENARIOS = {};
 const M = {};
+// Counts iterations that ran every step with no failure, per journey.
+const DONE = {};
 for (const j of JOURNEYS) {
+  DONE[j.id] = new Counter('ds_' + j.id + '_done');
   OPTIONS_SCENARIOS[j.id] = {
     executor: 'per-vu-iterations',
     exec: 'j_' + j.id,
@@ -104,12 +107,13 @@ function walkSteps(j) {
     m.reqs.add(1);
     m.fails.add(failed ? 1 : 0);
     if (res.status !== 0) m.dur.add(res.timings.duration);
-    if (failed) return;
+    if (failed) return false;
   }
+  return true;
 }
 
 function runJourney(j) {
-  walkSteps(j);
+  if (walkSteps(j)) DONE[j.id].add(1);
   sleep(0.05);
 }
 
@@ -117,7 +121,9 @@ export function handleSummary(data) {
   const num = (x) => (typeof x === 'number' && isFinite(x) ? x : 0);
   const vals = (name) => (data.metrics[name] && data.metrics[name].values) || {};
   const out = [];
+  const journeys = [];
   for (const j of JOURNEYS) {
+    journeys.push({ journey: j.id, completed: num(vals('ds_' + j.id + '_done').count) });
     for (const s of j.steps) {
       const id = j.id + '__' + s.name;
       const d = vals('ds_' + id + '_duration');
@@ -132,5 +138,7 @@ export function handleSummary(data) {
       });
     }
   }
-  return { 'steps.json': JSON.stringify(out) };
+  // data_received is every byte the app sent back: the engine subtracts it from the
+  // app's write counter so bigger responses are not counted as extra writes.
+  return { 'steps.json': JSON.stringify({ steps: out, journeys: journeys, received: num(vals('data_received').count) }) };
 }

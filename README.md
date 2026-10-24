@@ -12,8 +12,12 @@ staging environment that replays real user behaviour.
 > engine's report and opens one issue per cause; `fix it` on an issue commits the fix on a new
 > branch, opens a merge request for the requester and re-measures it. Shown on the demo app in
 > this project and on [NewGit](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/newgit),
-> a separate project, with the same flow ([evidence/flow.md](evidence/flow.md)). In CI the engine
-> also passes the clean control in 22 of 22 runs ([evidence/runs.md](evidence/runs.md)); the
+> a separate project, with the same flow ([evidence/flow.md](evidence/flow.md)). Regressions are
+> decided on step failures and process counters (CPU per completed journey, writes, memory,
+> allocations, goroutines), each with a tolerance; latency is reported but advisory. With that
+> rule the clean change came out clean in 3 of 3 flow runs and the planted and new-feature
+> changes were caught. In CI an earlier, latency-based rule passed the clean control in 22 of 22
+> runs ([evidence/runs.md](evidence/runs.md)); the
 > sandbox's own noise rate is not measured yet (one clean run there). The claims table says exactly what has been shown.
 
 ## Built for GitLab Transcend: Life After Code
@@ -53,7 +57,7 @@ to routes the author never opened. That gap is what Downstream targets.
 | 2 | It maps changed routes, routes that share code with them (blast radius) and routes the merge request adds | Verified: `downstream scan` ([`engine/scan`](engine/scan/)), Go `net/http` only ([evidence](evidence/flow.md)) |
 | 3 | The model writes journeys that cover the change, up to 20: existing journeys reaching every changed and affected route, new journeys for every new route, and control journeys elsewhere; the engine rejects a set that leaves a route out. They are shown to the reviewer in plain English first | Verified: coverage rules in [`engine/journey`](engine/journey/coverage.go), model-written journeys in every full session ([evidence](evidence/flow.md)) |
 | 4 | k6 runs them on the old build twice and the new build once, so noise is measured; new-feature journeys run in the new build's pass alongside the others, so existing pages are measured while the feature is in use | Verified in the sandbox ([`engine/runner`](engine/runner/), [`engine/k6gen`](engine/k6gen/)) |
-| 5 | Only differences beyond the noise are reported: one issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Verified: issues opened by the flow; the planted change gives 2 issues for 1 cause (one for the routes that reach the changed function, one for slowed routes outside them). The trade-off question is built (`engine/classify`, flow step R12) but no flow run has produced one yet |
+| 5 | Only differences beyond the noise and a per-metric tolerance open issues: failing steps, and process counters (CPU per completed journey, bytes written net of responses, write syscalls, memory, fds, threads, allocations, GC, goroutines). Latency is shown but advisory. One issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Verified: issues opened by the flow. Under the gated rule the planted change gives 1 issue (CPU per journey); the earlier latency rule gave 2 for 1 cause. A trade-off question was posted in session 10002748 ([evidence](evidence/flow.md)) |
 | 6 | `@handle fix it` (option 1) or `fix option N` commits the option on a new branch, opens a merge request mentioning the requester and re-runs the issue's journey on it; `verify` reruns after merge | `fix it` verified (!13, [evidence](evidence/flow.md)); `verify` written, not run |
 
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
@@ -104,7 +108,10 @@ Flow sessions on GitLab, from [`evidence/flow/`](evidence/flow/) (details in
 | Planted `hashSecret` change (!11): regressed steps, app CPU time B1 / C / B2 | 16 of 16; 0.11 / 17.69 / 0.12 s | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701 |
 | `fix it` re-measure (!13 against !11): logged-in steps p95, app CPU time | about 66 ms to 0.2-0.6 ms; 8.80 / 2.37 / 8.86 s, 0 regressions | [mr-13-notes.json](evidence/flow/session-10000200/mr-13-notes.json) L33 |
 | New similar-books route (!14): existing steps regressed while it is in use; app CPU time | 8 (`shelf_list` 2.1 ms to 129.4 ms p95); 0.10 / 1.72 / 0.11 s | [mr-14-notes.json](evidence/flow/mr-14-notes.json) L381 |
-| NewGit avatar change (NewGit !3): regressed steps, app CPU time | 10, controls included; 0.32 / 1.50 / 0.37 s | [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L785 |
+| NewGit avatar change (NewGit !3), earlier latency rule: regressed steps, app CPU time | 10, controls included; 0.32 / 1.50 / 0.37 s | [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L785 |
+| Gated rule, clean change: runs with an issue | 0 of 3 | [gated/mr-16-notes.json](evidence/flow/gated/mr-16-notes.json) L1273, L1475, L1677 |
+| Gated rule, planted change: CPU per completed journey, B1 / B2 / C | 2.87 / 2.91 / 451.25 ms | [gated/mr-11-notes.json](evidence/flow/gated/mr-11-notes.json) L1991 |
+| Gated rule, new feature: CPU per completed journey, B1 / B2 / C | 3.09 / 3.04 / 94.96 ms | [gated/mr-14-notes.json](evidence/flow/gated/mr-14-notes.json) L1211 |
 
 Engine runs in GitLab CI on the demo app, from [`evidence/runs/`](evidence/runs/) (one run per
 row unless stated; details in [evidence/runs.md](evidence/runs.md)):
@@ -116,6 +123,13 @@ row unless stated; details in [evidence/runs.md](evidence/runs.md)):
 | Planted change: app CPU time, B1 / candidate / B2 | 0.16 / 27.10 / 0.16 s | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L53 |
 | Clean change: runs flagged as regression | 0 of 22 (pipelines 63 and 66) | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) |
 | Clean change: largest step p95 increase over 20 runs | 4.6 ms (regression floor 10 ms) | `evidence/runs/ci-66-engine-noise/noise-*/report-*.md` |
+| A/A (same commit as base and head), 4-CPU dev machine: runs with a false regression | 0 of 20; 19 of 20 if the 10 ms floor were removed | [evidence/aa/README.md](evidence/aa/README.md), [summary](evidence/aa/before/summary.txt) L2-L3 |
+| A/A: B1/B2 spread of step p95 (median, p90) | 32.5%, 105.8% | [summary](evidence/aa/before/summary.txt) L10 |
+| A/A: largest excess of C over the worse baseline, 20 runs: CPU per journey / bytes written per journey / write syscalls per journey | 11.17% / 0.35% / 1.51% | [summary](evidence/aa/counters/summary.txt) L14-L16 |
+| A/A with the gated rule (latency advisory), 20 fresh runs: runs with a false regression | 0 of 20 (560 gated findings) | [summary](evidence/aa/after/summary.txt) L2, L6-L16 |
+| Gated rule, 5 runs each, 4-CPU dev machine: planted `raise-hash-cost` / planted `remove-list-limit` / clean control (two journey sets) | regression in 5 of 5 / 5 of 5 / 0 of 10 | [evidence/plants/README.md](evidence/plants/README.md) |
+| `remove-list-limit` (scripted edit): bytes written per completed journey | +58.10% to +59.80% | [table](evidence/plants/remove-list-limit-thorough/table.txt) |
+| A/A with runtime counters from the build overlay (allocations, alloc bytes, GC cycles per journey, goroutines), 20 runs: runs with a false regression | 0 of 20 | [summary](evidence/aa/runtime/summary.txt) L2, L31-L33 |
 
 The platform, from the logs in `evidence/day0/`:
 
@@ -184,6 +198,8 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | The same flow runs on another project, NewGit, with app notes and control journeys | Verified, session 10000842 (10 steps regressed; control pages slowed too) | NewGit `downstream.yml`, `downstream.md` | [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L757, L785; [job log](evidence/flow/newgit-session-10000842/job-log.txt) L697 |
 | A clean change comes out clean on the GitLab runner and in the flow | Verified, 22 of 22 CI runs on `saas-linux-small-amd64` and 1 of 1 flow run in the Duo sandbox (session 10001525); 6 of 12 local WSL2 runs were false positives | `engine/classify` | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) 20 runs; [summary](evidence/runs.md); [flow session 10001525](evidence/flow/session-10001525/mr-16-notes.json) L151 |
 | `fix it` refuses an option the issue does not have | Verified, session 10001522 | `engine/issues` (`fixcheck`) | [issue-6-notes.json](evidence/flow/session-10001522/issue-6-notes.json) L409 |
+| Gated rule: a clean change opens no issue; the planted and new-feature changes are caught | Verified in the Duo sandbox: 0 of 3 clean runs flagged; planted CPU per journey 2.87 / 2.91 / 451.25 ms; new feature 3.09 / 3.04 / 94.96 ms | `engine/classify`, `engine/runner` | [gated/mr-16-notes.json](evidence/flow/gated/mr-16-notes.json) L1273, L1475, L1677; [gated/mr-11-notes.json](evidence/flow/gated/mr-11-notes.json) L1991; [gated/mr-14-notes.json](evidence/flow/gated/mr-14-notes.json) L1211 |
+| The journey writer adds negative, edge-input and repeated steps, with statuses read from the head code | Verified, session 10002586 | `flows/downstream.yml` R6, `engine/journey/lint.go` | [gated/mr-11-notes.json](evidence/flow/gated/mr-11-notes.json) L1705 |
 | A new feature's journeys run on the new build alongside the compared ones, so its cost to existing pages shows | Verified, session 10001024 on !14 (8 existing steps regressed while the new route was in use; the same MR with a separate pass showed 0) | `engine/runner` | [mr-14-notes.json](evidence/flow/mr-14-notes.json) L151, L381 |
 | Journeys are written by the model from the scan and run by k6 against an app | Verified in flow sessions | `engine/journey`, `engine/k6gen` | [mr-11-notes.json](evidence/flow/mr-11-notes.json) L701; [mr-3-notes.json](evidence/flow/newgit-session-10000842/mr-3-notes.json) L757 |
 | One issue per cause, starter tagged | Verified that the flow opens the issues; the planted change gives 2 issues for 1 cause | `engine/issues` | [issue-4.json](evidence/flow/session-9999905/issue-4.json) L5; [mr-11-notes.json](evidence/flow/mr-11-notes.json) L785 |
@@ -198,6 +214,12 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
   stall can pass the 10 ms floor. The clean control was flagged in 6 of 12 local WSL2 runs and
   in 0 of 22 runner runs; the Duo sandbox's noise is not measured ([evidence/runs.md](evidence/runs.md)).
 - **`verify` has not run.** The command is in the flow; no session has used it.
+- **Latency is advisory.** A slower page with no change in failures or process counters is
+  shown in the report but opens no issue. Identical code varied far more in latency than in the
+  counters (`docs/details.md`).
+- **The gated rule has a small sample.** 3 clean flow runs, 1 planted and 1 new-feature run.
+  Allocation rises also need 100 objects or 16 KB per journey, and bytes written 1 KB per
+  journey: chosen floors, so a smaller regression of only those kinds passes as noise.
 - **Static analysis covers Go `net/http` only.** Routes must be registered with string-literal
   patterns on a ServeMux. Other frameworks and languages are not supported. Pages behind a
   catch-all handler show as route `/`, and helpers called from HTML templates through a
@@ -275,7 +297,8 @@ own credentials.
 **Deployment.** The flow is enabled in the GitLab project through the UI; there is nothing to
 deploy from this repo. What the brief means by deployment for a flow entry is unverified (T-12).
 
-**Security.** The model's only output that reaches execution is validated JSON, the engine talks
+**Security.** The model's only output that reaches execution is validated JSON and a number
+picking a file from the engine's own list (`downstream show --file <n>`), the engine talks
 to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
 under CODEOWNERS. The engine and `agentnotes.md` come from this repo at a commit pinned in the
 flow, and `downstream.yml` is read from the base commit, so a merge request cannot rewrite any

@@ -152,24 +152,69 @@ func jsLiteral(v any) (string, error) {
 	return s, nil
 }
 
-// ParseSummary reads steps.json as written by the script's handleSummary.
-func ParseSummary(data []byte) ([]model.StepMetrics, error) {
-	var out []model.StepMetrics
+// ParseReceived returns the bytes k6 received from the app in the pass, as
+// steps.json records them. ok is false for a steps.json written before the
+// field existed, or with a negative value.
+func ParseReceived(data []byte) (received float64, ok bool) {
+	var doc struct {
+		Received *float64 `json:"received"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil || doc.Received == nil || *doc.Received < 0 {
+		return 0, false
+	}
+	return *doc.Received, true
+}
+
+// ParseSummary reads steps.json as written by the script's handleSummary: an
+// object {"steps": [...], "journeys": [{"journey", "completed"}]}. The older
+// form, a bare array of steps, is accepted too; it carries no completed counts,
+// so the returned map is nil for it. The map is keyed by journey ID.
+func ParseSummary(data []byte) ([]model.StepMetrics, map[string]int, error) {
+	var doc struct {
+		Steps    []model.StepMetrics `json:"steps"`
+		Journeys []struct {
+			Journey   string `json:"journey"`
+			Completed int    `json:"completed"`
+		} `json:"journeys"`
+		Received *float64 `json:"received"`
+	}
+	var completed map[string]int
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&out); err != nil {
-		return nil, fmt.Errorf("steps.json: %w", err)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		if err := dec.Decode(&doc.Steps); err != nil {
+			return nil, nil, fmt.Errorf("steps.json: %w", err)
+		}
+	} else {
+		if err := dec.Decode(&doc); err != nil {
+			return nil, nil, fmt.Errorf("steps.json: %w", err)
+		}
+		completed = make(map[string]int, len(doc.Journeys))
+		for _, j := range doc.Journeys {
+			if j.Journey == "" {
+				return nil, nil, errors.New("steps.json: a journeys entry has no journey name")
+			}
+			if j.Completed < 0 {
+				return nil, nil, fmt.Errorf("steps.json: journey %s has a negative completed count", j.Journey)
+			}
+			if _, dup := completed[j.Journey]; dup {
+				return nil, nil, fmt.Errorf("steps.json: journey %s appears twice in journeys", j.Journey)
+			}
+			completed[j.Journey] = j.Completed
+		}
 	}
+	out := doc.Steps
 	if len(out) == 0 {
-		return nil, errors.New("steps.json: no steps")
+		return nil, nil, errors.New("steps.json: no steps")
 	}
 	for _, m := range out {
 		if m.Journey == "" || m.Step == "" {
-			return nil, errors.New("steps.json: an entry has no journey or step name")
+			return nil, nil, errors.New("steps.json: an entry has no journey or step name")
 		}
 		if m.Count < 0 || m.Failures < 0 || m.P50 < 0 || m.P95 < 0 || m.Mean < 0 {
-			return nil, fmt.Errorf("steps.json: %s/%s has a negative figure", m.Journey, m.Step)
+			return nil, nil, fmt.Errorf("steps.json: %s/%s has a negative figure", m.Journey, m.Step)
 		}
 	}
-	return out, nil
+	return out, completed, nil
 }

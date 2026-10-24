@@ -33,17 +33,18 @@ func k6Version(ctx context.Context, k6 string) (string, error) {
 
 // runK6 writes the script into a fresh directory under tmp, runs k6 there
 // (handleSummary writes steps.json relative to the working directory), and
-// returns the parsed steps. If k6 is killed or exits non-zero after writing
+// returns the parsed steps and the completed-iteration count per journey (nil
+// when steps.json is in the older form without them). If k6 is killed or exits non-zero after writing
 // steps.json, the figures are still used and the k6 error goes to log; only a
 // missing or unreadable steps.json is an error.
-func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duration, log logger) ([]model.StepMetrics, error) {
+func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duration, log logger) ([]model.StepMetrics, map[string]int, *float64, error) {
 	dir, err := os.MkdirTemp(tmp, "k6-")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	defer os.RemoveAll(dir)
 	if err := os.WriteFile(filepath.Join(dir, "script.js"), []byte(script), 0o600); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, maxDuration+k6Slack)
@@ -65,24 +66,28 @@ func runK6(ctx context.Context, k6, tmp, script string, maxDuration time.Duratio
 		}
 	}
 	if parent.Err() != nil && k6err != nil {
-		return nil, fmt.Errorf("%w; output tail:\n%s", k6err, out.String())
+		return nil, nil, nil, fmt.Errorf("%w; output tail:\n%s", k6err, out.String())
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "steps.json"))
 	if err != nil {
 		if k6err != nil {
-			return nil, fmt.Errorf("%w; no steps.json was written; output tail:\n%s", k6err, out.String())
+			return nil, nil, nil, fmt.Errorf("%w; no steps.json was written; output tail:\n%s", k6err, out.String())
 		}
-		return nil, fmt.Errorf("k6 wrote no steps.json: %w", err)
+		return nil, nil, nil, fmt.Errorf("k6 wrote no steps.json: %w", err)
 	}
-	steps, err := k6gen.ParseSummary(data)
+	steps, completed, err := k6gen.ParseSummary(data)
 	if err != nil {
 		if k6err != nil {
-			return nil, fmt.Errorf("%w; %v; output tail:\n%s", k6err, err, out.String())
+			return nil, nil, nil, fmt.Errorf("%w; %v; output tail:\n%s", k6err, err, out.String())
 		}
-		return nil, err
+		return nil, nil, nil, err
 	}
 	if k6err != nil {
 		log.printf("%v; using the steps.json it wrote; output tail: %s", k6err, strings.TrimSpace(out.String()))
 	}
-	return steps, nil
+	var received *float64
+	if v, ok := k6gen.ParseReceived(data); ok {
+		received = &v
+	}
+	return steps, completed, received, nil
 }

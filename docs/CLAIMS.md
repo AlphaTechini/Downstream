@@ -173,6 +173,20 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 - **Does not show:** how the cost splits between CPU and lock waiting; C's CPU time includes
   the new feature's own work, as the report says.
 
+## C-17. Under the gated rule a clean change opens no issue, and real regressions are caught
+
+- **File:** `engine/classify` (tolerances), `engine/runner` (process counters). The proof runs used
+  engine `84e61cb`; the pinned engine adds a 1 KB per journey floor on bytes written, after CI
+  pipeline 2984592625 flagged the clean change on a near-zero baseline
+- **Proof:** [gated/mr-16-notes.json](../evidence/flow/gated/mr-16-notes.json) lines 1273,
+  1475 and 1677: three clean-change runs with 0 regressed metrics.
+  [gated/mr-11-notes.json](../evidence/flow/gated/mr-11-notes.json) line 1991: the planted
+  change, CPU per completed journey 2.87 / 2.91 / 451.25 ms (B1 / B2 / C).
+  [gated/mr-14-notes.json](../evidence/flow/gated/mr-14-notes.json) line 1211: the new feature,
+  3.09 / 3.04 / 94.96 ms. Earlier rounds, with their false alarms, are in `evidence/flow.md`.
+- **Does not show:** a false-alarm rate (three runs); that an allocation-only rise under 100
+  objects or 16 KB per journey is caught (it is treated as noise by design).
+
 ## C-16. GitLab shows the MIT licence, and the flow is public in the AI Catalog
 
 - **File:** `LICENSE`; the catalog item built from `flows/downstream.yml`
@@ -185,6 +199,50 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-A1. On identical code the rule reports no regression, and the floor is why
+
+- **Files:** `engine/classify/classify.go`, `scripts/aa.sh`, `scripts/aa_summary.py`
+- **Proof:** [evidence/aa/before/summary.txt](../evidence/aa/before/summary.txt) lines 2-3
+  and 8-10: 20 A/A runs on a 4-CPU machine, 0 with a false regression; with the 10 ms
+  absolute floor removed, the same band and 20% rules would flag 8.6% to 11.8% of latency
+  findings and 19 of 20 runs. Raw figures: `evidence/aa/before/passes.tsv`.
+- **Check:** `scripts/aa.sh 20 /tmp/aa && python3 scripts/aa_summary.py /tmp/aa`
+- **Does not show:** behaviour on the GitLab runner or in the Duo sandbox; behaviour on a
+  slower machine (the laptop runs in `evidence/runs.md` had false regressions); that a real
+  latency regression under 10 ms would be reported (it would not).
+
+---
+
+## C-A2. With the gated rule, identical code gave no false regression in 20 fresh runs
+
+- **Files:** `engine/classify/classify.go` (`DefaultThresholds`, gated rule), `scripts/aa.sh`
+- **Proof:** [evidence/aa/after/summary.txt](../evidence/aa/after/summary.txt) line 2 (0 of
+  20 runs) and lines 6-16 (classes per metric); the tolerances were picked from the earlier
+  `counters` set, so these runs are out of sample. `TestReplayAARuns` in
+  `engine/classify` replays the `before` and `counters` sets and requires no gated
+  regression.
+- **Check:** `scripts/aa.sh 20 /tmp/aa && python3 scripts/aa_summary.py /tmp/aa`
+- **Does not show:** behaviour on the GitLab runner or in the Duo sandbox; the margin for CPU
+  per journey is small (largest A/A excess 13.96% against a 20% tolerance,
+  after/summary.txt line 19).
+
+---
+
+## C-A3. The gated rule reports both planted regressions and no clean change
+
+- **Files:** `engine/classify/classify.go`, `examples/changes/`, `scripts/plant.sh`
+- **Proof:** [evidence/plants/README.md](../evidence/plants/README.md);
+  `evidence/plants/final/*/summary-NN.txt` with the final engine: `raise-hash-cost` and
+  `remove-list-limit` regression=1 in 3 of 3 runs each, `clean-change` regression=0 in 6 of 6
+  runs over two journey sets. Earlier sets (5 runs each) agree, except one clean run under a
+  2% peak-memory tolerance (`evidence/plants/rss-2pct/`), which is why the tolerance is 5%.
+- **Check:** `scripts/plant.sh remove-list-limit examples/shelf/journeys.thorough.json 3 /tmp/p && cat /tmp/p/summary-*.txt`
+- **Does not show:** anything about real, unplanted changes or how often they would be caught;
+  behaviour on the GitLab runner or in the Duo sandbox (the `engine-e2e` CI job runs these
+  changes, but no log of it under the gated rule is committed).
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |
@@ -194,7 +252,8 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 | N-8 | A clean change comes out clean inside the Duo sandbox, as a rate | `flows/downstream.yml` | repeated clean-change sessions (one so far, clean: [mr-16-notes.json](../evidence/flow/session-10001525/mr-16-notes.json) line 151) |
 
 N-1 to N-4 (regressions found in a flow run, model-written journeys, issues opened by the
-flow, fixes applied) moved to C-12 to C-15; N-7 (licence shown by GitLab) moved to C-16.
+flow, fixes applied) moved to C-12 to C-15; N-7 (licence shown by GitLab) moved to C-16. N-9 (negative and edge-input journey steps) is shown in session 10002586
+([gated/mr-11-notes.json](../evidence/flow/gated/mr-11-notes.json) line 1705).
 
 When one of these gets proof, move it to a numbered claim above, add the evidence file under
 `evidence/`, and flip its README row to Verified in the same commit.

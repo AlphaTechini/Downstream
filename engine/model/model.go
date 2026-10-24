@@ -49,6 +49,9 @@ type Route struct {
 	Middleware []string `json:"middleware,omitempty"` // outermost first
 	File       string   `json:"file"`
 	Line       int      `json:"line"`
+	// HandlerFiles are the files that define the handler and its middleware, where
+	// the statuses a step can expect are decided.
+	HandlerFiles []string `json:"handler_files,omitempty"`
 }
 
 // Impact is a route in the blast radius and why it is there.
@@ -145,6 +148,18 @@ type Thresholds struct {
 	MinMemoryMB       float64 `json:"min_memory_mb"`       // and delta >= this for memory
 	MinCPUSeconds     float64 `json:"min_cpu_seconds"`     // and delta >= this for CPU time
 	MaxBaselineSpread float64 `json:"max_baseline_spread"` // verdict withheld when |B1-B2| / min(B1,B2) exceeds this
+
+	// Tolerances are the gated metrics' allowed changes, keyed by metric name.
+	// The fields above judge the advisory latency metrics. A run.json written
+	// before gated metrics existed has no Tolerances.
+	Tolerances map[string]Tolerance `json:"tolerances"`
+}
+
+// Tolerance is how far a gated metric may rise above the worse baseline before
+// a rise counts: the larger of Relative times the worse baseline and Absolute.
+type Tolerance struct {
+	Relative float64 `json:"relative"` // fraction of the worse baseline, 0.01 is 1%
+	Absolute float64 `json:"absolute"` // in the metric's unit
 }
 
 // Discard is a journey dropped because it failed on the baseline.
@@ -173,11 +188,75 @@ type NewFeaturePass struct {
 	Pass     Pass      `json:"pass"`
 }
 
-// ProcessStats are read from /proc for the app process during the k6 run.
+// ProcessStats are read from /proc (and from the kernel's resource usage for
+// the exited process) for the app process in one pass. Fields after PeakRSSMB
+// were added later; run.json files without them still parse, and a zero
+// CPUSource marks such a file.
 type ProcessStats struct {
-	CPUSeconds float64 `json:"cpu_seconds"` // user+system time consumed while k6 ran
+	CPUSeconds float64 `json:"cpu_seconds"` // user+system time consumed while k6 ran, in 10 ms ticks
 	PeakRSSMB  float64 `json:"peak_rss_mb"` // VmHWM at the end of the pass
+
+	// CPUSecondsExact is the figure CPU per journey is computed from. With
+	// CPUSource "schedstat" it is CPUSecondsWindow; with "rusage" it is user+system
+	// time over the whole process lifetime (start-up and shutdown included) at
+	// microsecond resolution; with "proc-stat" it is the tick value above.
+	CPUSecondsExact float64 `json:"cpu_seconds_exact"`
+	CPUSource       string  `json:"cpu_source"` // "schedstat", "rusage" or "proc-stat"
+
+	// CPUSecondsWindow is the time the app's threads spent on a CPU between just
+	// before k6 started and just after it exited, at nanosecond resolution, from
+	// /proc/<pid>/task/*/schedstat. It is 0 unless CPUSource is "schedstat".
+	CPUSecondsWindow float64 `json:"cpu_seconds_window"`
+
+	WriteBytes    float64 `json:"write_bytes"`    // wchar delta over the k6 run minus the bytes k6 received (the responses)
+	WriteSyscalls float64 `json:"write_syscalls"` // syscw delta over the k6 run
+	OpenFDs       int     `json:"open_fds"`       // after k6 exited and idle connections drained
+	Threads       int     `json:"threads"`        // same moment as OpenFDs
+
+	CompletedJourneys    int     `json:"completed_journeys"` // iterations that finished every step without a failure
+	CPUMsPerJourney      float64 `json:"cpu_ms_per_journey"`
+	WriteBytesPerJourney float64 `json:"write_bytes_per_journey"`
+	// ResponseBytes is what k6 received from the app; advisory, never a verdict.
+	ResponseBytes           float64 `json:"response_bytes,omitempty"`
+	ResponseBytesPerJourney float64 `json:"response_bytes_per_journey,omitempty"`
+	WriteSyscallsPerJourney float64 `json:"write_syscalls_per_journey"`
+
+	// Go runtime counters, read from the app over a loopback side port during
+	// the pass. They exist only when the target config sets main_dir and the
+	// build with the injected file succeeded; otherwise they are in Unmeasured.
+	AllocObjectsPerJourney float64 `json:"alloc_objects_per_journey"` // heap objects allocated during the k6 window
+	AllocBytesPerJourney   float64 `json:"alloc_bytes_per_journey"`   // heap bytes allocated during the k6 window
+	GCCycles               float64 `json:"gc_cycles"`                 // completed GC cycles during the k6 window; gated
+	GCCyclesPerJourney     float64 `json:"gc_cycles_per_journey"`     // GCCycles over completed journeys; for display only
+	Goroutines             int     `json:"goroutines"`                // after k6 exited and idle connections drained
+
+	// Unmeasured names each counter above that could not be read in this pass
+	// (its value is then 0 and means nothing).
+	Unmeasured []string `json:"unmeasured,omitempty"`
 }
+
+// CPUSource values.
+const (
+	CPUSourceSchedstat = "schedstat"
+	CPUSourceRusage    = "rusage"
+	CPUSourceProcStat  = "proc-stat"
+)
+
+// Names used in ProcessStats.Unmeasured.
+const (
+	UnmeasuredWriteBytes              = "write_bytes"
+	UnmeasuredWriteSyscalls           = "write_syscalls"
+	UnmeasuredOpenFDs                 = "open_fds"
+	UnmeasuredThreads                 = "threads"
+	UnmeasuredCPUPerJourney           = "cpu_ms_per_journey"
+	UnmeasuredWriteBytesPerJourney    = "write_bytes_per_journey"
+	UnmeasuredWriteSyscallsPerJourney = "write_syscalls_per_journey"
+	UnmeasuredAllocObjectsPerJourney  = "alloc_objects_per_journey"
+	UnmeasuredAllocBytesPerJourney    = "alloc_bytes_per_journey"
+	UnmeasuredGCCycles                = "gc_cycles"
+	UnmeasuredGCCyclesPerJourney      = "gc_cycles_per_journey"
+	UnmeasuredGoroutines              = "goroutines"
+)
 
 // StepMetrics are k6 figures for one step in one pass. Latencies are in ms.
 type StepMetrics struct {
@@ -200,6 +279,19 @@ const (
 	// ClassNotReached marks a latency figure for a step that recorded no
 	// requests in at least one pass, so there is nothing to compare.
 	ClassNotReached = "not-reached"
+	// ClassNotMeasured marks a gated counter that could not be read in at least
+	// one pass, so there is nothing to compare.
+	ClassNotMeasured = "not-measured"
+)
+
+// Kinds of metric. Counter, CPU, memory and failures are gated: they decide
+// whether a run has a regression. Latency is advisory.
+const (
+	KindCounter  = "counter"
+	KindCPU      = "cpu"
+	KindMemory   = "memory"
+	KindFailures = "failures"
+	KindLatency  = "latency"
 )
 
 // Metric names used in findings.
@@ -210,6 +302,17 @@ const (
 	MetricFailures = "failures"
 	MetricCPU      = "cpu_seconds"
 	MetricRSS      = "peak_rss_mb"
+
+	MetricCPUPerJourney           = "cpu_ms_per_journey"
+	MetricWriteBytesPerJourney    = "write_bytes_per_journey"
+	MetricWriteSyscallsPerJourney = "write_syscalls_per_journey"
+	MetricOpenFDs                 = "open_fds"
+	MetricThreads                 = "threads"
+	MetricAllocObjectsPerJourney  = "alloc_objects_per_journey"
+	MetricAllocBytesPerJourney    = "alloc_bytes_per_journey"
+	MetricGCCycles                = "gc_cycles"
+	MetricGCCyclesPerJourney      = "gc_cycles_per_journey" // run.json files from before gc_cycles; never gated now
+	MetricGoroutines              = "goroutines"
 )
 
 // Finding compares one metric across B1, C and B2.
@@ -227,7 +330,26 @@ type Finding struct {
 	DeltaPct float64 `json:"delta_pct"` // Delta as a percentage of the worse baseline
 	Class    string  `json:"class"`
 	Reason   string  `json:"reason"` // which rule decided the class, in words
+
+	// Kind says what sort of metric this is (the Kind constants). Gated findings
+	// can open issues; the others are advisory. A run.json written before gating
+	// existed has neither field: see Decides.
+	Kind  string `json:"kind"`
+	Gated bool   `json:"gated"`
+
+	// Allowed is the tolerance in effect for a gated metric (zero for the rest).
+	// Detectable is the smallest change this run could have told apart from
+	// noise: the larger of Allowed and Band for a gated metric. DetectablePct
+	// is Detectable as a percentage of the worse baseline.
+	Allowed       float64 `json:"allowed"`
+	Detectable    float64 `json:"detectable"`
+	DetectablePct float64 `json:"detectable_pct"`
 }
+
+// Decides reports whether the finding may count toward a verdict or an issue.
+// A finding from a run.json that predates Kind is treated as deciding, as it
+// did then.
+func (f Finding) Decides() bool { return f.Gated || f.Kind == "" }
 
 // RunError says where a run stopped and why.
 type RunError struct {

@@ -5,13 +5,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"io/fs"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -154,6 +159,261 @@ func TestParseVmHWM(t *testing.T) {
 	}
 }
 
+func TestParseProcIO(t *testing.T) {
+	good := "rchar: 1000\nwchar: 2500\nsyscr: 11\nsyscw: 42\nread_bytes: 0\nwrite_bytes: 4096\ncancelled_write_bytes: 0\n"
+	got, err := parseProcIO(good)
+	if err != nil || got != (procIO{RChar: 1000, WChar: 2500, SyscR: 11, SyscW: 42}) {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	// rchar and syscr are optional; only the write counters are needed.
+	if got, err := parseProcIO("wchar: 7\nsyscw: 3\n"); err != nil || got.WChar != 7 || got.SyscW != 3 {
+		t.Errorf("write-only input: %+v, %v", got, err)
+	}
+	for name, bad := range map[string]string{
+		"empty":           "",
+		"no wchar":        "rchar: 1\nsyscr: 1\nsyscw: 1\n",
+		"no syscw":        "rchar: 1\nwchar: 1\nsyscr: 1\n",
+		"not a number":    "wchar: abc\nsyscw: 1\n",
+		"negative":        "wchar: -5\nsyscw: 1\n",
+		"empty value":     "wchar:\nsyscw: 1\n",
+		"bad optional":    "rchar: x\nwchar: 1\nsyscw: 1\n",
+		"overflow":        "wchar: 99999999999999999999999\nsyscw: 1\n",
+		"truncated":       "wchar: 12\nsys",
+		"no colons":       "wchar 12\nsyscw 3\n",
+		"permission text": "Permission denied",
+	} {
+		if _, err := parseProcIO(bad); err == nil {
+			t.Errorf("%s: accepted %q", name, bad)
+		}
+	}
+}
+
+func TestParseThreads(t *testing.T) {
+	got, err := parseThreads("Name:\tapp\nVmHWM:\t 20480 kB\nThreads:\t9\nSigQ:\t0/1000\n")
+	if err != nil || got != 9 {
+		t.Fatalf("got %d, %v", got, err)
+	}
+	for name, bad := range map[string]string{
+		"empty":        "",
+		"no line":      "Name:\tapp\nVmHWM:\t1 kB\n",
+		"not a number": "Threads:\tmany\n",
+		"empty value":  "Threads:\n",
+		"zero":         "Threads:\t0\n",
+		"negative":     "Threads:\t-2\n",
+		"two numbers":  "Threads:\t3 4\n",
+	} {
+		if _, err := parseThreads(bad); err == nil {
+			t.Errorf("%s: accepted %q", name, bad)
+		}
+	}
+}
+
+func TestCountFDsSelf(t *testing.T) {
+	if _, err := os.Stat("/proc/self/fd"); err != nil {
+		t.Skip("no /proc")
+	}
+	n, err := countFDs(selfProcDir())
+	if err != nil || n < 3 {
+		t.Fatalf("n %d err %v", n, err)
+	}
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	m, err := countFDs(selfProcDir())
+	if err != nil || m != n+1 {
+		t.Errorf("after opening one file: %d then %d, err %v", n, m, err)
+	}
+	if _, err := countFDs("/proc/no-such-process"); err == nil {
+		t.Error("a pid that does not exist was counted")
+	}
+}
+
+func TestRusageSeconds(t *testing.T) {
+	if _, ok := rusageSeconds(nil); ok {
+		t.Error("nil process state reported usage")
+	}
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Skip("cannot run true")
+	}
+	if secs, ok := rusageSeconds(cmd.ProcessState); !ok || secs < 0 || secs > 5 {
+		t.Errorf("secs %v ok %v", secs, ok)
+	}
+}
+
+// wantCPUSource is the source a real pass should report on this machine:
+// schedstat when the kernel offers it, else the lifetime rusage reading.
+func wantCPUSource() string {
+	if _, err := readSchedstat(selfProcDir()); err == nil {
+		return model.CPUSourceSchedstat
+	}
+	return model.CPUSourceRusage
+}
+
+func TestBuildProcess(t *testing.T) {
+	full := procSample{
+		ticks0: 10, ticks1: 24, rssMB: 21.5,
+		io0: procIO{WChar: 1000, SyscW: 10}, io1: procIO{WChar: 41000, SyscW: 110},
+		threads: 8, fds: 12, exactCPU: 0.1375, haveExact: true, completed: 20,
+		received:  ptrFloat(30000), // of the 40000 bytes written, 30000 were responses
+		rt0:       runtimeCounters{AllocObjects: 1000, AllocBytes: 50000, GCCycles: 3, Goroutines: 6},
+		rt1:       runtimeCounters{AllocObjects: 41000, AllocBytes: 250000, GCCycles: 5, Goroutines: 14},
+		rtDrained: runtimeCounters{Goroutines: 7},
+	}
+	ps, notes := buildProcess(full)
+	want := model.ProcessStats{
+		CPUSeconds: 0.14, PeakRSSMB: 21.5, CPUSecondsExact: 0.1375, CPUSource: "rusage",
+		WriteBytes: 10000, WriteSyscalls: 100, OpenFDs: 12, Threads: 8,
+		CompletedJourneys: 20, CPUMsPerJourney: 6.875, WriteBytesPerJourney: 500, WriteSyscallsPerJourney: 5,
+		ResponseBytes: 30000, ResponseBytesPerJourney: 1500,
+		AllocObjectsPerJourney: 2000, AllocBytesPerJourney: 10000, GCCycles: 2, GCCyclesPerJourney: 0.1, Goroutines: 7,
+	}
+	if len(notes) != 0 || !reflect.DeepEqual(ps, want) {
+		t.Errorf("full sample: %+v notes %v", ps, notes)
+	}
+
+	t.Run("no rusage falls back to ticks", func(t *testing.T) {
+		s := full
+		s.haveExact = false
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "proc-stat" || ps.CPUSecondsExact != ps.CPUSeconds || ps.CPUMsPerJourney != 0.14*1000/20 || len(notes) != 0 {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+	})
+	t.Run("schedstat window is preferred and covers only the k6 window", func(t *testing.T) {
+		s := full
+		s.sched0, s.sched1, s.schedOK = 5_000_000_000, 5_250_000_000, true // 0.25 s on CPU inside the window
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "schedstat" || ps.CPUSecondsWindow != 0.25 || ps.CPUSecondsExact != 0.25 ||
+			ps.CPUMsPerJourney != 0.25*1000/20 || len(notes) != 0 {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+		// the lifetime reading, however large, no longer enters the figure
+		s.exactCPU = 9
+		if ps2, _ := buildProcess(s); ps2.CPUMsPerJourney != ps.CPUMsPerJourney {
+			t.Errorf("rusage leaked into the window figure: %v vs %v", ps2.CPUMsPerJourney, ps.CPUMsPerJourney)
+		}
+	})
+	t.Run("schedstat unreadable falls back to rusage with a note", func(t *testing.T) {
+		s := full
+		s.schedErr = &fs.PathError{Op: "open", Path: "/proc/1/task/1/schedstat", Err: errors.New("no such file or directory")}
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "rusage" || ps.CPUSecondsWindow != 0 || ps.CPUMsPerJourney != 6.875 || len(notes) != 1 ||
+			!strings.Contains(notes[0], "not measured from schedstat (no such file or directory); CPU per journey uses rusage") {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+		s.haveExact = false
+		if ps, _ := buildProcess(s); ps.CPUSource != "proc-stat" {
+			t.Errorf("source %q, want proc-stat", ps.CPUSource)
+		}
+	})
+	t.Run("schedstat sum going backwards is not used", func(t *testing.T) {
+		s := full
+		s.sched0, s.sched1, s.schedOK = 5_000_000_000, 4_000_000_000, true // a thread exited in the window
+		ps, notes := buildProcess(s)
+		if ps.CPUSource != "rusage" || ps.CPUSecondsWindow != 0 || len(notes) != 1 || !strings.Contains(notes[0], "went backwards") {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+	})
+	t.Run("io unreadable", func(t *testing.T) {
+		s := full
+		s.ioErr = &fs.PathError{Op: "open", Path: "/proc/123/io", Err: errors.New("permission denied")}
+		ps, notes := buildProcess(s)
+		wantNote := "write bytes and write syscalls: not measured; /proc/<pid>/io was not readable (permission denied)"
+		if len(notes) != 1 || notes[0] != wantNote {
+			t.Errorf("notes %q", notes)
+		}
+		if ps.WriteBytes != 0 || ps.WriteSyscalls != 0 || ps.WriteBytesPerJourney != 0 || ps.WriteSyscallsPerJourney != 0 {
+			t.Errorf("unread counters carry values: %+v", ps)
+		}
+		if !reflect.DeepEqual(ps.Unmeasured, []string{"write_bytes", "write_syscalls", "write_bytes_per_journey", "write_syscalls_per_journey"}) {
+			t.Errorf("unmeasured %v", ps.Unmeasured)
+		}
+		if ps.CPUMsPerJourney != 6.875 || ps.OpenFDs != 12 || ps.Threads != 8 {
+			t.Errorf("readable counters lost: %+v", ps)
+		}
+	})
+	t.Run("write counter going backwards", func(t *testing.T) {
+		s := full
+		s.io1.WChar = 5
+		ps, notes := buildProcess(s)
+		if len(notes) != 1 || ps.WriteBytes != 0 || len(ps.Unmeasured) != 4 {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+	})
+	t.Run("fds and threads unreadable", func(t *testing.T) {
+		s := full
+		s.fdsErr, s.threadsErr = errors.New("boom"), errors.New("bang")
+		ps, notes := buildProcess(s)
+		if len(notes) != 2 || !reflect.DeepEqual(ps.Unmeasured, []string{"open_fds", "threads"}) || ps.OpenFDs != 0 || ps.Threads != 0 {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+	})
+	t.Run("no completed journeys", func(t *testing.T) {
+		s := full
+		s.completed = 0
+		ps, notes := buildProcess(s)
+		if ps.CPUMsPerJourney != 0 || ps.WriteBytesPerJourney != 0 || ps.WriteSyscallsPerJourney != 0 || len(notes) != 1 ||
+			ps.AllocObjectsPerJourney != 0 || ps.AllocBytesPerJourney != 0 || ps.GCCyclesPerJourney != 0 || ps.Goroutines != 7 ||
+			!reflect.DeepEqual(ps.Unmeasured, []string{"cpu_ms_per_journey", "write_bytes_per_journey", "write_syscalls_per_journey",
+				"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles_per_journey"}) {
+			t.Errorf("%+v notes %v", ps, notes)
+		}
+		if ps.WriteBytes != 10000 || ps.ResponseBytes != 30000 || ps.CPUSecondsExact != 0.1375 {
+			t.Errorf("pass totals lost: %+v", ps)
+		}
+	})
+}
+
+func TestBuildProcessRuntimeCounters(t *testing.T) {
+	base := procSample{
+		ticks0: 10, ticks1: 24, rssMB: 21.5, exactCPU: 0.1, haveExact: true, completed: 10,
+		received: ptrFloat(0),
+		rt0:      runtimeCounters{AllocObjects: 100, AllocBytes: 1000, GCCycles: 2}, rt1: runtimeCounters{AllocObjects: 600, AllocBytes: 6000, GCCycles: 4},
+		rtDrained: runtimeCounters{Goroutines: 5},
+	}
+	allFour := []string{"alloc_objects_per_journey", "alloc_bytes_per_journey", "gc_cycles", "gc_cycles_per_journey", "goroutines"}
+
+	t.Run("read failed adds a note", func(t *testing.T) {
+		s := base
+		s.rtErr = errors.New("the injected /metrics endpoint did not answer")
+		ps, notes := buildProcess(s)
+		if !reflect.DeepEqual(ps.Unmeasured, allFour) || ps.Goroutines != 0 || ps.AllocBytesPerJourney != 0 {
+			t.Errorf("%+v", ps)
+		}
+		want := []string{"runtime counters: not measured; the injected /metrics endpoint did not answer"}
+		if !reflect.DeepEqual(notes, want) {
+			t.Errorf("notes %q", notes)
+		}
+	})
+	t.Run("no injection is quiet", func(t *testing.T) {
+		s := base
+		s.rtErr, s.rtQuiet = errors.New("no injected file"), true
+		ps, notes := buildProcess(s)
+		if !reflect.DeepEqual(ps.Unmeasured, allFour) || len(notes) != 0 {
+			t.Errorf("%+v notes %q", ps, notes)
+		}
+	})
+	t.Run("a counter going backwards", func(t *testing.T) {
+		s := base
+		s.rt1.GCCycles = 1
+		ps, notes := buildProcess(s)
+		if !reflect.DeepEqual(ps.Unmeasured, allFour) || len(notes) != 1 || !strings.Contains(notes[0], "GC cycles went backwards") {
+			t.Errorf("%+v notes %q", ps, notes)
+		}
+	})
+	t.Run("zero allocations are a measurement", func(t *testing.T) {
+		s := base
+		s.rt1 = s.rt0
+		ps, notes := buildProcess(s)
+		if len(ps.Unmeasured) != 0 || len(notes) != 0 || ps.AllocObjectsPerJourney != 0 || ps.Goroutines != 5 {
+			t.Errorf("%+v notes %q", ps, notes)
+		}
+	})
+}
+
 func TestReadSelfProc(t *testing.T) {
 	if _, err := os.Stat("/proc/self/stat"); err != nil {
 		t.Skip("no /proc")
@@ -168,6 +428,14 @@ func TestReadSelfProc(t *testing.T) {
 	rss, err := readPeakRSSMB(dir)
 	if err != nil || rss <= 0 {
 		t.Errorf("rss %v err %v", rss, err)
+	}
+	if n, err := readThreads(selfProcDir()); err != nil || n < 1 {
+		t.Errorf("threads %d err %v", n, err)
+	}
+	if io, err := readProcIO(selfProcDir()); err != nil {
+		t.Logf("/proc/self/io not readable here: %v", err)
+	} else if io.WChar == 0 && io.SyscW == 0 && io.RChar == 0 {
+		t.Errorf("io counters all zero: %+v", io)
 	}
 }
 
@@ -263,6 +531,7 @@ func main() {
 `
 
 const tinyConfig = `root: .
+main_dir: .
 build: go build -o {out} .
 start: "{out}"
 port_env: PORT
@@ -315,6 +584,13 @@ func tinyJourneys() model.JourneyFile {
 // tinyRepo creates a git repository with two commits; the second slows one handler.
 func tinyRepo(t *testing.T) (repo, base, head string) {
 	t.Helper()
+	return tinyRepoWith(t, tinyConfig, nil)
+}
+
+// tinyRepoWith is tinyRepo with its own downstream.yml and extra files, which
+// are committed in the base commit.
+func tinyRepoWith(t *testing.T, config string, extra map[string]string) (repo, base, head string) {
+	t.Helper()
 	t.Setenv("GIT_AUTHOR_NAME", "Test")
 	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.invalid")
 	t.Setenv("GIT_COMMITTER_NAME", "Test")
@@ -331,7 +607,13 @@ func tinyRepo(t *testing.T) (repo, base, head string) {
 	}
 	write("go.mod", tinyGoMod)
 	write("main.go", tinyMain)
-	write("downstream.yml", tinyConfig)
+	write("downstream.yml", config)
+	for name, body := range extra {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(repo, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(name, body)
+	}
 	git(t, repo, "add", ".")
 	git(t, repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base")
 	base = git(t, repo, "rev-parse", "HEAD")
@@ -392,6 +674,34 @@ func TestRunIntegration(t *testing.T) {
 		if len(p.Steps) != 3 {
 			t.Errorf("%s: %d steps, want 3 (quick/fast, items/create, items/read)", p.Label, len(p.Steps))
 		}
+		ps := p.Process
+		// 2 kept journeys x 2 VUs x 15 iterations, none failing.
+		if ps.CompletedJourneys != 60 {
+			t.Errorf("%s: %d completed journeys, want 60", p.Label, ps.CompletedJourneys)
+		}
+		if ps.CPUSource != wantCPUSource() || ps.CPUSecondsExact <= 0 || ps.CPUMsPerJourney <= 0 ||
+			math.Abs(ps.CPUMsPerJourney-ps.CPUSecondsExact*1000/60) > 1e-9 {
+			t.Errorf("%s: cpu %+v", p.Label, ps)
+		}
+		if (ps.CPUSource == model.CPUSourceSchedstat) != (ps.CPUSecondsWindow > 0) || (ps.CPUSecondsWindow > 0 && ps.CPUSecondsWindow != ps.CPUSecondsExact) {
+			t.Errorf("%s: window %v exact %v source %s", p.Label, ps.CPUSecondsWindow, ps.CPUSecondsExact, ps.CPUSource)
+		}
+		if ps.OpenFDs < 3 || ps.Threads < 1 {
+			t.Errorf("%s: open fds %d threads %d", p.Label, ps.OpenFDs, ps.Threads)
+		}
+		if ps.AllocObjectsPerJourney <= 0 || ps.AllocBytesPerJourney <= 0 || ps.GCCyclesPerJourney < 0 || ps.Goroutines < 1 || len(ps.Unmeasured) != 0 {
+			t.Errorf("%s: runtime counters %+v", p.Label, ps)
+		}
+		if _, err := os.Stat("/proc/self/io"); err == nil {
+			// The test app writes nothing but its responses, so bytes written net of
+			// the responses k6 received can be zero; the responses themselves are counted.
+			if ps.WriteBytes < 0 || ps.ResponseBytes <= 0 || ps.WriteSyscalls <= 0 || ps.ResponseBytesPerJourney <= 0 || ps.WriteSyscallsPerJourney <= 0 || len(ps.Unmeasured) != 0 {
+				t.Errorf("%s: write counters %+v", p.Label, ps)
+			}
+			if math.Abs(ps.WriteSyscallsPerJourney-ps.WriteSyscalls/60) > 1e-9 {
+				t.Errorf("%s: write syscalls per journey %v from %v", p.Label, ps.WriteSyscallsPerJourney, ps.WriteSyscalls)
+			}
+		}
 		for _, s := range p.Steps {
 			if s.Count != 30 || s.Failures != 0 {
 				t.Errorf("%s %s/%s: count %d failures %d, want 30 and 0", p.Label, s.Journey, s.Step, s.Count, s.Failures)
@@ -407,6 +717,11 @@ func TestRunIntegration(t *testing.T) {
 	if got := git(t, repo, "status", "--porcelain"); got != statusBefore {
 		t.Errorf("repository status changed: %q", got)
 	}
+	for _, n := range run.NotMeasured {
+		if strings.HasPrefix(n, "runtime counters") {
+			t.Errorf("runtime counters reported as not measured: %q", n)
+		}
+	}
 
 	// The apps must not outlive the run: no process may still run from the
 	// run's temp directory, which the build lines in the log name.
@@ -417,6 +732,53 @@ func TestRunIntegration(t *testing.T) {
 	}
 	if _, err := os.Stat(tmp); err == nil {
 		t.Errorf("temp directory %s was not removed", tmp)
+	}
+}
+
+func TestRunSurvivesUnreadableCounters(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+	k6 := findK6(t)
+	repo, base, head := tinyRepo(t)
+	old, oldDrain := procSource, connDrain
+	defer func() { procSource, connDrain = old, oldDrain }()
+	connDrain = 10 * time.Millisecond
+	procSource.io = func(dir string) (procIO, error) {
+		return procIO{}, &fs.PathError{Op: "open", Path: dir + "/io", Err: errors.New("permission denied")}
+	}
+	procSource.fds = func(string) (int, error) { return 0, errors.New("no fd listing") }
+
+	var logBuf bytes.Buffer
+	run, err := Run(context.Background(), Options{Repo: repo, Base: base, Head: head, Journeys: tinyJourneys(), K6: k6, Log: &logBuf})
+	if err != nil {
+		t.Fatalf("Run: %v\nlog:\n%s", err, logBuf.String())
+	}
+	if len(run.Passes) != 3 {
+		t.Fatalf("passes: %d", len(run.Passes))
+	}
+	for _, p := range run.Passes {
+		ps := p.Process
+		wantU := []string{"write_bytes", "write_syscalls", "open_fds", "write_bytes_per_journey", "write_syscalls_per_journey"}
+		if !reflect.DeepEqual(ps.Unmeasured, wantU) {
+			t.Errorf("%s: unmeasured %v, want %v", p.Label, ps.Unmeasured, wantU)
+		}
+		if ps.WriteBytes != 0 || ps.OpenFDs != 0 || ps.Threads < 1 || ps.CPUSource != wantCPUSource() || ps.CompletedJourneys != 60 {
+			t.Errorf("%s: %+v", p.Label, ps)
+		}
+	}
+	// One line per counter for the whole run, not one per pass.
+	var io, fds int
+	for _, n := range run.NotMeasured {
+		if strings.HasPrefix(n, "write bytes and write syscalls: not measured; /proc/<pid>/io was not readable (permission denied)") {
+			io++
+		}
+		if strings.HasPrefix(n, "open file descriptors: not measured;") {
+			fds++
+		}
+	}
+	if io != 1 || fds != 1 || len(run.NotMeasured) != 3 {
+		t.Errorf("not_measured = %q", run.NotMeasured)
 	}
 }
 
@@ -522,16 +884,16 @@ func fakeK6(t *testing.T, body string) string {
 	return p
 }
 
-const fakeSteps = `printf '%s' '[{"journey":"j","step":"s","count":4,"failures":1,"p50_ms":2,"p95_ms":9,"mean_ms":3}]' > steps.json`
+const fakeSteps = `printf '%s' '{"steps":[{"journey":"j","step":"s","count":4,"failures":1,"p50_ms":2,"p95_ms":9,"mean_ms":3}],"journeys":[{"journey":"j","completed":3}]}' > steps.json`
 
 func TestRunK6KeepsStepsWhenK6ExitsNonZero(t *testing.T) {
 	var log bytes.Buffer
-	steps, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\necho boom >&2\nexit 3"), t.TempDir(), "x", time.Second, logger{&log})
+	steps, completed, _, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\necho boom >&2\nexit 3"), t.TempDir(), "x", time.Second, logger{&log})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(steps) != 1 || steps[0].Count != 4 || steps[0].P95 != 9 {
-		t.Errorf("steps = %+v", steps)
+	if len(steps) != 1 || steps[0].Count != 4 || steps[0].P95 != 9 || completed["j"] != 3 {
+		t.Errorf("steps = %+v completed = %v", steps, completed)
 	}
 	if !strings.Contains(log.String(), "k6 failed") || !strings.Contains(log.String(), "boom") {
 		t.Errorf("k6 error not logged: %q", log.String())
@@ -544,7 +906,7 @@ func TestRunK6KeepsStepsWhenK6IsKilled(t *testing.T) {
 	defer func() { k6Slack = old }()
 	var log bytes.Buffer
 	start := time.Now()
-	steps, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\nsleep 60"), t.TempDir(), "x", 0, logger{&log})
+	steps, _, _, err := runK6(context.Background(), fakeK6(t, fakeSteps+"\nsleep 60"), t.TempDir(), "x", 0, logger{&log})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -557,13 +919,21 @@ func TestRunK6KeepsStepsWhenK6IsKilled(t *testing.T) {
 }
 
 func TestRunK6ErrorsWithoutStepsFile(t *testing.T) {
-	_, err := runK6(context.Background(), fakeK6(t, "echo nope >&2\nexit 2"), t.TempDir(), "x", time.Second, logger{})
+	_, _, _, err := runK6(context.Background(), fakeK6(t, "echo nope >&2\nexit 2"), t.TempDir(), "x", time.Second, logger{})
 	if err == nil || !strings.Contains(err.Error(), "k6 failed") || !strings.Contains(err.Error(), "nope") {
 		t.Errorf("err = %v", err)
 	}
-	_, err = runK6(context.Background(), fakeK6(t, "exit 0"), t.TempDir(), "x", time.Second, logger{})
+	_, _, _, err = runK6(context.Background(), fakeK6(t, "exit 0"), t.TempDir(), "x", time.Second, logger{})
 	if err == nil || !strings.Contains(err.Error(), "no steps.json") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestRunK6AcceptsArrayStepsFile(t *testing.T) {
+	old := `printf '%s' '[{"journey":"j","step":"s","count":4,"failures":0,"p50_ms":2,"p95_ms":9,"mean_ms":3}]' > steps.json`
+	steps, completed, _, err := runK6(context.Background(), fakeK6(t, old), t.TempDir(), "x", time.Second, logger{})
+	if err != nil || len(steps) != 1 || completed != nil {
+		t.Errorf("steps %+v completed %v err %v", steps, completed, err)
 	}
 }
 
@@ -572,3 +942,8 @@ func TestK6Timeout(t *testing.T) {
 		t.Errorf("k6Slack = %s, want 60s", k6Slack)
 	}
 }
+
+// selfProcDir is this test process's /proc directory, for the readers that take one.
+func selfProcDir() string { return fmt.Sprintf("/proc/%d", os.Getpid()) }
+
+func ptrFloat(v float64) *float64 { return &v }

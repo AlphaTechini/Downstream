@@ -26,7 +26,8 @@ func TestParseGood(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Config{
-		Root: "examples/shelf", Build: "go build -o {out} ./examples/shelf/cmd/shelf",
+		Root: "examples/shelf", MainDir: "examples/shelf/cmd/shelf", // worked out from the build command
+		Build: "go build -o {out} ./examples/shelf/cmd/shelf",
 		Start: "{out}", PortEnv: "PORT", ReadyPath: "/health", VUs: 2, Iterations: 20, Duration: 60 * time.Second,
 	}
 	if got != want {
@@ -99,6 +100,19 @@ func TestParseTable(t *testing.T) {
 		{name: "no colon", in: "root r\n" + req, wantErr: "line 1"},
 		{name: "absolute root", in: strings.Replace(req, "root: r", "root: /etc", 1), wantErr: "relative"},
 		{name: "root escapes repo", in: strings.Replace(req, "root: r", "root: ../x", 1), wantErr: "relative"},
+		{name: "main_dir is optional and read", in: req + "main_dir: cmd/app\n", check: func(t *testing.T, c Config) {
+			if c.MainDir != "cmd/app" {
+				t.Fatalf("main_dir = %q", c.MainDir)
+			}
+		}},
+		{name: "main_dir absent", in: req, check: func(t *testing.T, c Config) {
+			if c.MainDir != "" {
+				t.Fatalf("main_dir = %q", c.MainDir)
+			}
+		}},
+		{name: "absolute main_dir", in: req + "main_dir: /etc\n", wantErr: "line 6: main_dir must be a relative path"},
+		{name: "main_dir escapes repo", in: req + "main_dir: ../x\n", wantErr: "line 6: main_dir must be a relative path"},
+		{name: "empty quoted main_dir", in: req + "main_dir: \"\"\n", wantErr: "line 6: main_dir must not be empty"},
 		{name: "bad port_env", in: strings.Replace(req, "PORT", "p;rt", 1), wantErr: "port_env"},
 		{name: "ready_path without slash", in: strings.Replace(req, "/health", "health", 1), wantErr: "ready_path"},
 	}

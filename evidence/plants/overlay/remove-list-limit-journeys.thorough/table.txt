@@ -1,0 +1,18 @@
+run	summary
+run-01	regression=1 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+run-02	regression=1 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+run-03	regression=1 trade-off=0 improved=0 withheld=0 advisory=0 discarded=0 passes=3
+
+gated findings that are not noise:
+run-01	app.alloc_bytes_per_journey	regression	54896.7333	54581.6000	326933.8667	2744.8367	315.1333	2744.8367	495.54
+run-01	app.gc_cycles_per_journey	regression	0.0167	0.0167	0.1083	0.0250	0.0000	0.0250	550.00
+run-01	app.peak_rss_mb	regression	12.3711	12.6914	13.3008	0.2538	0.3203	0.3203	4.80
+run-01	app.write_bytes_per_journey	regression	3157.0667	3151.4083	4990.7500	31.5707	5.6583	31.5707	58.08
+run-02	app.alloc_bytes_per_journey	regression	54756.4000	54704.8000	331155.1333	2737.8200	51.6000	2737.8200	504.78
+run-02	app.gc_cycles_per_journey	regression	0.0167	0.0167	0.1250	0.0250	0.0000	0.0250	650.00
+run-02	app.peak_rss_mb	regression	12.5938	12.8008	13.5273	0.2560	0.2070	0.2560	5.68
+run-02	app.write_bytes_per_journey	regression	3140.8500	3153.9083	5103.7333	31.5391	13.0583	31.5391	61.82
+run-03	app.alloc_bytes_per_journey	regression	54396.1333	54842.6667	327371.2000	2742.1333	446.5333	2742.1333	496.93
+run-03	app.gc_cycles_per_journey	regression	0.0167	0.0167	0.1083	0.0250	0.0000	0.0250	550.00
+run-03	app.peak_rss_mb	regression	12.4102	12.4062	13.7305	0.2482	0.0039	0.2482	10.64
+run-03	app.write_bytes_per_journey	regression	3137.8333	3143.5000	5009.0833	31.4350	5.6667	31.4350	59.35

@@ -1,0 +1,11 @@
+runs: 20 (stopped early: 0)
+runs with at least one false regression (any metric): 0 of 20
+runs with at least one false regression if the absolute floor were removed: 19 of 20
+
+metric	findings	regression	rate	runs>=1	improved	withheld	noise	other	no floor	spread p50	spread p90	spread max
+cpu_seconds	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	6.7%	16.0%	21.4%
+failures	440	0	0.0%	0 of 20	0	0	440	0	-	-	-	-
+mean_ms	440	0	0.0%	0 of 20	0	0	440	0	38 (8.6%)	17.3%	49.0%	148.7%
+p50_ms	440	0	0.0%	0 of 20	0	0	440	0	43 (9.8%)	16.1%	57.3%	197.9%
+p95_ms	440	0	0.0%	0 of 20	0	0	440	0	52 (11.8%)	32.5%	105.8%	391.8%
+peak_rss_mb	20	0	0.0%	0 of 20	0	0	20	0	0 (0.0%)	0.4%	1.1%	1.3%

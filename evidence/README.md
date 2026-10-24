@@ -18,6 +18,8 @@ Raw material behind the claims in the top-level README. Nothing here is a mock-u
 | [runs/local-wsl-clean-change/](runs/local-wsl-clean-change/) | 12 clean-change runs on a WSL2 laptop, kept as evidence of false positives on a noisy machine |
 | [flow.md](flow.md) | Results of the flow sessions below, with line references |
 | [flow/](flow/) | Flow sessions on 2026-10-24: CI job logs, and merge request notes, issues and merge requests from the GitLab API (indented JSON) |
+| [aa/](aa/) | A/A runs (same commit as base and head): false regressions and counter noise on identical code, with the scripts that produce them ([aa/README.md](aa/README.md)) |
+| [plants/](plants/) | Planted regressions and the clean control: five runs each, then three each with later engines (`overlay/`, `rss-2pct/`, `final/`) ([plants/README.md](plants/README.md)) |
 | [SHA256SUMS](SHA256SUMS) | SHA-256 of each evidence file above; checked by `make verify` |
 
 The runs under `runs/` are engine CLI runs in CI and on a laptop. The runs under `flow/` are
