@@ -120,18 +120,20 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 
 ## What might fail
 
-Downstream runs inside GitLab's Duo sandbox, so it can only build and run an application with
-what that sandbox has: Go 1.22.12, Node 20.20.2, Python 3.9.25, no docker, no psql, 2 vCPU,
-about 7.8 GiB of RAM, and a network allowlist ([`docs/details.md`](docs/details.md) section 2).
-If an application needs a different version of its language, a tool or service the sandbox
-does not have, or a download the allowlist blocks, it will not build or start. Downstream then
-stops at the step that failed and reports it, with no verdict.
+Downstream builds the application it checks inside GitLab's Duo sandbox: the engine builds the
+base commit and the head commit there and measures both. So the application has to build and
+start with what the sandbox has: Go 1.22.12, Node 20.20.2, Python 3.9.25, no docker, no psql,
+2 vCPU, about 7.8 GiB of RAM, and a network allowlist ([`docs/details.md`](docs/details.md)
+section 2). If an application needs a newer version of its language than those, a tool or
+service the sandbox does not have, or a download the allowlist blocks, it will not build or
+start. Downstream then stops at the step that failed and reports it, with no verdict.
 
-The stop-and-report path is tested with a compile error (`TestRunStopsOnBuildFailure`). A
-version or tool mismatch has not been run inside the sandbox. It has happened once, with the
-demo app, which imported `crypto/pbkdf2` (Go 1.24 or newer) and was rewritten to build on
-Go 1.22 (`git log --grep "crypto/pbkdf2"`). To get past it, pin the application to the
-sandbox's versions or install the missing tool in the agent's `setup_script`.
+The engine has not built an application inside the sandbox yet (see above). The
+stop-and-report path is tested outside it, with a compile error (`TestRunStopsOnBuildFailure`).
+A version mismatch has happened once, with the demo app, which imported `crypto/pbkdf2`
+(Go 1.24 or newer) and was rewritten to build on Go 1.22 (`git log --grep "crypto/pbkdf2"`).
+To get past it, pin the application to the sandbox's versions or install the missing tool in
+the agent's `setup_script`.
 
 ## 30-second check
 
