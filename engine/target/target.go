@@ -24,7 +24,24 @@ type Config struct {
 	VUs        int
 	Iterations int           // journey iterations per VU; a fixed sample size per pass
 	Duration   time.Duration // cap on the time one pass may take
+	Frontend   Frontend
 }
+
+// Frontend describes a static frontend build. All fields are empty when the
+// repo declares none; the frontend stage then checks the pages the backend
+// itself serves.
+type Frontend struct {
+	Dir   string // directory holding package.json, relative to the repo; "." by default
+	Build string // shell command run in Dir, such as "npm run build"
+	Out   string // directory the build writes, relative to the repo
+	Node  string // exact Node version, such as 20.20.2; the PATH's node when empty
+}
+
+// HasBackend reports whether the file declares a backend to build and run.
+func (c Config) HasBackend() bool { return c.Build != "" }
+
+// HasStaticFrontend reports whether the file declares a frontend build.
+func (c Config) HasStaticFrontend() bool { return c.Frontend.Out != "" }
 
 const (
 	defaultVUs        = 2
@@ -39,7 +56,10 @@ const (
 var (
 	keyRe     = regexp.MustCompile(`^[a-z_]+$`)
 	portEnvRe = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	nodeVerRe = regexp.MustCompile(`^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$`)
 )
+
+var backendKeys = []string{"root", "build", "start", "port_env", "ready_path"}
 
 // Parse reads the flat subset of YAML the engine supports: "key: value" lines,
 // "#" comments, optional single or double quotes. Anything else is an error that
@@ -87,6 +107,14 @@ func Parse(data []byte) (Config, error) {
 			cfg.PortEnv = val
 		case "ready_path":
 			cfg.ReadyPath = val
+		case "frontend_dir":
+			cfg.Frontend.Dir = val
+		case "frontend_build":
+			cfg.Frontend.Build = val
+		case "frontend_out":
+			cfg.Frontend.Out = val
+		case "frontend_node":
+			cfg.Frontend.Node = val
 		case "vus":
 			v, err := strconv.Atoi(val)
 			if err != nil {
@@ -119,6 +147,21 @@ func Parse(data []byte) (Config, error) {
 		}
 	}
 
+	if err := checkFrontend(&cfg.Frontend, seen); err != nil {
+		return Config{}, err
+	}
+	// A frontend-only repo has no backend keys at all. Once any backend key is
+	// present, all of them are required.
+	backend := cfg.Frontend.Out == ""
+	for _, k := range backendKeys {
+		if _, ok := seen[k]; ok {
+			backend = true
+		}
+	}
+	if !backend {
+		cfg.VUs, cfg.Iterations, cfg.Duration = vus, iterations, duration
+		return cfg, nil
+	}
 	for _, req := range []struct{ key, val string }{
 		{"root", cfg.Root}, {"build", cfg.Build}, {"start", cfg.Start},
 		{"port_env", cfg.PortEnv}, {"ready_path", cfg.ReadyPath},
@@ -152,6 +195,40 @@ func Parse(data []byte) (Config, error) {
 		cfg.MainDir = mainDirFromBuild(cfg.Build)
 	}
 	return cfg, nil
+}
+
+// checkFrontend validates the frontend_* keys: build and out come together, and
+// every path stays inside the repo.
+func checkFrontend(f *Frontend, seen map[string]int) error {
+	_, hasBuild := seen["frontend_build"]
+	_, hasOut := seen["frontend_out"]
+	if hasBuild != hasOut {
+		return fmt.Errorf("frontend_build and frontend_out must be set together")
+	}
+	if n, ok := seen["frontend_dir"]; ok && !hasOut {
+		return fmt.Errorf("line %d: frontend_dir needs frontend_build and frontend_out", n)
+	}
+	if n, ok := seen["frontend_node"]; ok && !hasOut {
+		return fmt.Errorf("line %d: frontend_node needs frontend_build and frontend_out", n)
+	}
+	if !hasOut {
+		return nil
+	}
+	if f.Dir == "" {
+		f.Dir = "."
+	}
+	for _, p := range []struct{ key, val string }{{"frontend_dir", f.Dir}, {"frontend_out", f.Out}} {
+		if strings.HasPrefix(p.val, "/") || strings.Contains(p.val, "..") {
+			return fmt.Errorf("line %d: %s must be a relative path inside the repo", seen[p.key], p.key)
+		}
+	}
+	if f.Out == "." {
+		return fmt.Errorf("line %d: frontend_out must be the build's output directory, not the repo root", seen["frontend_out"])
+	}
+	if n, ok := seen["frontend_node"]; ok && !nodeVerRe.MatchString(f.Node) {
+		return fmt.Errorf("line %d: frontend_node %q is not an exact version such as 20.20.2", n, f.Node)
+	}
+	return nil
 }
 
 // mainDirFromBuild finds the package a plain `go build` command builds, such as

@@ -115,6 +115,31 @@ func TestParseTable(t *testing.T) {
 		{name: "empty quoted main_dir", in: req + "main_dir: \"\"\n", wantErr: "line 6: main_dir must not be empty"},
 		{name: "bad port_env", in: strings.Replace(req, "PORT", "p;rt", 1), wantErr: "port_env"},
 		{name: "ready_path without slash", in: strings.Replace(req, "/health", "health", 1), wantErr: "ready_path"},
+		{name: "frontend only", in: "frontend_dir: web\nfrontend_build: npm run build\nfrontend_out: web/dist\nfrontend_node: 20.20.2\n", check: func(t *testing.T, c Config) {
+			if c.HasBackend() || !c.HasStaticFrontend() {
+				t.Fatalf("backend %v, static frontend %v", c.HasBackend(), c.HasStaticFrontend())
+			}
+			if c.Frontend != (Frontend{Dir: "web", Build: "npm run build", Out: "web/dist", Node: "20.20.2"}) {
+				t.Fatalf("frontend = %+v", c.Frontend)
+			}
+		}},
+		{name: "frontend_dir defaults to the repo root", in: "frontend_build: npm run build\nfrontend_out: dist\n", check: func(t *testing.T, c Config) {
+			if c.Frontend.Dir != "." {
+				t.Fatalf("frontend_dir = %q", c.Frontend.Dir)
+			}
+		}},
+		{name: "backend and frontend", in: req + "frontend_build: npm run build\nfrontend_out: dist\n", check: func(t *testing.T, c Config) {
+			if !c.HasBackend() || !c.HasStaticFrontend() {
+				t.Fatalf("backend %v, static frontend %v", c.HasBackend(), c.HasStaticFrontend())
+			}
+		}},
+		{name: "a backend key makes all backend keys required", in: "root: r\nfrontend_build: b\nfrontend_out: dist\n", wantErr: `missing required key "build"`},
+		{name: "empty file", in: "", wantErr: `missing required key "root"`},
+		{name: "frontend_build without out", in: req + "frontend_build: npm run build\n", wantErr: "must be set together"},
+		{name: "frontend_node alone", in: req + "frontend_node: 20.20.2\n", wantErr: "line 6: frontend_node needs"},
+		{name: "frontend_out escapes repo", in: "frontend_build: b\nfrontend_out: ../x\n", wantErr: "line 2: frontend_out must be a relative path"},
+		{name: "frontend_out is the root", in: "frontend_build: b\nfrontend_out: .\n", wantErr: "not the repo root"},
+		{name: "frontend_node not exact", in: "frontend_build: b\nfrontend_out: dist\nfrontend_node: 20\n", wantErr: "line 3: frontend_node"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
