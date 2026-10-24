@@ -100,6 +100,9 @@ ok: links resolve, verified claims cite evidence, evidence is clean, checksums m
 
 With Go 1.22 or newer and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
 including the integration tests that start an app and run k6 (they skip without k6).
+On Linux with Node 20.19 or newer and npm, `make verify-frontend` builds the React and Svelte
+fixtures and runs the frontend stage on a planted and a clean change (about 2 minutes; it
+downloads the fixtures' npm packages).
 
 `make verify` validates the flow and config YAML, checks that docs links resolve, that every Verified
 row above links to committed evidence, that logs hold no unredacted email, and that the
