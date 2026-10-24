@@ -4,6 +4,9 @@
 old and new builds, finds what else the change quietly broke or slowed, traces the likely
 cause, and files a fix.** It is a GitLab Duo Agent Platform flow. *Merged is not safe.*
 
+**The mechanism, in one sentence:** a change is blamed only for what exceeds the disagreement
+between two runs of the old build, measured in the same session.
+
 For: maintainers and reviewers of web/API services on GitLab, especially small teams with no
 staging environment that replays real user behaviour.
 
@@ -17,8 +20,9 @@ staging environment that replays real user behaviour.
 > allocations, goroutines), each with a tolerance; latency is reported but advisory. With that
 > rule the clean change came out clean in 3 of 3 flow runs and the planted and new-feature
 > changes were caught. In CI an earlier, latency-based rule passed the clean control in 22 of 22
-> runs ([evidence/runs.md](evidence/runs.md)); the
-> sandbox's own noise rate is not measured yet (one clean run there). The claims table says exactly what has been shown.
+> runs ([evidence/runs.md](evidence/runs.md)). With the current tolerances the clean change has
+> run 4 times in the sandbox, all clean (flow 1.0.12 and 1.0.13): a small sample, not a measured
+> rate. The claims table says exactly what has been shown.
 >
 > **Frontend stage (new, 2026-10-24):** when a change touches pages, templates or a frontend
 > build, Downstream also renders the old and new pages in happy-dom (no browser) and reports
@@ -68,7 +72,35 @@ scenarios it handles.
   PID namespace, read-only home, missing `TMPDIR`, blocked clones and 200 s command limit
   ([evidence/flow.md](evidence/flow.md)).
 - **Every claim is checked by a script.** `make verify` fails if a Verified row lacks committed
-  evidence or an evidence file changed since it was recorded.
+  evidence or a raw evidence file listed in [`evidence/SHA256SUMS`](evidence/SHA256SUMS) changed
+  since it was recorded.
+
+Code entry points: the flow is [`flows/downstream.yml`](flows/downstream.yml), the engine's CLI
+is [`engine/cmd/downstream/main.go`](engine/cmd/downstream/main.go) (Go), and the frontend
+checker is [`tools/fecheck/fecheck.mjs`](tools/fecheck/fecheck.mjs). The React and Svelte apps
+under [`fixtures/frontend/`](fixtures/frontend/README.md) are test fixtures for the frontend
+stage, not the product.
+
+## 30-second check
+
+No keys, accounts or installs beyond Python 3 with PyYAML (preinstalled on many Linux systems):
+
+```bash
+git clone https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git && cd showcase
+python3 scripts/validate_yaml.py && python3 scripts/check_evidence.py
+```
+
+Expected output:
+
+```text
+ok: 2 flow file(s), 1 agent config file(s)
+ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
+```
+
+If `import yaml` fails, install PyYAML in a virtualenv first (`python3 -m venv .venv && .
+.venv/bin/activate && pip install pyyaml`; on Debian or Ubuntu this needs the `python3-venv`
+package). `make verify` runs the same two commands. More checks with Go, k6 or Node are in
+[Deeper checks](#deeper-checks).
 
 ## Built for GitLab Transcend: Life After Code
 
@@ -84,6 +116,16 @@ have not been re-read against the live page since and are to be re-checked befor
 | One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option, the flow opens a merge request for it, and a human reviews and merges | Verified: `fix it` opened !13 with the requester as reviewer and did not merge ([evidence/flow.md](evidence/flow.md)) |
 | Path A (new project) | first commit 2026-10-22 (`git log`) | Intended path |
 
+Judging criteria (from the earlier GitLab AI Hackathon; re-check against the live rules) and
+where each is answered:
+
+| Criterion | Where to look |
+|---|---|
+| Technical implementation, including Duo Agent Platform tools, triggers and context | [technical_implementation.md](technical_implementation.md); [Duo Agent Platform features used](#duo-agent-platform-features-used); the flow [`flows/downstream.yml`](flows/downstream.yml) (mention trigger, `run_command`, notes, issues, commits, merge requests); the claims table with sandbox logs |
+| Design and usability | One mention to start; a plain-English journeys note before any numbers; one issue per cause with numbered fix options; `fix it` to apply one; setup in [Use Downstream on your project](#use-downstream-on-your-project) |
+| Potential impact | [The problem](#the-problem) (change-caused outages, sourced); [scenarios](technical_implementation.md#3-real-projects-it-is-built-for) for APIs, server-rendered apps, single-page apps and full-stack repositories |
+| Idea quality | [The mechanism](#downstream) above; prior art and what is not novel in [`docs/details.md`](docs/details.md) section 13 |
+
 Not claimed: coverage of all nine lifecycle stages, the Google Cloud bonus (no deployment code
 here), the environmental prize.
 
@@ -98,6 +140,12 @@ Both are Google-specific.
 
 Our argument, which is not measured here: a diff shows what changed, not what the change does
 to routes the author never opened. That gap is what Downstream targets.
+
+Prior art: Kassandra (an earlier Transcend entry, k6 on a merge request), GitLab Load Performance
+Testing (a fixed k6 script, paid tiers) and Diffy-style replay (old versus new on the same
+traffic). Downstream does not claim to invent running k6 on a merge request; the claim is the
+combination of a noise-controlled baseline, the blast radius, model-written journeys, one issue
+per cause and the `fix it` loop ([`docs/details.md`](docs/details.md) section 13).
 
 ## How it works
 
@@ -118,27 +166,7 @@ Entry points: the flow is [`flows/downstream.yml`](flows/downstream.yml); the en
 [`engine/cmd/downstream/main.go`](engine/cmd/downstream/main.go); the demo app starts from
 [`examples/shelf/cmd/shelf/main.go`](examples/shelf/cmd/shelf/main.go).
 
-## 30-second check
-
-```bash
-git clone https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase.git && cd showcase
-python3 -m venv .venv && . .venv/bin/activate
-pip install pyyaml
-make verify
-```
-
-The virtualenv keeps `pip` working on systems that refuse system-wide installs (PEP 668, for
-example Ubuntu 24.04). Without `make`, run the two lines `make verify` runs:
-`python3 scripts/validate_yaml.py && python3 scripts/check_evidence.py`.
-
-Expected output:
-
-```text
-python3 scripts/validate_yaml.py
-ok: 2 flow file(s), 1 agent config file(s)
-python3 scripts/check_evidence.py
-ok: links resolve, verified claims cite evidence, evidence is clean, checksums match
-```
+## Deeper checks
 
 With Go 1.22 or newer and k6 on PATH, `make test` also runs gofmt, go vet and the engine's tests,
 including the integration tests that start an app and run k6 (they skip without k6).
@@ -280,8 +308,10 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 
 ## What is mocked or not built
 
-- **The sandbox's noise rate is not measured.** One clean-change run inside the flow came out
-  clean (session 10001525); one run is not a rate.
+- **The sandbox's noise rate is a small sample.** With the current tolerances the clean change
+  ran 4 times in the sandbox and came out clean each time ([C-18](docs/CLAIMS.md),
+  [live 1.0.13](evidence/flow/frontend/live-1.0.13-mr-16-notes.json) L151); four runs are not a
+  rate.
 - **False positives on noisy machines.** Each step's p95 comes from 20 samples, so a short
   stall can pass the 10 ms floor. The clean control was flagged in 6 of 12 local WSL2 runs and
   in 0 of 22 runner runs; the Duo sandbox's noise is not measured ([evidence/runs.md](evidence/runs.md)).
