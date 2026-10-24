@@ -126,7 +126,7 @@ func TestBuild(t *testing.T) {
 		"1. Look the book up by key instead of scanning.",
 		"2. Revert the scan.",
 		"**How to reply**",
-		"Reply with a mention of Downstream followed by `fix option N`",
+		"Reply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N`",
 		"<!-- downstream:v1 ",
 	}
 	pos := 0

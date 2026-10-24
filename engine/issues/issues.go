@@ -198,7 +198,9 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 	if len(fix) == 0 {
 		w("No fix options were supplied, so there is nothing to apply.")
 	} else {
-		w("Reply with a mention of Downstream followed by `fix option N` in this issue to apply option N.")
+		w("Reply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. " +
+			"Downstream commits the change on a new branch, opens a merge request for it against the original branch, " +
+			"and re-runs this journey on it. It never merges.")
 	}
 	w("")
 	w(mline)
