@@ -36,7 +36,11 @@ func Schema() string {
 				"additionalProperties": false,
 				"required":             []string{"id", "goal", "why_included", "steps"},
 				"properties": map[string]any{
-					"id":           map[string]any{"type": "string", "pattern": "^[a-z0-9_]{1,40}$", "description": "Unique within the file."},
+					"id": map[string]any{"type": "string", "pattern": "^[a-z0-9_]{1,40}$", "description": "Unique within the file."},
+					"kind": map[string]any{
+						"enum":        []any{model.KindExisting, model.KindNew, model.KindControl},
+						"description": "existing (default): covers changed or affected routes that exist before the change; run on both builds and compared. new: uses a route the merge request adds; run on the new build only. control: unrelated to the change, to catch app-wide slowdowns.",
+					},
 					"goal":         text("What this user is trying to do, in plain English."),
 					"why_included": text("Why this journey matters for the change under review."),
 					"steps": map[string]any{

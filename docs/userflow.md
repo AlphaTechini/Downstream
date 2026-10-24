@@ -71,7 +71,7 @@ The platform posts its own "has started" reply with a session link. Downstream t
 
 ### A3. Journeys added (before any numbers)
 
-> **Journeys added** (3 to 6, shown so you can say if they are unrealistic)
+> **Journeys added** (as many as the change needs, up to 20, grouped as existing, new feature and controls; shown so you can say if they are unrealistic)
 >
 > 1. **`<journey 1 goal>`**: a user does `<step>`, then `<step>`, then `<step>`.
 >    *Why included:* it calls the changed route.

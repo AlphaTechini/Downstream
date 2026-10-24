@@ -128,11 +128,24 @@ func cmdValidate(args []string) error {
 	if err := journey.Validate(f, s.Routes); err != nil {
 		return err
 	}
-	steps := 0
+	uncovered, err := journey.Coverage(f, s)
+	if err != nil {
+		return err
+	}
+	steps, kinds := 0, map[string]int{}
 	for _, j := range f.Journeys {
 		steps += len(j.Steps)
+		k := j.Kind
+		if k == "" {
+			k = model.KindExisting
+		}
+		kinds[k]++
 	}
-	fmt.Printf("ok: %d journeys, %d steps\n", len(f.Journeys), steps)
+	fmt.Printf("ok: %d journeys (%d existing, %d new, %d control), %d steps\n",
+		len(f.Journeys), kinds[model.KindExisting], kinds[model.KindNew], kinds[model.KindControl], steps)
+	for _, r := range uncovered {
+		fmt.Printf("uncovered: %s %s (journey cap reached)\n", r.Method, r.Path)
+	}
 	return nil
 }
 
@@ -223,6 +236,7 @@ func cmdSummary(args []string) error {
 	fmt.Printf("withheld=%d\n", counts[model.ClassWithheld])
 	fmt.Printf("discarded=%d\n", len(run.Discarded))
 	fmt.Printf("passes=%d\n", len(run.Passes))
+	fmt.Printf("new_failures=%d\n", report.NewFailures(run))
 	if run.Error != nil {
 		fmt.Printf("stopped=%s\n", run.Error.Stage)
 	}

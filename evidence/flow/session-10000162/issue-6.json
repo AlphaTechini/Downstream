@@ -1,0 +1,73 @@
+{
+ "id": 207758252,
+ "iid": 6,
+ "project_id": 87948026,
+ "title": "[Downstream] 18 steps slower via hashSecret: worst reader_tidies_shelf.log_in p95 latency up 541.5 ms (+8853%)",
+ "description": "Run started by @AlphaTechini on !11.\n\n**Changed functions**\n\n- `hashSecret` on `DELETE /me/shelf/{id}`, `GET /me/shelf`, `POST /books`, `POST /books/{id}/reviews`, `POST /login`, `POST /users`, `PUT /me/shelf/{id}`\n\n**Measured**\n\n| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |\n|---|---|---|---|---|---|---|---|\n| new_reader_builds_shelf | add_book | p95 latency | 2.0 ms | 1.9 ms | 296.6 ms | 0.1 ms | +294.6 ms (+14553%) |\n| new_reader_builds_shelf | log_in | p95 latency | 5.8 ms | 6.8 ms | 513.1 ms | 1.0 ms | +506.2 ms (+7409%) |\n| new_reader_builds_shelf | shelf_add | p95 latency | 2.3 ms | 1.8 ms | 278.2 ms | 0.5 ms | +275.9 ms (+11979%) |\n| new_reader_builds_shelf | shelf_list | p95 latency | 2.2 ms | 2.8 ms | 303.7 ms | 0.6 ms | +300.9 ms (+10703%) |\n| new_reader_builds_shelf | sign_up | p95 latency | 1.7 ms | 5.3 ms | 303.8 ms | 3.6 ms | +298.5 ms (+5644%) |\n| reader_reviews_book | add_book | p95 latency | 2.0 ms | 2.4 ms | 249.0 ms | 0.4 ms | +246.6 ms (+10307%) |\n| reader_reviews_book | log_in | p95 latency | 3.8 ms | 3.4 ms | 505.2 ms | 0.4 ms | +501.5 ms (+13302%) |\n| reader_reviews_book | post_review | p95 latency | 1.5 ms | 5.9 ms | 269.5 ms | 4.4 ms | +263.6 ms (+4445%) |\n| reader_reviews_book | sign_up | p95 latency | 1.8 ms | 2.7 ms | 277.4 ms | 0.9 ms | +274.7 ms (+10158%) |\n| reader_tidies_shelf | add_book | p95 latency | 1.5 ms | 2.3 ms | 265.0 ms | 0.8 ms | +262.7 ms (+11583%) |\n| reader_tidies_shelf | log_in | p95 latency | 6.1 ms | 4.6 ms | 547.6 ms | 1.5 ms | +541.5 ms (+8853%) |\n| reader_tidies_shelf | shelf_add | p95 latency | 1.1 ms | 1.9 ms | 281.4 ms | 0.8 ms | +279.5 ms (+14637%) |\n| reader_tidies_shelf | shelf_list_again | p95 latency | 0.7 ms | 2.8 ms | 221.2 ms | 2.0 ms | +218.4 ms (+7814%) |\n| reader_tidies_shelf | shelf_remove | p95 latency | 2.2 ms | 2.1 ms | 271.0 ms | 0.1 ms | +268.8 ms (+12248%) |\n| reader_tidies_shelf | sign_up | p95 latency | 3.9 ms | 2.7 ms | 250.3 ms | 1.2 ms | +246.5 ms (+6357%) |\n| visitor_browses_by_tag | add_book | p95 latency | 5.6 ms | 2.3 ms | 269.6 ms | 3.3 ms | +264.0 ms (+4698%) |\n| visitor_browses_by_tag | log_in | p95 latency | 2.5 ms | 2.4 ms | 489.5 ms | 0.2 ms | +487.0 ms (+19100%) |\n| visitor_browses_by_tag | sign_up | p95 latency | 3.5 ms | 7.5 ms | 283.4 ms | 4.0 ms | +275.8 ms (+3659%) |\n\nEach row is the step's headline regression (failures, then p95, mean, p50). Change is against the worse baseline run.\n\nApp process:\n\n- CPU time: B1 0.15 s, B2 0.15 s, C 24.83 s, noise band 0.00 s, change +24.68 s (+16453%) against the worse baseline\n\nRule for the headline (`reader_tidies_shelf.log_in.p95_ms`): worse than the worse baseline by 541.5 ms (8852.9%), which is more than 2 times the noise band of 1.5 ms, at least 20% and at least 10.0 ms\n\n**Repro**\n\n1. `POST /users`, expect 201\n2. `POST /login`, expect 200\n3. `POST /books`, expect 201\n4. `PUT /me/shelf/{{book_id}}`, expect 200\n5. `DELETE /me/shelf/{{book_id}}`, expect 200\n6. `GET /me/shelf`, expect 200\n\nRerun with:\n\n```\ndownstream run --base 1e86e1172b3d696996b67da875239b28baba7f26 --head 4a2296e1f589d37bb11fa86802c82d76e0fe605f --journeys journeys.json --out run.json\n```\n\n`journeys.json` is the journey embedded in this issue's hidden marker (the journey of the headline step). Recover it with:\n\n```\ndownstream marker parse --journeys-out journeys.json < issue.md\n```\n\nOther steps in the table belong to other journeys of the run; their definitions are in `run.json` under `journeys`.\n\n**Likely cause**\n\nLikely the higher hashIterations constant in hashSecret: login and sign-up hash the password with it, and requireAuth calls verifyToken, which hashes the token secret with it again, so every authenticated request pays the full key derivation cost.\n\n**Fix options**\n\n1. Hash API token secrets with a fast single-pass SHA-256 instead of hashSecret in issueToken and verifyToken, since token secrets are long random values, and keep the higher iteration count only for passwords; this leaves token secrets without key stretching, which is acceptable only because they are random.\n2. Cache successful token verifications in memory for a short time in verifyToken so repeated requests with the same token skip the hash; this costs memory and delays token revocation by the cache lifetime.\n3. Add a separate iteration constant for token secrets in secret.go, keep the low value for tokens and the raised value for passwords, and pick the constant by a parameter on hashSecret; this weakens stored token hashes against offline guessing, which random secrets make impractical.\n4. Revert hashIterations to the previous value; this gives up the stronger password hashing the change was meant to add.\n\n**How to reply**\n\nReply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. Downstream commits the change on a new branch, opens a merge request for it against the original branch, and re-runs this journey on it. It never merges.\n\n<details><summary>Downstream state, read by fix it and verify. Do not edit.</summary>\n\n```text\ndownstream:v1 {\"v\":1,\"mr\":11,\"base\":\"1e86e1172b3d696996b67da875239b28baba7f26\",\"head\":\"4a2296e1f589d37bb11fa86802c82d76e0fe605f\",\"finding\":\"reader_tidies_shelf.log_in.p95_ms\",\"metric\":\"p95_ms\",\"step\":\"log_in\",\"journey\":{\"id\":\"reader_tidies_shelf\",\"goal\":\"A reader views their shelf and removes a book\",\"why_included\":\"Authenticated list and delete routes on the shelf; the auth check runs the changed function\",\"steps\":[{\"name\":\"sign_up\",\"method\":\"POST\",\"path\":\"/users\",\"headers\":{\"Content-Type\":\"application/json\"},\"body\":{\"username\":\"tidy_{{uniq}}\",\"password\":\"shelf-pass-123\"},\"expect_status\":201},{\"name\":\"log_in\",\"method\":\"POST\",\"path\":\"/login\",\"headers\":{\"Content-Type\":\"application/json\"},\"body\":{\"username\":\"tidy_{{uniq}}\",\"password\":\"shelf-pass-123\"},\"expect_status\":200,\"extract\":{\"token\":\"/token\"}},{\"name\":\"add_book\",\"method\":\"POST\",\"path\":\"/books\",\"headers\":{\"Authorization\":\"Bearer {{token}}\",\"Content-Type\":\"application/json\"},\"body\":{\"title\":\"A Field Guide to Moss\",\"author\":\"A. Writer\",\"tags\":[\"nature\"]},\"expect_status\":201,\"extract\":{\"book_id\":\"/id\"}},{\"name\":\"shelf_add\",\"method\":\"PUT\",\"path\":\"/me/shelf/{{book_id}}\",\"headers\":{\"Authorization\":\"Bearer {{token}}\"},\"expect_status\":200},{\"name\":\"shelf_remove\",\"method\":\"DELETE\",\"path\":\"/me/shelf/{{book_id}}\",\"headers\":{\"Authorization\":\"Bearer {{token}}\"},\"expect_status\":200},{\"name\":\"shelf_list_again\",\"method\":\"GET\",\"path\":\"/me/shelf\",\"headers\":{\"Authorization\":\"Bearer {{token}}\"},\"expect_status\":200}]},\"b1\":6.11630695,\"c\":547.5872179500001,\"b2\":4.610827100000001,\"band\":1.5054798499999995,\"fix_options\":[\"Hash API token secrets with a fast single-pass SHA-256 instead of hashSecret in issueToken and verifyToken, since token secrets are long random values, and keep the higher iteration count only for passwords; this leaves token secrets without key stretching, which is acceptable only because they are random.\",\"Cache successful token verifications in memory for a short time in verifyToken so repeated requests with the same token skip the hash; this costs memory and delays token revocation by the cache lifetime.\",\"Add a separate iteration constant for token secrets in secret.go, keep the low value for tokens and the raised value for passwords, and pick the constant by a parameter on hashSecret; this weakens stored token hashes against offline guessing, which random secrets make impractical.\",\"Revert hashIterations to the previous value; this gives up the stronger password hashing the change was meant to add.\"]}\n```\n\n</details>",
+ "state": "opened",
+ "created_at": "2026-10-24T10:18:40.670Z",
+ "updated_at": "2026-10-24T10:22:00.302Z",
+ "closed_at": null,
+ "closed_by": null,
+ "labels": [],
+ "milestone": null,
+ "assignees": [],
+ "author": {
+  "id": 43692725,
+  "username": "ai-downstream-gitlab-ai-hackathon",
+  "public_email": null,
+  "name": "downstream",
+  "state": "active",
+  "locked": false,
+  "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43692725/custom-flow-3.png?v=1792833842",
+  "web_url": "https://gitlab.com/ai-downstream-gitlab-ai-hackathon"
+ },
+ "type": "ISSUE",
+ "assignee": null,
+ "user_notes_count": 4,
+ "merge_requests_count": 0,
+ "upvotes": 0,
+ "downvotes": 0,
+ "start_date": null,
+ "due_date": null,
+ "confidential": false,
+ "discussion_locked": null,
+ "issue_type": "issue",
+ "web_url": "https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/6",
+ "time_stats": {
+  "time_estimate": 0,
+  "total_time_spent": 0,
+  "human_time_estimate": null,
+  "human_total_time_spent": null
+ },
+ "task_completion_status": {
+  "count": 0,
+  "completed_count": 0
+ },
+ "weight": null,
+ "blocking_issues_count": 0,
+ "has_tasks": true,
+ "task_status": "0 of 0 checklist items completed",
+ "_links": {
+  "self": "https://gitlab.com/api/v4/projects/87948026/issues/6",
+  "notes": "https://gitlab.com/api/v4/projects/87948026/issues/6/notes",
+  "award_emoji": "https://gitlab.com/api/v4/projects/87948026/issues/6/award_emoji",
+  "project": "https://gitlab.com/api/v4/projects/87948026",
+  "closed_as_duplicate_of": null
+ },
+ "references": {
+  "short": "#6",
+  "relative": "#6",
+  "full": "gitlab-ai-hackathon/transcend-october-2026/35141659/showcase#6"
+ },
+ "severity": "UNKNOWN",
+ "subscribed": true,
+ "moved_to_id": null,
+ "imported": false,
+ "imported_from": "none",
+ "service_desk_reply_to": null,
+ "epic_iid": null,
+ "epic": null,
+ "iteration": null,
+ "health_status": null
+}

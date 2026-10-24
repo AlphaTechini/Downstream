@@ -17,10 +17,12 @@ type Scan struct {
 	Root         string        `json:"root"`   // directory analysed, relative to the repo
 	Method       string        `json:"method"` // one line describing the analysis and its limits
 	ChangedFiles []ChangedFile `json:"changed_files"`
-	ChangedFuncs []string      `json:"changed_funcs"` // functions whose body or declarations they use overlap a hunk
-	Routes       []Route       `json:"routes"`        // route table of the head build
-	Changed      []Impact      `json:"changed"`       // routes whose handler call path reaches a changed function
-	Affected     []Impact      `json:"affected"`      // routes that share a dependency with a changed route
+	ChangedFuncs []string      `json:"changed_funcs"`       // functions whose body or declarations they use overlap a hunk
+	Routes       []Route       `json:"routes"`              // route table of the head build
+	Changed      []Impact      `json:"changed"`             // routes whose handler call path reaches a changed function
+	Affected     []Impact      `json:"affected"`            // routes that share a dependency with a changed route
+	NewRoutes    []Route       `json:"new_routes"`          // head routes with no matching method and pattern on the base
+	AppNotes     string        `json:"app_notes,omitempty"` // downstream.md from the base commit: test data and key pages
 	Notes        []string      `json:"notes,omitempty"`
 }
 
@@ -64,11 +66,24 @@ type JourneyFile struct {
 
 // Journey is what one user does, in order.
 type Journey struct {
-	ID          string `json:"id"` // [a-z0-9_]{1,40}
+	ID          string `json:"id"`             // [a-z0-9_]{1,40}
+	Kind        string `json:"kind,omitempty"` // KindExisting (the default), KindNew or KindControl
 	Goal        string `json:"goal"`
 	WhyIncluded string `json:"why_included"`
 	Steps       []Step `json:"steps"`
 }
+
+// Journey kinds. Existing and control journeys run on both builds and are
+// compared. New journeys use routes the merge request adds, so they run on the
+// head build only, in their own pass.
+const (
+	KindExisting = "existing" // covers a changed or affected route that exists on the base
+	KindNew      = "new"      // covers a route only the head has
+	KindControl  = "control"  // unrelated to the change; catches app-wide effects such as CPU contention
+)
+
+// IsNew reports whether j runs on the head build only.
+func (j Journey) IsNew() bool { return j.Kind == KindNew }
 
 // Step is one request. Strings in Path, Headers and Body may contain {{var}}
 // placeholders filled from earlier Extract results or the built-in {{uniq}}.
@@ -97,18 +112,20 @@ type Note struct {
 
 // Run is run.json: the three passes, discarded journeys and findings.
 type Run struct {
-	Version     int       `json:"version"`
-	Base        string    `json:"base"`
-	Head        string    `json:"head"`
-	StartedAt   string    `json:"started_at"` // RFC 3339
-	EndedAt     string    `json:"ended_at"`
-	Settings    Settings  `json:"settings"`
-	Journeys    []Journey `json:"journeys"` // the journeys that were kept
-	Discarded   []Discard `json:"discarded"`
-	Passes      []Pass    `json:"passes"` // in run order: B1, C, B2
-	Findings    []Finding `json:"findings"`
-	NotMeasured []string  `json:"not_measured"`
-	Error       *RunError `json:"error,omitempty"` // set when the run stopped early
+	Version   int       `json:"version"`
+	Base      string    `json:"base"`
+	Head      string    `json:"head"`
+	StartedAt string    `json:"started_at"` // RFC 3339
+	EndedAt   string    `json:"ended_at"`
+	Settings  Settings  `json:"settings"`
+	Journeys  []Journey `json:"journeys"` // the journeys that were kept
+	Discarded []Discard `json:"discarded"`
+	Passes    []Pass    `json:"passes"` // in run order: B1, C, B2
+	// NewFeature holds the new journeys, which run in pass C only.
+	NewFeature  *NewFeaturePass `json:"new_feature,omitempty"`
+	Findings    []Finding       `json:"findings"`
+	NotMeasured []string        `json:"not_measured"`
+	Error       *RunError       `json:"error,omitempty"` // set when the run stopped early
 }
 
 // Settings records how the run was configured.
@@ -145,6 +162,15 @@ type Pass struct {
 	EndedAt   string        `json:"ended_at"`
 	Process   ProcessStats  `json:"process"`
 	Steps     []StepMetrics `json:"steps"`
+}
+
+// NewFeaturePass holds the new journeys and their step figures from pass C,
+// where they ran alongside the compared journeys. There is no baseline, so the
+// figures are reported as measured, not classified. Process is C's, so it
+// includes all of C's traffic.
+type NewFeaturePass struct {
+	Journeys []Journey `json:"journeys"`
+	Pass     Pass      `json:"pass"`
 }
 
 // ProcessStats are read from /proc for the app process during the k6 run.

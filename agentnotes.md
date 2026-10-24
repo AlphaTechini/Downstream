@@ -11,22 +11,39 @@ file; the flow never does. If this file and the flow prompt disagree, the flow p
 A journey is what a real user does, in order, with their session state carried between
 steps. It is not a list of endpoints.
 
-- 3 to 6 journeys per run. Fewer, realistic ones beat many shallow ones.
-- Each journey must touch the changed route, or a route listed in the engine's blast
-  radius for it (callers, shared helpers, shared tables, shared middleware).
+Journeys follow the change, so their number depends on what the merge request touches,
+up to 20. `downstream validate` checks the coverage rules below and names what is missing.
+
+- **Existing journeys** (`"kind": "existing"`, the default): together they must reach every
+  route in scan.json `changed` and `affected`, including routes the diff never edits but
+  whose code it reaches (a changed helper that sign-up and login call puts sign-up and login
+  in scope). They run on the old and the new build and are compared.
+- **New journeys** (`"kind": "new"`): together they must reach every route in scan.json
+  `new_routes`, the actions the new feature adds. A step on a new route may only appear in
+  a new journey. They run on the new build only, at the same time as the existing and
+  control journeys, so the comparison shows existing pages while the new feature is in use.
+  The report gives their own figures and failures, not a comparison. They may start with
+  existing steps such as signing up.
+- **Control journeys** (`"kind": "control"`): one or two on routes outside the change. They
+  catch app-wide effects static analysis cannot see, such as a new feature eating CPU and
+  slowing unrelated pages.
+- One journey can cover several routes. Prefer fewer, realistic journeys that cover
+  everything over one journey per route.
+- If scan.json has `app_notes`, the repository wrote them for you: use the test data and
+  pages they list. Routes behind a catch-all handler appear only there.
 - Start from the entry a user would use (sign up, log in, list, open, change, leave).
-- Include at least one journey that does not touch the changed route but shares a
-  dependency with it. That is where silent breakage hides.
-- Use only data a user could create through the API. No fixtures that bypass the app.
-- Every journey is validated on the baseline build first. A journey that fails on the
-  baseline is discarded and the discard is reported, not hidden.
+- Use only data a user could create through the app, or data `app_notes` says exists.
+- Existing and control journeys are checked on the baseline build first. One that fails
+  there is discarded and the discard is reported, not hidden.
 - Name journeys by the user's goal ("reader opens an article and favourites it").
 
 ## Reviewer summary (the "Journeys added" note)
 
-For each journey: one line for the goal, then a numbered list of steps in plain English,
-then one line saying why it is in the run ("changed route", "calls the changed route",
-"shares table X"). No jargon, no k6 syntax. A reviewer should be able to say "yes, that
+Group the journeys under three headings: "Existing parts the change reaches (compared old
+against new)", "New feature (new build only)" and "Controls". For each journey: one line for
+the goal, then a numbered list of steps in plain English, then one line saying why it is in
+the run ("changed route", "calls the changed route", "shares table X", "new route",
+"control"). No jargon, no k6 syntax. A reviewer should be able to say "yes, that
 is a thing users do" or "no, add one for Y" in under a minute.
 
 ## Classification (initial defaults, to be tuned against logged runs)

@@ -40,7 +40,7 @@ Design context is in [details.md](details.md); the reviewer and maintainer exper
 
 | ID | Pri | Requirement | Check |
 |---|---|---|---|
-| FR-10 | MUST | The agent generates 3 to 6 journeys from the diff and the route table, as JSON that validates against the engine's schema. | Engine rejects a malformed file; unit test in `engine/`. |
+| FR-10 | MUST | The agent generates journeys that cover the change, up to 20: existing journeys reaching every changed and affected route, new journeys for every route the merge request adds (run on the new build only, alongside the others), and at least one control journey; as JSON that validates against the engine's schema and coverage rules. | Engine rejects a malformed or uncovering file (`engine/journey/coverage.go`); flow sessions in `evidence/flow.md`. |
 | FR-11 | MUST | Journeys run through the changed route and the routes in its blast radius. At least one journey avoids the changed route. | `scan.json` and `journeys.json` of the evidence run. |
 | FR-12 | MUST | Every journey is validated on the baseline first. A journey failing on baseline is discarded and listed. | Test with a deliberately broken journey. |
 | FR-13 | MUST | The reviewer sees a plain-English summary of each journey before the numbers, following `agentnotes.md`. | "Journeys added" note in the evidence run. |

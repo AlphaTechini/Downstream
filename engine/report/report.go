@@ -23,6 +23,7 @@ func Render(run model.Run, scan *model.Scan) string {
 	r.summary()
 	r.journeyTables()
 	r.appTable()
+	r.newFeature()
 	r.chart()
 	r.issuesToOpen()
 	r.discarded()
@@ -411,6 +412,7 @@ func (r *renderer) blastRadius() {
 	r.blank()
 	r.routes(r.scan.Affected)
 	r.blank()
+	r.coverage()
 	if m := oneLine(r.scan.Method); m != "" {
 		r.line("*" + m + "*")
 		r.blank()

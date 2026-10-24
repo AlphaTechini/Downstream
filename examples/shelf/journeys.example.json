@@ -311,6 +311,20 @@
           "expect_status": 200
         }
       ]
+    },
+    {
+      "id": "monitor_checks_health",
+      "kind": "control",
+      "goal": "An uptime monitor checks that the service is healthy.",
+      "why_included": "Control journey outside most changes, to catch app-wide slowdowns.",
+      "steps": [
+        {
+          "name": "health",
+          "method": "GET",
+          "path": "/health",
+          "expect_status": 200
+        }
+      ]
     }
   ]
 }

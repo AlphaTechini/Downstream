@@ -126,22 +126,66 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
   thresholds give false positives: 6 of 12 local WSL2 runs flagged the clean change
   ([evidence/runs.md](../evidence/runs.md), "Local WSL2 runs").
 
+## C-12. A mention runs the whole flow in the Duo sandbox and opens issues
+
+- **File:** `flows/downstream.yml`, the engine at the commit pinned as `ENGINE_SHA`
+- **Proof:** session 9999905 on showcase !11:
+  [mr-11-notes.json](../evidence/flow/mr-11-notes.json) line 701 (report: 16 of 16 steps
+  regressed, app CPU time 0.11 / 17.69 / 0.12 s), line 785 (issues #4 and #5 opened),
+  [issue-4.json](../evidence/flow/session-9999905/issue-4.json) line 5, and the
+  [job log](../evidence/flow/session-9999905/job-log.txt) line 808 (`Job succeeded`). Session
+  10000162 repeats it: lines 987 and 1071.
+- **Does not show:** the sandbox's noise on a clean change; a regression that was not planted.
+  The planted change still gives two issues for one cause.
+
+## C-13. `fix it` commits the fix, opens a merge request for the requester and re-measures it
+
+- **File:** `flows/downstream.yml` (FIX steps F1 to F8), `engine/issues` (marker)
+- **Proof:** session 10000200 on issue #6:
+  [issue-6-notes.json](../evidence/flow/session-10000200/issue-6-notes.json) lines 151 and 235,
+  [mr-13.json](../evidence/flow/session-10000200/mr-13.json) line 16 (branch
+  `downstream/fix-6-option-1`) and lines 33-36 (reviewer), the change in
+  [mr-13-diffs.json](../evidence/flow/session-10000200/mr-13-diffs.json) line 3, and the
+  re-measure in [mr-13-notes.json](../evidence/flow/session-10000200/mr-13-notes.json) line 33
+  (16 metrics improved, 0 regressed).
+- **Does not show:** that every option compiles; the re-measure is the check, and a failed
+  build is posted on the fix merge request instead. The fix merge request's author is the
+  requester, because GitLab runs the session as the user who mentioned the bot.
+
+## C-14. The same flow runs on another project
+
+- **File:** NewGit's `downstream.yml`, `downstream.md` and `.gitlab/duo/agent-config.yml`
+- **Proof:** session 10000842 on NewGit !3:
+  [mr-3-notes.json](../evidence/flow/newgit-session-10000842/mr-3-notes.json) line 757
+  (journeys grouped as existing and control, from `downstream.md`), line 785 (10 steps
+  regressed, app CPU time 0.32 / 1.50 / 0.37 s, control pages slower too), and the
+  [job log](../evidence/flow/newgit-session-10000842/job-log.txt) line 697.
+- **Does not show:** that static analysis links template helpers to routes; it found no
+  changed routes for `avatarHue`, which NewGit calls from templates.
+
+## C-15. A new feature's journeys show its cost to existing pages
+
+- **File:** `engine/runner/runner.go` (new journeys run in pass C), `engine/journey/coverage.go`
+- **Proof:** test MR !14 adds `GET /books/{id}/similar`.
+  [mr-14-notes.json](../evidence/flow/mr-14-notes.json) line 151: session 10000857, with the
+  new journey in a separate pass, reports 0 regressions. Line 381: session 10001024, with it in
+  pass C, reports 8 regressed steps and app CPU time 0.10 / 1.72 / 0.11 s; line 437: issue #8.
+- **Does not show:** how the cost splits between CPU and lock waiting; C's CPU time includes
+  the new feature's own work, as the report says.
+
 ---
 
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |
 |---|---|---|---|
-| N-1 | The engine finds regressions inside a flow run | `engine/` (CI runs: C-10, C-11); `flows/downstream.yml` | T-07 |
-| N-2 | Journeys are generated from the diff by the model | the model step is in the flow prompt; k6 running hand-written journeys is shown in C-10 | T-07 |
-| N-3 | One issue per cause, starter tagged | `engine/issues` (bodies produced in CI; the planted change gives 2 groups for 1 cause); `flows/downstream.yml` | T-08 |
-| N-4 | `fix option N` applies a change and reruns the journey | `engine/issues` checks the option number only; applying is not built | T-09, T-10 |
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
 | N-7 | The GitLab project shows an MIT licence in its sidebar | `LICENSE` | T-12 (the file is committed; GitLab's detection not yet checked) |
+| N-8 | A clean change comes out clean inside the Duo sandbox | `flows/downstream.yml` | a clean-change control session |
 
-The engine's CI runs (C-10, C-11) are runs of the CLI, not of the flow, so N-1 to N-3 stay
-unverified until a flow run's output is committed under `evidence/`.
+N-1 to N-4 (regressions found in a flow run, model-written journeys, issues opened by the
+flow, fixes applied) moved to C-12 to C-14.
 
 When one of these gets proof, move it to a numbered claim above, add the evidence file under
 `evidence/`, and flip its README row to Verified in the same commit.

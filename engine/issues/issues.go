@@ -25,8 +25,14 @@ type Issue struct {
 	Steps     []string `json:"steps"` // finding IDs covered: each step's headline
 }
 
-const markerPrefix = "<!-- downstream:v1 "
-const markerSuffix = " -->"
+// The marker is a plain line in a fenced block. It used to be an HTML comment,
+// but GitLab's flow tools drop HTML comments, so issue #4 lost it (session
+// 9999905). Old comment markers are still read.
+const markerPrefix = "downstream:v1 "
+const markerSuffix = ""
+
+const legacyPrefix = "<!-- downstream:v1 "
+const legacySuffix = " -->"
 
 var (
 	starterRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,255}$`)
@@ -198,10 +204,18 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 	if len(fix) == 0 {
 		w("No fix options were supplied, so there is nothing to apply.")
 	} else {
-		w("Reply with a mention of Downstream followed by `fix option N` in this issue to apply option N.")
+		w("Reply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. " +
+			"Downstream commits the change on a new branch, opens a merge request for it against the original branch, " +
+			"and re-runs this journey on it. It never merges.")
 	}
 	w("")
+	w("<details><summary>Downstream state, read by fix it and verify. Do not edit.</summary>")
+	w("")
+	w("```text")
 	w(mline)
+	w("```")
+	w("")
+	w("</details>")
 
 	ids := make([]string, 0, len(g.Steps))
 	for _, s := range g.Steps {
@@ -350,8 +364,9 @@ func routeMatches(patMethod, pattern, method, path string) bool {
 	return len(ps) == len(xs)
 }
 
-// encodeMarker writes the marker comment. "--" may not appear inside an HTML
-// comment, so each pair of hyphens is replaced by two JSON unicode escapes, which decode back to "--".
+// encodeMarker writes the marker line. Backticks are escaped so the JSON cannot
+// close the fenced block around it, and "--" so it stays safe to paste into an
+// HTML comment; both escapes decode back to the original text.
 func encodeMarker(m model.Marker) (string, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -360,31 +375,38 @@ func encodeMarker(m model.Marker) (string, error) {
 	}
 	js := strings.TrimSpace(buf.String())
 	js = strings.ReplaceAll(js, "--", `\u002d\u002d`)
+	js = strings.ReplaceAll(js, "`", `\u0060`)
 	return markerPrefix + js + markerSuffix, nil
 }
 
-// ParseMarker reads the hidden marker from an issue body (the last line that
-// starts it), or accepts the bare marker JSON object, and validates the fields
-// later steps depend on.
+// ParseMarker reads the marker from an issue body (the last line that starts
+// it), or accepts the bare marker JSON object, and validates the fields later
+// steps depend on.
 func ParseMarker(body string) (model.Marker, error) {
 	var m model.Marker
 	if t := strings.TrimSpace(body); strings.HasPrefix(t, "{") {
 		return decodeMarker(t)
 	}
-	line := ""
+	line, legacy := "", false
 	for _, l := range strings.Split(body, "\n") {
 		l = strings.TrimSpace(l)
-		if strings.HasPrefix(l, markerPrefix) {
-			line = l
+		switch {
+		case strings.HasPrefix(l, markerPrefix):
+			line, legacy = l, false
+		case strings.HasPrefix(l, legacyPrefix):
+			line, legacy = l, true
 		}
 	}
 	if line == "" {
 		return m, errors.New("no downstream:v1 marker found in the issue body")
 	}
-	if !strings.HasSuffix(line, markerSuffix) {
-		return m, errors.New("marker comment is not closed with -->")
+	if legacy {
+		if !strings.HasSuffix(line, legacySuffix) {
+			return m, errors.New("marker comment is not closed with -->")
+		}
+		return decodeMarker(strings.TrimSuffix(strings.TrimPrefix(line, legacyPrefix), legacySuffix))
 	}
-	return decodeMarker(strings.TrimSuffix(strings.TrimPrefix(line, markerPrefix), markerSuffix))
+	return decodeMarker(strings.TrimPrefix(line, markerPrefix))
 }
 
 func decodeMarker(js string) (model.Marker, error) {

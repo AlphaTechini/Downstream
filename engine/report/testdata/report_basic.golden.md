@@ -79,6 +79,11 @@ Affected routes:
 
 - `GET /shelf`: reads the shelf table that store.AddBook writes
 
+Coverage: these routes in the change had no journey step that ran, so they were not measured:
+
+- `GET /shelf`
+- `POST /shelf/books`
+
 *Go AST route table and static call graph, depth 2; calls through interfaces and reflection are not followed.*
 
 **Not measured**

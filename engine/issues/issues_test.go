@@ -126,8 +126,8 @@ func TestBuild(t *testing.T) {
 		"1. Look the book up by key instead of scanning.",
 		"2. Revert the scan.",
 		"**How to reply**",
-		"Reply with a mention of Downstream followed by `fix option N`",
-		"<!-- downstream:v1 ",
+		"Reply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N`",
+		"downstream:v1 ",
 	}
 	pos := 0
 	for _, w := range order {
@@ -143,8 +143,8 @@ func TestBuild(t *testing.T) {
 	if !reflect.DeepEqual(p95.Steps, []string{"shelf.add_book.p95_ms"}) {
 		t.Errorf("steps = %v", p95.Steps)
 	}
-	if last := lastLine(body); !strings.HasPrefix(last, "<!-- downstream:v1 ") || !strings.HasSuffix(last, " -->") {
-		t.Errorf("last line is not the marker: %q", last)
+	if last := lastLine(body); last != "</details>" {
+		t.Errorf("body does not end with the state section: %q", last)
 	}
 	m := markerLine(t, body)
 	if strings.Contains(strings.TrimSuffix(strings.TrimPrefix(m, markerPrefix), markerSuffix), "--") {
@@ -154,9 +154,14 @@ func TestBuild(t *testing.T) {
 
 func markerLine(t *testing.T, body string) string {
 	t.Helper()
-	l := lastLine(body)
-	if !strings.HasPrefix(l, markerPrefix) {
-		t.Fatalf("no marker on the last line: %q", l)
+	l := ""
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, markerPrefix) {
+			l = line
+		}
+	}
+	if l == "" {
+		t.Fatalf("no marker line in body")
 	}
 	return l
 }
@@ -200,13 +205,13 @@ func TestMarkerRoundTrip(t *testing.T) {
 
 func TestMarkerTricky(t *testing.T) {
 	m := model.Marker{Version: 1, MR: 3, Base: baseSHA, Head: headSHA, FindingID: "a.b.c",
-		FixOptions: []string{"x --> y <!-- z ---- \\-- \"q\" > <"}}
+		FixOptions: []string{"x --> y <!-- z ---- \\-- \"q\" > < ``` `"}}
 	line, err := encodeMarker(m)
 	if err != nil {
 		t.Fatal(err)
 	}
 	inner := strings.TrimSuffix(strings.TrimPrefix(line, markerPrefix), markerSuffix)
-	if strings.Contains(inner, "--") || strings.Contains(inner, "<") || strings.Contains(inner, ">") {
+	if strings.ContainsAny(inner, "<>`") || strings.Contains(inner, "--") {
 		t.Errorf("unsafe characters in marker JSON: %s", inner)
 	}
 	got, err := ParseMarker("text\r\n" + line + "\r\n")
@@ -222,7 +227,7 @@ func TestParseMarkerErrors(t *testing.T) {
 	good, _ := encodeMarker(model.Marker{Version: 1, MR: 3, Base: baseSHA, Head: headSHA, FindingID: "a.b.c"})
 	cases := map[string]string{
 		"none":        "just text",
-		"unclosed":    strings.TrimSuffix(good, " -->"),
+		"unclosed":    legacyPrefix + strings.TrimPrefix(good, markerPrefix),
 		"bad json":    markerPrefix + "{nope" + markerSuffix,
 		"bad version": markerPrefix + `{"v":2,"mr":1,"base":"` + baseSHA + `","head":"` + headSHA + `","finding":"a"}` + markerSuffix,
 		"bad sha":     markerPrefix + `{"v":1,"mr":1,"base":"main; rm -rf /","head":"` + headSHA + `","finding":"a"}` + markerSuffix,
@@ -237,6 +242,9 @@ func TestParseMarkerErrors(t *testing.T) {
 	}
 	if _, err := ParseMarker(good); err != nil {
 		t.Errorf("good marker rejected: %v", err)
+	}
+	if _, err := ParseMarker(legacyPrefix + strings.TrimPrefix(good, markerPrefix) + legacySuffix); err != nil {
+		t.Errorf("legacy comment marker rejected: %v", err)
 	}
 }
 

@@ -1,0 +1,15 @@
+[
+ {
+  "diff": "@@ -4,6 +4,7 @@ import (\n \t\"bytes\"\n \t\"context\"\n \t\"crypto/rand\"\n+\t\"crypto/sha256\"\n \t\"crypto/subtle\"\n \t\"encoding/hex\"\n \t\"net/http\"\n@@ -36,12 +37,22 @@ func checkPassword(stored []byte, password string) bool {\n \treturn subtle.ConstantTimeCompare(hashSecret(password, salt), want) == 1\n }\n \n+// hashTokenSecret returns a single-pass SHA-256 of the salt followed by the\n+// token secret. Token secrets are 32 random bytes, so they need no key\n+// stretching; only passwords go through hashSecret.\n+func hashTokenSecret(secret string, salt []byte) []byte {\n+\th := sha256.New()\n+\th.Write(salt)\n+\th.Write([]byte(secret))\n+\treturn h.Sum(nil)\n+}\n+\n // issueToken creates \"<tokenID>.<secret>\" and stores only the salted hash of the secret.\n func (s *Server) issueToken(userID string) string {\n \ttokenID := hex.EncodeToString(randomBytes(8))\n \tsecret := hex.EncodeToString(randomBytes(32))\n \tsalt := randomBytes(saltLen)\n-\ts.store.putToken(tokenID, tokenRecord{UserID: userID, Salt: salt, Hash: hashSecret(secret, salt)})\n+\ts.store.putToken(tokenID, tokenRecord{UserID: userID, Salt: salt, Hash: hashTokenSecret(secret, salt)})\n \treturn tokenID + \".\" + secret\n }\n \n@@ -55,7 +66,7 @@ func (s *Server) verifyToken(token string) (string, bool) {\n \tif !ok {\n \t\treturn \"\", false\n \t}\n-\tif subtle.ConstantTimeCompare(hashSecret(secret, rec.Salt), rec.Hash) != 1 {\n+\tif subtle.ConstantTimeCompare(hashTokenSecret(secret, rec.Salt), rec.Hash) != 1 {\n \t\treturn \"\", false\n \t}\n \treturn rec.UserID, true\n",
+  "collapsed": false,
+  "too_large": false,
+  "new_path": "examples/shelf/auth.go",
+  "old_path": "examples/shelf/auth.go",
+  "a_mode": "100644",
+  "b_mode": "100644",
+  "new_file": false,
+  "renamed_file": false,
+  "deleted_file": false,
+  "generated_file": false
+ }
+]
