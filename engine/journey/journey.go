@@ -17,7 +17,7 @@ import (
 
 // Limits shared by Validate and Schema so the two cannot drift apart.
 const (
-	maxJourneys = 6
+	maxJourneys = 20
 	maxSteps    = 12
 	maxBody     = 4096
 	maxPath     = 300
@@ -73,6 +73,11 @@ func Validate(f model.JourneyFile, routes []model.Route) error {
 			add("%s: id is used by more than one journey", jl)
 		}
 		seenJ[j.ID] = true
+		switch j.Kind {
+		case "", model.KindExisting, model.KindNew, model.KindControl:
+		default:
+			add("%s: kind must be %q, %q or %q, got %q", jl, model.KindExisting, model.KindNew, model.KindControl, j.Kind)
+		}
 		checkText(add, jl, "goal", j.Goal)
 		checkText(add, jl, "why_included", j.WhyIncluded)
 		if n := len(j.Steps); n < 1 || n > maxSteps {

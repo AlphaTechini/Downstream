@@ -54,14 +54,14 @@ func TestValidateRules(t *testing.T) {
 		want   string // substring of the error, which must also name the journey/step
 	}{
 		{"version", func(f *model.JourneyFile) { f.Version = 2 }, "version must be 1"},
-		{"no journeys", func(f *model.JourneyFile) { f.Journeys = nil }, "1 to 6 journeys"},
+		{"no journeys", func(f *model.JourneyFile) { f.Journeys = nil }, "1 to 20 journeys"},
 		{"too many journeys", func(f *model.JourneyFile) {
-			for i := 0; i < 6; i++ {
+			for i := 0; i < 20; i++ {
 				j := f.Journeys[0]
 				j.ID = "j" + string(rune('a'+i))
 				f.Journeys = append(f.Journeys, j)
 			}
-		}, "1 to 6 journeys"},
+		}, "1 to 20 journeys"},
 		{"journey id", func(f *model.JourneyFile) { f.Journeys[0].ID = "Bad-ID" }, "id must match"},
 		{"journey id empty", func(f *model.JourneyFile) { f.Journeys[0].ID = "" }, "id must match"},
 		{"journey id long", func(f *model.JourneyFile) { f.Journeys[0].ID = strings.Repeat("a", 41) }, "id must match"},

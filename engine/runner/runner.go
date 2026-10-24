@@ -25,6 +25,12 @@ import (
 
 const buildTimeout = 150 * time.Second
 
+// passBudget is the time all measured passes may take together, so a run with
+// a head-only pass for new journeys still fits the flow's 200 s command limit
+// alongside the two builds. Each pass gets an equal share, capped by the
+// target's own duration.
+const passBudget = 120 * time.Second
+
 // Options configure one run.
 type Options struct {
 	Repo, Base, Head string
@@ -113,6 +119,21 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 	if err != nil {
 		return fail("load config", err)
 	}
+	var compare, fresh []model.Journey
+	for _, j := range o.Journeys.Journeys {
+		if j.IsNew() {
+			fresh = append(fresh, j)
+		} else {
+			compare = append(compare, j)
+		}
+	}
+	passes := 3
+	if len(fresh) > 0 {
+		passes++
+	}
+	if share := passBudget / time.Duration(passes); cfg.Duration > share {
+		cfg.Duration = share
+	}
 	run.Settings.VUs = cfg.VUs
 	run.Settings.Iterations = cfg.Iterations
 	run.Settings.DurationSeconds = int(cfg.Duration / time.Second)
@@ -162,12 +183,16 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 	runID := strconv.FormatInt(time.Now().Unix(), 16)
 
 	log.printf("baseline check: one iteration of each journey on base")
-	probe, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["base"], runID: runID, vus: 1, iterations: 1}, o.Journeys)
+	if len(compare) == 0 {
+		return fail("baseline check", errors.New("every journey uses new routes, so nothing can be compared; add existing or control journeys"))
+	}
+	probe, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["base"], runID: runID, vus: 1, iterations: 1},
+		model.JourneyFile{Version: o.Journeys.Version, Journeys: compare})
 	if err != nil {
 		return fail("baseline check", err)
 	}
 	var kept []model.Journey
-	for _, j := range o.Journeys.Journeys {
+	for _, j := range compare {
 		if d, bad := baselineFailure(j, probe.Steps); bad {
 			run.Discarded = append(run.Discarded, d)
 			log.printf("baseline check: discarded %s at step %s", d.Journey, d.Step)
@@ -191,6 +216,18 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 		}
 		res.Label, res.Commit = p.label, p.sha
 		run.Passes = append(run.Passes, res)
+	}
+	if len(fresh) > 0 {
+		// New journeys run last and alone, so their load stays out of the C pass
+		// that is compared with the baseline.
+		log.printf("pass N: head %s, %d new journeys", short(headSHA), len(fresh))
+		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["head"], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations},
+			model.JourneyFile{Version: o.Journeys.Version, Journeys: fresh})
+		if err != nil {
+			return fail("pass N", err)
+		}
+		res.Label, res.Commit = "N", headSHA
+		run.NewFeature = &model.NewFeaturePass{Journeys: fresh, Pass: res}
 	}
 	log.printf("done: %d passes", len(run.Passes))
 	return nil

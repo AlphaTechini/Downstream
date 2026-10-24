@@ -68,6 +68,13 @@ func Run(opts Options) (model.Scan, error) {
 		Routes:       []model.Route{},
 		Changed:      []model.Impact{},
 		Affected:     []model.Impact{},
+		NewRoutes:    []model.Route{},
+	}
+	if notes, problem := appNotes(repo, base); notes != "" || problem != "" {
+		sc.AppNotes = notes
+		if problem != "" {
+			sc.Notes = append(sc.Notes, problem)
+		}
 	}
 	hunks := map[string][]model.Hunk{}
 	goChanged := 0
@@ -114,6 +121,15 @@ func Run(opts Options) (model.Scan, error) {
 	}
 	if len(prog.routes) == 0 {
 		sc.Notes = append(sc.Notes, fmt.Sprintf("no HandleFunc or Handle registrations with a literal pattern found under %s", root))
+	}
+	baseRoutes, inBase, err := routesAt(repo, base, root)
+	if err != nil {
+		return zero, fmt.Errorf("base route table: %w", err)
+	}
+	if inBase {
+		sc.NewRoutes = newRoutes(sc.Routes, baseRoutes)
+	} else {
+		sc.NewRoutes = append(sc.NewRoutes, sc.Routes...)
 	}
 
 	changed := prog.changedFuncs(hunks)
