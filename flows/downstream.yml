@@ -96,7 +96,7 @@ prompts:
 
         SETUP (first command of every procedure; run it exactly)
         S1. run_command:
-            export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=831a73e697e3 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
+            export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=af542dc65a97 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
         Every later command starts with:
             export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp &&
 
@@ -181,9 +181,12 @@ prompts:
             shows regression=0, stop; "advisory=" counts latency changes that open no issue and
             are already in the report. If only the frontend line shows regressions, do R11F.
             Otherwise run_command:
-            downstream issues --run /tmp/ds/run.json --scan /tmp/ds/scan.json --mr <iid> --starter <starter> --out /tmp/ds/draft.json && cat /tmp/ds/draft.json
+            F=""; test -f /tmp/ds/frontend.json && F="--frontend /tmp/ds/frontend.json"; downstream issues --run /tmp/ds/run.json --scan /tmp/ds/scan.json $F --mr <iid> --starter <starter> --out /tmp/ds/draft.json && cat /tmp/ds/draft.json
             For each finding ID in "needs_notes", read that issue's draft body (its changed
-            functions, steps and figures) and the hunks in scan.json, and write notes JSON:
+            functions, steps and figures) and the hunks in scan.json, and write notes JSON. An ID
+            starting "fe-" is a frontend issue: read the pages and the changed frontend files it
+            lists with get_repository_file at ref <head>, and write fix options that change those
+            files. Notes JSON:
             {"version":1,"items":{"<finding id>":{"likely_cause":"<one or two sentences,
             starting with Likely>","fix_options":["<option>", ...]}}}. One to five fix options,
             each a concrete code change. Words only: no figures, no tables. Then run_command:
@@ -193,7 +196,14 @@ prompts:
             F=""; test -f /tmp/ds/frontend.json && F="--frontend /tmp/ds/frontend.json"; downstream issues --run /tmp/ds/run.json --scan /tmp/ds/scan.json --notes /tmp/ds/notes.json $F --mr <iid> --starter <starter> --out /tmp/ds/issues.json && cat /tmp/ds/issues.json
             If the engine rejects the notes, fix them using its error text, at most twice.
         R11F. Frontend regressions only (or a frontend-only project with regression above 0):
-            run_command: downstream issues --frontend /tmp/ds/frontend.json --mr <iid> --starter <starter> --out /tmp/ds/issues.json && cat /tmp/ds/issues.json
+            run_command: downstream issues --frontend /tmp/ds/frontend.json --mr <iid> --starter <starter> --out /tmp/ds/draft.json && cat /tmp/ds/draft.json
+            Write notes for each ID in "needs_notes" as R11 describes for "fe-" IDs, then
+            run_command:
+            cat > /tmp/ds/notes.json <<'DOWNSTREAM_JSON'
+            <one-line notes JSON>
+            DOWNSTREAM_JSON
+            downstream issues --frontend /tmp/ds/frontend.json --notes /tmp/ds/notes.json --mr <iid> --starter <starter> --out /tmp/ds/issues.json && cat /tmp/ds/issues.json
+            If the engine rejects the notes, fix them using its error text, at most twice.
         R12. For each entry in "issues", create_issue with its title and body exactly.
             For each entry in "questions", create_merge_request_note with the text exactly.
             Then post a last merge request note listing the issues you opened.
@@ -213,7 +223,8 @@ prompts:
             an issue note and stop.
         F3. create_issue_note: "Applying option <N> for @<starter>: <option text>. A merge
             request with the change follows, then a re-measure of this journey."
-        F4. Find the code to change: the issue body names the changed functions and routes.
+        F4. Find the code to change: the issue body names the changed functions and routes, or,
+            for a frontend issue, the pages and the changed frontend files.
             Use get_repository_file with ref <mrhead> to read each file you will change, in full.
             Write the smallest change that does exactly what the option says and nothing else:
             same language and style, no new dependencies, no edits outside those files, and it
@@ -228,11 +239,16 @@ prompts:
             committed it and will re-measure the journey from the issue on this merge request.
             Review it before merging; Downstream never merges." Set @<starter> as reviewer if
             the tool allows it. Read the new merge request's IID as <fixmr>.
-        F7. Re-measure. run_command:
+        F7. Re-measure. If the marker JSON has "kind":"frontend", run_command:
+            downstream marker parse --journeys-out /tmp/ds/fe-journeys.json < /tmp/ds/marker.json
+            cd /tmp/ds-engine/tools/fecheck && (test -d node_modules || npm ci --legacy-peer-deps --no-audit --no-fund)
+            then run_command (allow 200 seconds): downstream frontend --base <mrhead> --head <fix> --journeys /tmp/ds/fe-journeys.json --fecheck /tmp/ds-engine/tools/fecheck --out /tmp/ds/frontend.json
+            then run_command: downstream report --frontend /tmp/ds/frontend.json --out /tmp/ds/report.md && cat /tmp/ds/report.md
+            Otherwise run_command:
             downstream marker parse --journeys-out /tmp/ds/journeys.json < /tmp/ds/marker.json
             then run_command: downstream scan --base <mrhead> --head <fix> --out /tmp/ds/scan.json
             then run_command (allow 200 seconds): downstream run --base <mrhead> --head <fix> --journeys /tmp/ds/journeys.json --out /tmp/ds/run.json
-            then the R9 command. create_merge_request_note on <fixmr>: first the line
+            then the R9 command. Either way, create_merge_request_note on <fixmr>: first the line
             "Re-measured: baseline is <src> at <mrhead first 8>, candidate is this fix at <fix
             first 8>. Improvements show as negative changes." then the report text exactly as
             printed. If any of these commands fails, post its error text on <fixmr> instead and
