@@ -15,8 +15,8 @@ including routes the diff never mentions.
 touches only that handler and has no performance effect, so a run on it should show no
 difference beyond noise.
 
-`remove-list-limit.patch` is a planted regression, made for the demo. **Scripted edit, not
-AI-written:** it is the output of one fixed substitution on `examples/shelf/handlers.go`,
+`remove-list-limit.patch` is a planted regression, made for the demo. It is a scripted edit:
+the output of one fixed substitution on `examples/shelf/handlers.go`,
 
 ```
 sed -i 's/^\tmaxListed = 50$/\tmaxListed = 100000/' examples/shelf/handlers.go

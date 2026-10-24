@@ -13,7 +13,8 @@ python3 scripts/aa_summary.py <scratch-dir> evidence/aa/<set>
 ```
 
 Each set's `machine.txt` records the commit SHA as it was when the runs were made; find the
-commit on this branch by the subject named under each set. `run` accepts the same SHA twice; the runner builds it once
+commit on this branch by the subject named under each set. `run` accepts the same SHA twice;
+the runner builds it once
 ([before/run-01.log](before/run-01.log) L4) and still runs three passes (L7-L10).
 
 ## Set `before`: the rule as committed in `0fa756e`
@@ -21,8 +22,8 @@ commit on this branch by the subject named under each set. `run` accepts the sam
 Machine, versions and the exact command: [before/machine.txt](before/machine.txt) (4 CPUs,
 Go 1.22.12, k6 v0.56.0, journeys `examples/shelf/journeys.example.json`, 2 VUs and 10
 iterations per VU). Nothing else ran on the machine during these runs. Raw figures per step
-and pass: [before/passes.tsv](before/passes.tsv). Findings that are not noise (every other finding was noise; summary.txt counts each class):
-[before/findings.tsv](before/findings.tsv). Summary: [before/summary.txt](before/summary.txt).
+and pass: [before/passes.tsv](before/passes.tsv). Findings that are not noise (every other
+finding was noise; summary.txt counts each class): [before/findings.tsv](before/findings.tsv). Summary: [before/summary.txt](before/summary.txt).
 
 | Measured | Value | Source |
 |---|---|---|
@@ -72,8 +73,9 @@ The rule as committed still gave 0 false regressions in 20 runs (summary.txt L2)
 journey is far noisier here than the tolerance first proposed for it (3 to 4%): each pass uses
 only about 0.15 s of CPU, so start-up and scheduling are a large share of it. Bytes written per
 journey are the steadiest counter, but not exact: the app's responses are likely to differ in
-length between passes because they carry generated tokens and IDs (not checked). A thread count of 9 or 10 moves by one thread, which is
-11%, so threads need an absolute tolerance rather than a relative one.
+length between passes because they carry generated tokens and IDs (not checked). A thread
+count of 9 or 10 moves by one thread, which is 11%, so threads need an absolute tolerance
+rather than a relative one.
 
 ## Set `after`: the gated rule
 
@@ -83,8 +85,8 @@ on process counters and keep latency advisory").
 Same machine and procedure ([after/machine.txt](after/machine.txt)), 20 fresh runs (not the
 runs the tolerances were picked from), nothing else running. Summary:
 [after/summary.txt](after/summary.txt); raw figures: [after/passes.tsv](after/passes.tsv);
-findings that are not noise (all others were noise): [after/findings.tsv](after/findings.tsv). Only gated findings
-can be a regression now; latency is advisory.
+findings that are not noise (all others were noise): [after/findings.tsv](after/findings.tsv).
+Only gated findings can be a regression now; latency is advisory.
 
 | Measured | before (old rule) | after (gated rule) | Source |
 |---|---|---|---|

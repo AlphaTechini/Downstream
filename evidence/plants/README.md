@@ -8,11 +8,10 @@ with Go 1.22.12 and k6 v0.56.0 (`machine.txt` in each set), followed by
 Rule in effect: the gated rule of `engine/classify` (latency advisory). Raw output per run:
 `summary-NN.txt` (the `downstream summary` counts) and `gated.tsv` (every app-wide gated finding,
 and any step finding that is not noise, with B1, B2, C, allowed rise, noise band and
-smallest detectable change). `table.txt` lists the
-gated findings that are not noise.
+smallest detectable change). `table.txt` lists the gated findings that are not noise.
 
 Both changes are planted; neither comes from real history. `remove-list-limit` is a scripted
-edit, not AI-written: the patch is the output of the fixed `sed` command in
+edit: the patch is the output of the fixed `sed` command in
 [`examples/changes/README.md`](../../examples/changes/README.md). These runs say nothing about
 how often Downstream would catch a real change.
 
@@ -36,8 +35,9 @@ What else the runs show:
   rule before gating (latency plus a 10 MB memory floor) reported `regression=0`; that run's
   output was not kept, so it is not evidence here.
 - A measurement of an unbounded list on a different service, outside this repository and
-  not checked here, had bytes written rise about 42 times. That did not happen here: the demo's list grows only to the books the journeys create in one pass, so bytes per
-  journey rose by about 58%.
+  not checked here, had bytes written rise about 42 times. That did not happen here: the
+  demo's list grows only to the books the journeys create in one pass, so bytes per journey
+  rose by about 58%.
 
 ## Later checks, and why peak RSS is allowed 5%
 

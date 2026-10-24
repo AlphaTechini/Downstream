@@ -182,7 +182,7 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 | N-4 | `fix option N` applies a change and reruns the journey | `engine/issues` checks the option number only; applying is not built | T-09, T-10 |
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
-| N-8 | The flow's model writes negative, edge-input, repeated, page-size and cross-user steps | `flows/downstream.yml` R6, `agentnotes.md` | no flow session has run; `downstream validate` warnings are the only check |
+| N-8 | The flow's model writes negative, edge-input, repeated, page-size and cross-user steps | `flows/downstream.yml` R6, `agentnotes.md` | T-16; no flow session has run, and `downstream validate` warnings are the only check |
 | N-7 | The GitLab project shows an MIT licence in its sidebar | `LICENSE` | T-12 (the file is committed; GitLab's detection not yet checked) |
 
 The engine's CI runs (C-10, C-11) are runs of the CLI, not of the flow, so N-1 to N-3 stay
