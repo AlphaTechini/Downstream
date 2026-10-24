@@ -77,6 +77,10 @@ import (
 // 2 cycles is chosen, not derived. It lets one cycle of jitter pass and still
 // flags a pass with three or more cycles beyond the worse baseline.
 //
+// Bytes written per journey has an absolute floor of 1 KB: net of the responses
+// it is close to zero for an app that writes nothing else, and 1% of almost
+// nothing flagged a clean change in CI (pipeline 2984592625).
+//
 // The allocation tolerances also have an absolute floor, 100 objects and 16 KB
 // per journey, chosen rather than derived: a change that adds a field to one
 // response raised heap objects by 26 per journey (14%) on a health-heavy run of
@@ -95,7 +99,7 @@ func DefaultThresholds() model.Thresholds {
 		MinCPUSeconds:     0.5,
 		MaxBaselineSpread: 0.5,
 		Tolerances: map[string]model.Tolerance{
-			model.MetricWriteBytesPerJourney:    {Relative: 0.01},
+			model.MetricWriteBytesPerJourney:    {Relative: 0.01, Absolute: 1 << 10},
 			model.MetricWriteSyscallsPerJourney: {Relative: 0.04},
 			model.MetricOpenFDs:                 {Absolute: 1},
 			model.MetricThreads:                 {Absolute: 2},

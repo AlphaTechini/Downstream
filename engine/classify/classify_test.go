@@ -224,7 +224,7 @@ func TestDefaults(t *testing.T) {
 		t.Errorf("defaults: %+v", d)
 	}
 	want := map[string]model.Tolerance{
-		"write_bytes_per_journey":    {Relative: 0.01},
+		"write_bytes_per_journey":    {Relative: 0.01, Absolute: 1 << 10},
 		"write_syscalls_per_journey": {Relative: 0.04},
 		"open_fds":                   {Absolute: 1},
 		"threads":                    {Absolute: 2},
@@ -384,8 +384,9 @@ func TestGatedRule(t *testing.T) {
 		{"rise beyond allowed but inside band is withheld", model.MetricCPUPerJourney, vals{10, 17, 15}, model.ClassWithheld, 3, 5, "could not be seen"},
 		{"improvement inside the band is withheld", model.MetricCPUPerJourney, vals{10, 6, 15}, model.ClassWithheld, 3, 5, "smallest change it could detect is 5.00"},
 		// counters with a relative tolerance
-		{"bytes regression", model.MetricWriteBytesPerJourney, vals{1000, 1030, 1004}, model.ClassRegression, 10.04, 10.04, "more than the allowed"},
-		{"bytes noise", model.MetricWriteBytesPerJourney, vals{1000, 1008, 1004}, model.ClassNoise, 10.04, 10.04, "not more than the allowed"},
+		{"bytes regression", model.MetricWriteBytesPerJourney, vals{200000, 206000, 200800}, model.ClassRegression, 2008, 2008, "more than the allowed"},
+		{"bytes noise", model.MetricWriteBytesPerJourney, vals{200000, 201600, 200800}, model.ClassNoise, 2008, 2008, "not more than the allowed"},
+		{"bytes near zero under the 1 KB floor is noise", model.MetricWriteBytesPerJourney, vals{10, 12, 10}, model.ClassNoise, 1024, 1024, "not more than the allowed"},
 		{"syscalls regression", model.MetricWriteSyscallsPerJourney, vals{5, 5.5, 5.1}, model.ClassRegression, 0.204, 0.204, "more than the allowed"},
 		// peak memory
 		{"memory regression", model.MetricRSS, vals{50, 53, 50.2}, model.ClassRegression, 2.51, 2.51, "more than the allowed"},
