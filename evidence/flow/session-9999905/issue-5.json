@@ -1,0 +1,73 @@
+{
+ "id": 207756900,
+ "iid": 5,
+ "project_id": 87948026,
+ "title": "[Downstream] 4 steps slower on routes outside the diff's call paths: worst visitor_browses_books.list_books p95 latency up 69.4 ms (+5843%)",
+ "description": "Run started by @AlphaTechini on !11.\n\n**Changed functions**\n\nNone: no changed function is on the call path of the routes these steps call.\n\n**Measured**\n\n| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |\n|---|---|---|---|---|---|---|---|\n| author_publishes_and_reviews | list_reviews | p95 latency | 1.6 ms | 0.8 ms | 50.0 ms | 0.8 ms | +48.3 ms (+2950%) |\n| new_reader_signs_up | health | p95 latency | 1.5 ms | 0.6 ms | 59.0 ms | 0.8 ms | +57.6 ms (+3958%) |\n| visitor_browses_books | list_books | p95 latency | 1.2 ms | 0.9 ms | 70.6 ms | 0.2 ms | +69.4 ms (+5843%) |\n| visitor_browses_books | list_books_filtered | p95 latency | 1.1 ms | 2.3 ms | 61.2 ms | 1.3 ms | +58.8 ms (+2510%) |\n\nEach row is the step's headline regression (failures, then p95, mean, p50). Change is against the worse baseline run.\n\nRule for the headline (`visitor_browses_books.list_books.p95_ms`): worse than the worse baseline by 69.4 ms (5842.7%), which is more than 2 times the noise band of 0.2 ms, at least 20% and at least 10.0 ms\n\n**Repro**\n\n1. `GET /books`, expect 200\n2. `GET /books?tag=fiction`, expect 200\n\nRerun with:\n\n```\ndownstream run --base 1e86e1172b3d696996b67da875239b28baba7f26 --head 4a2296e1f589d37bb11fa86802c82d76e0fe605f --journeys journeys.json --out run.json\n```\n\n`journeys.json` is the journey embedded in this issue's hidden marker (the journey of the headline step). Recover it with:\n\n```\ndownstream marker parse --journeys-out journeys.json < issue.md\n```\n\nOther steps in the table belong to other journeys of the run; their definitions are in `run.json` under `journeys`.\n\n**Likely cause**\n\nLikely a hypothesis only: these routes do not call hashSecret, but the slow key derivation now saturates CPU on the shared single process, so unrelated requests queue behind it while the other journeys run.\n\n**Fix options**\n\n1. Reduce the CPU cost of hashSecret on the token path, for example by using a fast HMAC for token secrets, so the shared process is no longer starved. This is the same change that fixes the directly affected routes.\n2. Limit how many key derivations run at once with a small semaphore, so other requests keep getting CPU time. This costs higher latency on login and sign up under load.\n3. Revert the iteration constant to its earlier value. This removes the contention but also drops the security hardening the change aimed for.\n\n**How to reply**\n\nReply with a mention of Downstream followed by `fix option N` in this issue to apply option N.",
+ "state": "opened",
+ "created_at": "2026-10-24T09:51:49.351Z",
+ "updated_at": "2026-10-24T09:51:49.351Z",
+ "closed_at": null,
+ "closed_by": null,
+ "labels": [],
+ "milestone": null,
+ "assignees": [],
+ "author": {
+  "id": 43692725,
+  "username": "ai-downstream-gitlab-ai-hackathon",
+  "public_email": null,
+  "name": "downstream",
+  "state": "active",
+  "locked": false,
+  "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43692725/custom-flow-3.png?v=1792833842",
+  "web_url": "https://gitlab.com/ai-downstream-gitlab-ai-hackathon"
+ },
+ "type": "ISSUE",
+ "assignee": null,
+ "user_notes_count": 0,
+ "merge_requests_count": 0,
+ "upvotes": 0,
+ "downvotes": 0,
+ "start_date": null,
+ "due_date": null,
+ "confidential": false,
+ "discussion_locked": null,
+ "issue_type": "issue",
+ "web_url": "https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/5",
+ "time_stats": {
+  "time_estimate": 0,
+  "total_time_spent": 0,
+  "human_time_estimate": null,
+  "human_total_time_spent": null
+ },
+ "task_completion_status": {
+  "count": 0,
+  "completed_count": 0
+ },
+ "weight": null,
+ "blocking_issues_count": 0,
+ "has_tasks": true,
+ "task_status": "0 of 0 checklist items completed",
+ "_links": {
+  "self": "https://gitlab.com/api/v4/projects/87948026/issues/5",
+  "notes": "https://gitlab.com/api/v4/projects/87948026/issues/5/notes",
+  "award_emoji": "https://gitlab.com/api/v4/projects/87948026/issues/5/award_emoji",
+  "project": "https://gitlab.com/api/v4/projects/87948026",
+  "closed_as_duplicate_of": null
+ },
+ "references": {
+  "short": "#5",
+  "relative": "#5",
+  "full": "gitlab-ai-hackathon/transcend-october-2026/35141659/showcase#5"
+ },
+ "severity": "UNKNOWN",
+ "subscribed": true,
+ "moved_to_id": null,
+ "imported": false,
+ "imported_from": "none",
+ "service_desk_reply_to": null,
+ "epic_iid": null,
+ "epic": null,
+ "iteration": null,
+ "health_status": null
+}

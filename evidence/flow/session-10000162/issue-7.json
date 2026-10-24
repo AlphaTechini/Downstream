@@ -1,0 +1,73 @@
+{
+ "id": 207758254,
+ "iid": 7,
+ "project_id": 87948026,
+ "title": "[Downstream] 3 steps slower on routes outside the diff's call paths: worst visitor_browses_by_tag.browse_tag p95 latency up 71.4 ms (+1127%)",
+ "description": "Run started by @AlphaTechini on !11.\n\n**Changed functions**\n\nNone: no changed function is on the call path of the routes these steps call.\n\n**Measured**\n\n| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |\n|---|---|---|---|---|---|---|---|\n| reader_reviews_book | read_reviews | p95 latency | 0.7 ms | 1.4 ms | 64.0 ms | 0.7 ms | +62.5 ms (+4383%) |\n| visitor_browses_by_tag | browse_tag | p95 latency | 1.1 ms | 6.3 ms | 77.8 ms | 5.2 ms | +71.4 ms (+1127%) |\n| visitor_browses_by_tag | open_book | p95 latency | 1.0 ms | 1.4 ms | 70.4 ms | 0.4 ms | +69.0 ms (+4901%) |\n\nEach row is the step's headline regression (failures, then p95, mean, p50). Change is against the worse baseline run.\n\nRule for the headline (`visitor_browses_by_tag.browse_tag.p95_ms`): worse than the worse baseline by 71.4 ms (1127.3%), which is more than 2 times the noise band of 5.2 ms, at least 20% and at least 10.0 ms\n\n**Repro**\n\n1. `POST /users`, expect 201\n2. `POST /login`, expect 200\n3. `POST /books`, expect 201\n4. `GET /books?tag=maps`, expect 200\n5. `GET /books/{{book_id}}`, expect 200\n\nRerun with:\n\n```\ndownstream run --base 1e86e1172b3d696996b67da875239b28baba7f26 --head 4a2296e1f589d37bb11fa86802c82d76e0fe605f --journeys journeys.json --out run.json\n```\n\n`journeys.json` is the journey embedded in this issue's hidden marker (the journey of the headline step). Recover it with:\n\n```\ndownstream marker parse --journeys-out journeys.json < issue.md\n```\n\nOther steps in the table belong to other journeys of the run; their definitions are in `run.json` under `journeys`.\n\n**Likely cause**\n\nLikely CPU contention rather than a code path: these public read routes do not call hashSecret, but they run in the same process as the sign-up, login and token checks that now use much more CPU, so the reads wait for CPU time; this is a hypothesis.\n\n**Fix options**\n\n1. Hash API token secrets with a fast single-pass SHA-256 instead of hashSecret in verifyToken and issueToken, which removes most of the CPU competing with the public reads; this leaves token secrets without key stretching.\n2. Limit how many hashSecret calls run at once with a small semaphore in secret.go, so reads keep spare CPU; this makes sign-up and login queue under load.\n3. Revert hashIterations to the previous value; this gives up the stronger password hashing the change was meant to add.\n\n**How to reply**\n\nReply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. Downstream commits the change on a new branch, opens a merge request for it against the original branch, and re-runs this journey on it. It never merges.\n\n<details><summary>Downstream state, read by fix it and verify. Do not edit.</summary>\n\n```text\ndownstream:v1 {\"v\":1,\"mr\":11,\"base\":\"1e86e1172b3d696996b67da875239b28baba7f26\",\"head\":\"4a2296e1f589d37bb11fa86802c82d76e0fe605f\",\"finding\":\"visitor_browses_by_tag.browse_tag.p95_ms\",\"metric\":\"p95_ms\",\"step\":\"browse_tag\",\"journey\":{\"id\":\"visitor_browses_by_tag\",\"goal\":\"A visitor browses books by tag and opens one\",\"why_included\":\"Shares function hasTag with a changed route; the browse and open steps are public and never check a token\",\"steps\":[{\"name\":\"sign_up\",\"method\":\"POST\",\"path\":\"/users\",\"headers\":{\"Content-Type\":\"application/json\"},\"body\":{\"username\":\"curator_{{uniq}}\",\"password\":\"shelf-pass-123\"},\"expect_status\":201},{\"name\":\"log_in\",\"method\":\"POST\",\"path\":\"/login\",\"headers\":{\"Content-Type\":\"application/json\"},\"body\":{\"username\":\"curator_{{uniq}}\",\"password\":\"shelf-pass-123\"},\"expect_status\":200,\"extract\":{\"token\":\"/token\"}},{\"name\":\"add_book\",\"method\":\"POST\",\"path\":\"/books\",\"headers\":{\"Authorization\":\"Bearer {{token}}\",\"Content-Type\":\"application/json\"},\"body\":{\"title\":\"Maps of Small Towns\",\"author\":\"A. Writer\",\"tags\":[\"maps\"]},\"expect_status\":201,\"extract\":{\"book_id\":\"/id\"}},{\"name\":\"browse_tag\",\"method\":\"GET\",\"path\":\"/books?tag=maps\",\"expect_status\":200},{\"name\":\"open_book\",\"method\":\"GET\",\"path\":\"/books/{{book_id}}\",\"expect_status\":200}]},\"b1\":1.1480975500000008,\"c\":77.75863890000001,\"b2\":6.33559165,\"band\":5.1874940999999986,\"fix_options\":[\"Hash API token secrets with a fast single-pass SHA-256 instead of hashSecret in verifyToken and issueToken, which removes most of the CPU competing with the public reads; this leaves token secrets without key stretching.\",\"Limit how many hashSecret calls run at once with a small semaphore in secret.go, so reads keep spare CPU; this makes sign-up and login queue under load.\",\"Revert hashIterations to the previous value; this gives up the stronger password hashing the change was meant to add.\"]}\n```\n\n</details>",
+ "state": "opened",
+ "created_at": "2026-10-24T10:18:41.552Z",
+ "updated_at": "2026-10-24T10:18:41.552Z",
+ "closed_at": null,
+ "closed_by": null,
+ "labels": [],
+ "milestone": null,
+ "assignees": [],
+ "author": {
+  "id": 43692725,
+  "username": "ai-downstream-gitlab-ai-hackathon",
+  "public_email": null,
+  "name": "downstream",
+  "state": "active",
+  "locked": false,
+  "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43692725/custom-flow-3.png?v=1792833842",
+  "web_url": "https://gitlab.com/ai-downstream-gitlab-ai-hackathon"
+ },
+ "type": "ISSUE",
+ "assignee": null,
+ "user_notes_count": 0,
+ "merge_requests_count": 0,
+ "upvotes": 0,
+ "downvotes": 0,
+ "start_date": null,
+ "due_date": null,
+ "confidential": false,
+ "discussion_locked": null,
+ "issue_type": "issue",
+ "web_url": "https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase/-/work_items/7",
+ "time_stats": {
+  "time_estimate": 0,
+  "total_time_spent": 0,
+  "human_time_estimate": null,
+  "human_total_time_spent": null
+ },
+ "task_completion_status": {
+  "count": 0,
+  "completed_count": 0
+ },
+ "weight": null,
+ "blocking_issues_count": 0,
+ "has_tasks": true,
+ "task_status": "0 of 0 checklist items completed",
+ "_links": {
+  "self": "https://gitlab.com/api/v4/projects/87948026/issues/7",
+  "notes": "https://gitlab.com/api/v4/projects/87948026/issues/7/notes",
+  "award_emoji": "https://gitlab.com/api/v4/projects/87948026/issues/7/award_emoji",
+  "project": "https://gitlab.com/api/v4/projects/87948026",
+  "closed_as_duplicate_of": null
+ },
+ "references": {
+  "short": "#7",
+  "relative": "#7",
+  "full": "gitlab-ai-hackathon/transcend-october-2026/35141659/showcase#7"
+ },
+ "severity": "UNKNOWN",
+ "subscribed": true,
+ "moved_to_id": null,
+ "imported": false,
+ "imported_from": "none",
+ "service_desk_reply_to": null,
+ "epic_iid": null,
+ "epic": null,
+ "iteration": null,
+ "health_status": null
+}

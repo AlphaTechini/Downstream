@@ -1,0 +1,73 @@
+{
+ "id": 207760065,
+ "iid": 1,
+ "project_id": 88032755,
+ "title": "[Downstream] 10 steps slower on routes outside the diff's call paths: worst visitor_reads_repo_history.commits p95 latency up 33.4 ms (+180%)",
+ "description": "Run started by @AlphaTechini on !3.\n\n**Changed functions**\n\nNone: no changed function is on the call path of the routes these steps call.\n\n**Measured**\n\n| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |\n|---|---|---|---|---|---|---|---|\n| monitor_checks_health | health | p95 latency | 6.5 ms | 10.8 ms | 28.7 ms | 4.3 ms | +18.0 ms (+167%) |\n| visitor_browses_projects | explore | p95 latency | 9.8 ms | 6.9 ms | 31.5 ms | 3.0 ms | +21.7 ms (+220%) |\n| visitor_browses_projects | profile | p95 latency | 4.9 ms | 5.4 ms | 17.4 ms | 0.5 ms | +12.0 ms (+221%) |\n| visitor_follows_issues_and_mrs | mr_list | p95 latency | 11.9 ms | 10.3 ms | 32.1 ms | 1.6 ms | +20.2 ms (+170%) |\n| visitor_follows_issues_and_mrs | one_issue | p95 latency | 7.9 ms | 12.2 ms | 35.2 ms | 4.3 ms | +23.0 ms (+189%) |\n| visitor_follows_issues_and_mrs | one_mr | p95 latency | 32.7 ms | 35.9 ms | 57.8 ms | 3.2 ms | +21.9 ms (+61%) |\n| visitor_reads_code_files | raw_file | p95 latency | 24.4 ms | 25.3 ms | 56.1 ms | 0.9 ms | +30.8 ms (+122%) |\n| visitor_reads_code_files | tree | mean latency | 14.5 ms | 16.7 ms | 42.0 ms | 2.2 ms | +25.3 ms (+151%) |\n| visitor_reads_repo_history | commits | p95 latency | 18.5 ms | 16.6 ms | 51.9 ms | 2.0 ms | +33.4 ms (+180%) |\n| visitor_reads_repo_history | repo_home | mean latency | 14.0 ms | 17.6 ms | 48.7 ms | 3.6 ms | +31.1 ms (+177%) |\n\nEach row is the step's headline regression (failures, then p95, mean, p50). Change is against the worse baseline run.\n\nApp process:\n\n- CPU time: B1 0.32 s, B2 0.37 s, C 1.50 s, noise band 0.05 s, change +1.13 s (+305%) against the worse baseline\n\nRule for the headline (`visitor_reads_repo_history.commits.p95_ms`): worse than the worse baseline by 33.4 ms (180.2%), which is more than 2 times the noise band of 2.0 ms, at least 20% and at least 10.0 ms\n\n**Repro**\n\n1. `GET /demo/storefront`, expect 200\n2. `GET /demo/storefront/-/commits/main`, expect 200\n\nRerun with:\n\n```\ndownstream run --base 7f2473276ae80df9e124064ccf5fd0091d5e205e --head 2893f09986e85f279941e8e04f1deffd8c55c632 --journeys journeys.json --out run.json\n```\n\n`journeys.json` is the journey embedded in this issue's hidden marker (the journey of the headline step). Recover it with:\n\n```\ndownstream marker parse --journeys-out journeys.json < issue.md\n```\n\nOther steps in the table belong to other journeys of the run; their definitions are in `run.json` under `journeys`.\n\n**Likely cause**\n\nLikely the changed avatarHue function, which now runs a very long SHA-256 loop for every name; the static scan did not link it to these routes (they go through the catch-all handler), so this is a hypothesis, but the rise in app CPU time and the slowdown on pages without avatars such as health and raw file fit a shared CPU cost.\n\n**Fix options**\n\n1. Restore the previous cheap rolling hash in avatarHue and drop the repeated hashing loop.\n2. Keep a single SHA-256 call in avatarHue with no repeated rounds, which still spreads hues well at the cost of one hash per name.\n3. Cache the hue per name in a small in-memory map so each name is hashed at most once, at the cost of some memory and a lock or sync.Map.\n\n**How to reply**\n\nReply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N` for another option. Downstream commits the change on a new branch, opens a merge request for it against the original branch, and re-runs this journey on it. It never merges.\n\n<details><summary>Downstream state, read by fix it and verify. Do not edit.</summary>\n\n```text\ndownstream:v1 {\"v\":1,\"mr\":3,\"base\":\"7f2473276ae80df9e124064ccf5fd0091d5e205e\",\"head\":\"2893f09986e85f279941e8e04f1deffd8c55c632\",\"finding\":\"visitor_reads_repo_history.commits.p95_ms\",\"metric\":\"p95_ms\",\"step\":\"commits\",\"journey\":{\"id\":\"visitor_reads_repo_history\",\"kind\":\"existing\",\"goal\":\"Visitor opens a repository and reads its commit history\",\"why_included\":\"Repository home and commit history render avatars via avatarHue\",\"steps\":[{\"name\":\"repo_home\",\"method\":\"GET\",\"path\":\"/demo/storefront\",\"expect_status\":200},{\"name\":\"commits\",\"method\":\"GET\",\"path\":\"/demo/storefront/-/commits/main\",\"expect_status\":200}]},\"b1\":18.522486000000008,\"c\":51.89783645000003,\"b2\":16.556226100000003,\"band\":1.9662599000000043,\"fix_options\":[\"Restore the previous cheap rolling hash in avatarHue and drop the repeated hashing loop.\",\"Keep a single SHA-256 call in avatarHue with no repeated rounds, which still spreads hues well at the cost of one hash per name.\",\"Cache the hue per name in a small in-memory map so each name is hashed at most once, at the cost of some memory and a lock or sync.Map.\"]}\n```\n\n</details>",
+ "state": "opened",
+ "created_at": "2026-10-24T10:50:12.224Z",
+ "updated_at": "2026-10-24T10:50:12.224Z",
+ "closed_at": null,
+ "closed_by": null,
+ "labels": [],
+ "milestone": null,
+ "assignees": [],
+ "author": {
+  "id": 43692725,
+  "username": "ai-downstream-gitlab-ai-hackathon",
+  "public_email": null,
+  "name": "downstream",
+  "state": "active",
+  "locked": false,
+  "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43692725/custom-flow-3.png?v=1792833842",
+  "web_url": "https://gitlab.com/ai-downstream-gitlab-ai-hackathon"
+ },
+ "type": "ISSUE",
+ "assignee": null,
+ "user_notes_count": 0,
+ "merge_requests_count": 0,
+ "upvotes": 0,
+ "downvotes": 0,
+ "start_date": null,
+ "due_date": null,
+ "confidential": false,
+ "discussion_locked": null,
+ "issue_type": "issue",
+ "web_url": "https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/newgit/-/work_items/1",
+ "time_stats": {
+  "time_estimate": 0,
+  "total_time_spent": 0,
+  "human_time_estimate": null,
+  "human_total_time_spent": null
+ },
+ "task_completion_status": {
+  "count": 0,
+  "completed_count": 0
+ },
+ "weight": null,
+ "blocking_issues_count": 0,
+ "has_tasks": true,
+ "task_status": "0 of 0 checklist items completed",
+ "_links": {
+  "self": "https://gitlab.com/api/v4/projects/88032755/issues/1",
+  "notes": "https://gitlab.com/api/v4/projects/88032755/issues/1/notes",
+  "award_emoji": "https://gitlab.com/api/v4/projects/88032755/issues/1/award_emoji",
+  "project": "https://gitlab.com/api/v4/projects/88032755",
+  "closed_as_duplicate_of": null
+ },
+ "references": {
+  "short": "#1",
+  "relative": "#1",
+  "full": "gitlab-ai-hackathon/transcend-october-2026/35141659/newgit#1"
+ },
+ "severity": "UNKNOWN",
+ "subscribed": true,
+ "moved_to_id": null,
+ "imported": false,
+ "imported_from": "none",
+ "service_desk_reply_to": null,
+ "epic_iid": null,
+ "epic": null,
+ "iteration": null,
+ "health_status": null
+}
