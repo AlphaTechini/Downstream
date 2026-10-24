@@ -106,6 +106,19 @@ syscalls now also need 1 call per journey.
 Three clean runs are a small sample. Under the floor, the new feature's heap objects rise of
 70 per journey (16%) is noise; CPU per journey still flags that change.
 
+### Floors on the live bot (flow 1.0.10 to 1.0.12, 2026-10-24)
+
+Notes from 13:55 UTC on, in [flow/floors/](flow/floors/).
+
+| Flow (engine) | Clean !16 | Planted !11: CPU per journey B1 / B2 / C | New feature !14 | NewGit !3: CPU per journey B1 / B2 / C | Source |
+|---|---|---|---|---|---|
+| 1.0.10 (ca4a97a) | flagged peak RSS 5.7 / 5.9 to 6.3 MB | 2.67 / 2.72 / 420.57 ms | CPU and peak RSS (8.7 to 9.5 MB) | not run | mr-16 L151; mr-11 L151; mr-14 L151 |
+| 1.0.11 (b358131, peak RSS needs 10 MB) | 2 of 3 clean; 1 flagged write syscalls 4.83 / 4.85 to 5.20 | 2.81 / 2.74 / 438.84 ms | CPU only | 5.20 / 4.99 / 21.33 ms | mr-16 L437, L639, L897; mr-11 L409; mr-14 L381; newgit-mr-3 L151 |
+| 1.0.12 (22a453c, write syscalls need 1 call) | **0 of 3 flagged** | 2.87 / 2.79 / 424.64 ms | not run | 10.38 / 9.75 / 32.28 ms | mr-16 L1127, L1329, L1531; mr-11 L667; newgit-mr-3 L409 |
+
+The 10 MB floor also hides the new feature's peak memory rise of 0.7 MB (+8%) that 1.0.10 flagged on
+!14; CPU per journey still flags that change.
+
 ## Not shown here
 
 - Noise of the Duo sandbox as a rate: one clean-change run (10001525) came out clean.
