@@ -25,10 +25,9 @@ import (
 
 const buildTimeout = 150 * time.Second
 
-// passBudget is the time all measured passes may take together, so a run with
-// a head-only pass for new journeys still fits the flow's 200 s command limit
-// alongside the two builds. Each pass gets an equal share, capped by the
-// target's own duration.
+// passBudget is the time the three measured passes may take together, so a
+// run fits the flow's 200 s command limit alongside the two builds. Each pass
+// gets an equal share, capped by the target's own duration.
 const passBudget = 120 * time.Second
 
 // Options configure one run.
@@ -127,11 +126,7 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 			compare = append(compare, j)
 		}
 	}
-	passes := 3
-	if len(fresh) > 0 {
-		passes++
-	}
-	if share := passBudget / time.Duration(passes); cfg.Duration > share {
+	if share := passBudget / 3; cfg.Duration > share {
 		cfg.Duration = share
 	}
 	run.Settings.VUs = cfg.VUs
@@ -206,31 +201,52 @@ func execute(ctx context.Context, o Options, run *model.Run) error {
 	run.Journeys = kept
 	keptFile := model.JourneyFile{Version: o.Journeys.Version, Journeys: kept}
 
+	// The head pass carries the new journeys too, as real users would use the new
+	// feature alongside the old ones, so existing pages are measured while it is
+	// in use. Their steps are moved out of C afterwards, so the old-against-new
+	// tables compare the same journeys.
+	mixedFile := keptFile
+	if len(fresh) > 0 {
+		mixedFile = model.JourneyFile{Version: o.Journeys.Version, Journeys: append(append([]model.Journey{}, kept...), fresh...)}
+	}
 	for _, p := range []struct{ label, side, sha string }{
 		{"B1", "base", baseSHA}, {"C", "head", headSHA}, {"B2", "base", baseSHA},
 	} {
-		log.printf("pass %s: %s %s", p.label, p.side, short(p.sha))
-		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds[p.side], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations}, keptFile)
+		file := keptFile
+		if p.label == "C" {
+			file = mixedFile
+		}
+		log.printf("pass %s: %s %s, %d journeys", p.label, p.side, short(p.sha), len(file.Journeys))
+		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds[p.side], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations}, file)
 		if err != nil {
 			return fail("pass "+p.label, err)
 		}
 		res.Label, res.Commit = p.label, p.sha
-		run.Passes = append(run.Passes, res)
-	}
-	if len(fresh) > 0 {
-		// New journeys run last and alone, so their load stays out of the C pass
-		// that is compared with the baseline.
-		log.printf("pass N: head %s, %d new journeys", short(headSHA), len(fresh))
-		res, err := runPass(ctx, passSpec{k6: k6, tmp: tmp, log: log, cfg: cfg, b: builds["head"], runID: runID, vus: cfg.VUs, iterations: cfg.Iterations},
-			model.JourneyFile{Version: o.Journeys.Version, Journeys: fresh})
-		if err != nil {
-			return fail("pass N", err)
+		if p.label == "C" && len(fresh) > 0 {
+			nf := &model.NewFeaturePass{Journeys: fresh, Pass: res}
+			nf.Pass.Steps, res.Steps = splitSteps(res.Steps, fresh)
+			run.NewFeature = nf
 		}
-		res.Label, res.Commit = "N", headSHA
-		run.NewFeature = &model.NewFeaturePass{Journeys: fresh, Pass: res}
+		run.Passes = append(run.Passes, res)
 	}
 	log.printf("done: %d passes", len(run.Passes))
 	return nil
+}
+
+// splitSteps separates the metrics of the given journeys from the rest.
+func splitSteps(steps []model.StepMetrics, js []model.Journey) (of, rest []model.StepMetrics) {
+	ids := map[string]bool{}
+	for _, j := range js {
+		ids[j.ID] = true
+	}
+	for _, s := range steps {
+		if ids[s.Journey] {
+			of = append(of, s)
+		} else {
+			rest = append(rest, s)
+		}
+	}
+	return of, rest
 }
 
 func short(sha string) string {

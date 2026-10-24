@@ -20,8 +20,10 @@ up to 20. `downstream validate` checks the coverage rules below and names what i
   in scope). They run on the old and the new build and are compared.
 - **New journeys** (`"kind": "new"`): together they must reach every route in scan.json
   `new_routes`, the actions the new feature adds. A step on a new route may only appear in
-  a new journey. They run on the new build only, so the report gives their figures and
-  failures, not a comparison. They may start with existing steps such as signing up.
+  a new journey. They run on the new build only, at the same time as the existing and
+  control journeys, so the comparison shows existing pages while the new feature is in use.
+  The report gives their own figures and failures, not a comparison. They may start with
+  existing steps such as signing up.
 - **Control journeys** (`"kind": "control"`): one or two on routes outside the change. They
   catch app-wide effects static analysis cannot see, such as a new feature eating CPU and
   slowing unrelated pages.

@@ -7,9 +7,9 @@ import (
 	"downstream/engine/model"
 )
 
-// newFeature writes the head-only pass. Those journeys use routes the base does
-// not have, so there is nothing to compare: figures are shown as measured and
-// only failed requests count against the change.
+// newFeature writes the new journeys' figures from pass C. Those journeys use
+// routes the base does not have, so there is nothing to compare: figures are
+// shown as measured and only failed requests count against the change.
 func (r *renderer) newFeature() {
 	nf := r.run.NewFeature
 	if nf == nil {
@@ -17,7 +17,7 @@ func (r *renderer) newFeature() {
 	}
 	r.line("#### New feature (new build only)")
 	r.blank()
-	r.line("These journeys use routes this merge request adds, so they ran on the new build only (pass N) and have no baseline. Figures are as measured; failed requests are the only verdict.")
+	r.line("These journeys use routes this merge request adds, so they ran on the new build only, in pass C alongside the journeys above, and have no baseline. Figures are as measured; failed requests are the only verdict. Because they ran in C, the old-against-new figures above show existing pages while the new feature is in use, and C's app CPU time includes their work.")
 	r.blank()
 	r.line("| Journey | Step | Requests | Failed | p50 | p95 | Verdict |")
 	r.line("|---|---|---|---|---|---|---|")
@@ -40,9 +40,6 @@ func (r *renderer) newFeature() {
 				" | " + val(s.P50, "ms") + unitSuffix("ms") + " | " + val(s.P95, "ms") + unitSuffix("ms") + " | " + verdict + " |")
 		}
 	}
-	r.blank()
-	p := nf.Pass.Process
-	r.line("App process during pass N: CPU time " + val(p.CPUSeconds, "s") + unitSuffix("s") + ", peak RSS " + val(p.PeakRSSMB, "MB") + unitSuffix("MB") + ".")
 	r.blank()
 }
 

@@ -121,7 +121,7 @@ type Run struct {
 	Journeys  []Journey `json:"journeys"` // the journeys that were kept
 	Discarded []Discard `json:"discarded"`
 	Passes    []Pass    `json:"passes"` // in run order: B1, C, B2
-	// NewFeature holds the new journeys, run on the head build only after B2.
+	// NewFeature holds the new journeys, which run in pass C only.
 	NewFeature  *NewFeaturePass `json:"new_feature,omitempty"`
 	Findings    []Finding       `json:"findings"`
 	NotMeasured []string        `json:"not_measured"`
@@ -164,8 +164,10 @@ type Pass struct {
 	Steps     []StepMetrics `json:"steps"`
 }
 
-// NewFeaturePass is the head-only pass for journeys that use new routes. There
-// is no baseline, so its figures are reported as measured, not classified.
+// NewFeaturePass holds the new journeys and their step figures from pass C,
+// where they ran alongside the compared journeys. There is no baseline, so the
+// figures are reported as measured, not classified. Process is C's, so it
+// includes all of C's traffic.
 type NewFeaturePass struct {
 	Journeys []Journey `json:"journeys"`
 	Pass     Pass      `json:"pass"`
