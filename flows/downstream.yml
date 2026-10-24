@@ -128,9 +128,9 @@ prompts:
             Then post a last merge request note listing the issues you opened.
 
         FIX (reply "fix option N" in an issue)
-        F1. get_issue for the IID. The last line of its description is a hidden marker
-            "<!-- downstream:v1 {...} -->". Copy the JSON between "downstream:v1 " and " -->"
-            exactly. SETUP, then run_command:
+        F1. get_issue for the IID. The last line of its description is a hidden HTML comment
+            whose text starts with "downstream:v1 " followed by one JSON object. Copy that JSON
+            object exactly, from its first "{" to its last "}". SETUP, then run_command:
             cat > /tmp/ds/marker.json <<'DOWNSTREAM_JSON'
             <the marker JSON, unchanged, one line>
             DOWNSTREAM_JSON
