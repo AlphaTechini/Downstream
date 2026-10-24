@@ -101,10 +101,11 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 - **The product flow has not run.** [`flows/downstream.yml`](flows/downstream.yml) uses tools
   not yet exercised from a custom flow (`create_issue`, `get_issue`, `create_issue_note`;
   T-08, T-09), and the engine has not yet been built inside the sandbox.
-- **Toolchain matching is not handled.** The engine builds the target with the Go in the sandbox
-  (1.22.12). A target that needs a newer Go stops the run at the build stage with a failure
-  note and no verdict. The demo app hit this once and was rewritten to avoid it. Details:
-  [`docs/details.md`](docs/details.md) section 3.4.
+- **Matching the sandbox is not handled.** The engine builds and starts the target with what the
+  sandbox has: Go 1.22.12, Node 20.20.2, Python 3.9.25, no docker, no psql. A target that needs
+  another version, a missing tool or a service stops the run at the build or baseline check
+  stage with a failure note and no verdict. The demo app hit this once (Go 1.24) and was
+  rewritten to avoid it. Details: [`docs/details.md`](docs/details.md) section 3.4.
 - **Static analysis covers Go `net/http` only.** Routes must be registered with string-literal
   patterns on a ServeMux. Other frameworks and languages are not supported.
 - **Fixes are not applied.** `fix option N` checks the option exists; the change itself would
