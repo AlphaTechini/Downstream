@@ -15,7 +15,7 @@ Candidate `aaaaaaaa` against baseline `11111111`. Run started 2026-10-23T09:00:0
 | Write syscalls per journey | not measured | not measured | not measured | - | - | - | - | not-measured |
 | Open fds | 7 | 7 | 7 | +0 (+0%) | 0 | 1 | 1 (14.3%) | noise |
 | Threads | 9 | 10 | 10 | +0 (+0%) | 1 | 2 | 2 (20.0%) | noise |
-| Peak RSS | 10.2 MB | 10.2 MB | 10.2 MB | +0.0 MB (+0%) | 0.0 MB | 0.5 MB | 0.5 MB (5.0%) | noise |
+| Peak RSS | 10.2 MB | 10.2 MB | 10.2 MB | +0.0 MB (+0%) | 0.0 MB | 10.0 MB | 10.0 MB (98.0%) | noise |
 
 Change is against the worse baseline run. A rise counts only when it is more than both the allowed rise and the noise band. Smallest detectable is the larger of the two: the smallest change this run could tell apart from noise.
 
@@ -104,6 +104,6 @@ none
 
 Gated metrics decide the verdict. For each, the worse baseline is the larger of B1 and B2, the noise band is the difference between them, and the allowed rise is the larger of a fraction of the worse baseline and an absolute figure. A metric is a regression when the candidate is above the worse baseline by more than the allowed rise and by more than the noise band, and improved by the opposite rule against the better baseline. When neither holds and the noise band is larger than the allowed rise, no verdict is given (withheld): a change of the allowed size could not be seen in this run. Smallest detectable is the larger of the allowed rise and the noise band. A step that passed on both baseline runs and failed on the candidate is a regression. One gated app metric clearly better and another clearly worse is reported as a trade-off.
 
-Allowed rise by metric: CPU per completed journey 20% of the worse baseline; Bytes written per journey the larger of 1% of the worse baseline and an absolute 1024; Write syscalls per journey 4% of the worse baseline; Open fds an absolute 1; Threads an absolute 2; Peak RSS 5% of the worse baseline; Heap objects allocated per journey the larger of 10% of the worse baseline and an absolute 100; Heap bytes allocated per journey the larger of 5% of the worse baseline and an absolute 16384; GC cycles per pass an absolute 2; Goroutines an absolute 1.
+Allowed rise by metric: CPU per completed journey 20% of the worse baseline; Bytes written per journey the larger of 1% of the worse baseline and an absolute 1024; Write syscalls per journey 4% of the worse baseline; Open fds an absolute 1; Threads an absolute 2; Peak RSS the larger of 5% of the worse baseline and an absolute 10; Heap objects allocated per journey the larger of 10% of the worse baseline and an absolute 100; Heap bytes allocated per journey the larger of 5% of the worse baseline and an absolute 16384; GC cycles per pass an absolute 2; Goroutines an absolute 1.
 
 Latency is advisory: a latency or total CPU figure is called slower when the candidate is worse than the worse baseline run by more than 2 times the noise band (the difference between B1 and B2), by at least 20%, and by at least 10 ms (latency) or 0.5 s (CPU). It never opens an issue.

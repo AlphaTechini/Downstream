@@ -218,8 +218,9 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
   shown in the report but opens no issue. Identical code varied far more in latency than in the
   counters (`docs/details.md`).
 - **The gated rule has a small sample.** 3 clean flow runs, 1 planted and 1 new-feature run.
-  Allocation rises also need 100 objects or 16 KB per journey, and bytes written 1 KB per
-  journey: chosen floors, so a smaller regression of only those kinds passes as noise.
+  Allocation rises also need 100 objects or 16 KB per journey, bytes written 1 KB per journey,
+  and peak memory 10 MB: chosen floors, so a smaller regression of only those kinds passes as
+  noise.
 - **Static analysis covers Go `net/http` only.** Routes must be registered with string-literal
   patterns on a ServeMux. Other frameworks and languages are not supported. Pages behind a
   catch-all handler show as route `/`, and helpers called from HTML templates through a

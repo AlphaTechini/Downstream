@@ -229,7 +229,7 @@ func TestDefaults(t *testing.T) {
 		"open_fds":                   {Absolute: 1},
 		"threads":                    {Absolute: 2},
 		"cpu_ms_per_journey":         {Relative: 0.20},
-		"peak_rss_mb":                {Relative: 0.05},
+		"peak_rss_mb":                {Relative: 0.05, Absolute: 10},
 
 		"alloc_objects_per_journey": {Relative: 0.10, Absolute: 100},
 		"alloc_bytes_per_journey":   {Relative: 0.05, Absolute: 16 << 10},
@@ -389,8 +389,9 @@ func TestGatedRule(t *testing.T) {
 		{"bytes near zero under the 1 KB floor is noise", model.MetricWriteBytesPerJourney, vals{10, 12, 10}, model.ClassNoise, 1024, 1024, "not more than the allowed"},
 		{"syscalls regression", model.MetricWriteSyscallsPerJourney, vals{5, 5.5, 5.1}, model.ClassRegression, 0.204, 0.204, "more than the allowed"},
 		// peak memory
-		{"memory regression", model.MetricRSS, vals{50, 53, 50.2}, model.ClassRegression, 2.51, 2.51, "more than the allowed"},
-		{"memory noise", model.MetricRSS, vals{50, 52.5, 50.2}, model.ClassNoise, 2.51, 2.51, "not more than the allowed"},
+		{"memory regression", model.MetricRSS, vals{300, 318, 301}, model.ClassRegression, 15.05, 15.05, "more than the allowed"},
+		{"memory noise", model.MetricRSS, vals{300, 315, 301}, model.ClassNoise, 15.05, 15.05, "not more than the allowed"},
+		{"memory rise under the 10 MB floor is noise", model.MetricRSS, vals{5.7, 6.3, 5.9}, model.ClassNoise, 10, 10, "not more than the allowed"},
 		// small integer counts use an absolute tolerance
 		{"fds: one more is noise", model.MetricOpenFDs, vals{7, 8, 7}, model.ClassNoise, 1, 1, "an absolute tolerance"},
 		{"fds: two more is a regression", model.MetricOpenFDs, vals{7, 9, 7}, model.ClassRegression, 1, 1, "more than the allowed 1"},

@@ -97,7 +97,9 @@ Round 3 job logs: [10002744](flow/gated/session-10002744-mr16-job-log.txt) L702,
 
 After round 3, the clean change in CI (pipeline 2984592625) flagged bytes written per journey
 rising from a near-zero baseline (0 B/journey, +17%). Bytes written now also needs 1 KB per
-journey, as the allocations need 100 objects or 16 KB.
+journey, as the allocations need 100 objects or 16 KB. The live flow then flagged the clean
+change on peak memory (5.7 / 5.9 MB to 6.3 MB, over 5% of a 6 MB app); peak memory now also
+needs 10 MB, the memory minimum the latency rule used.
 
 Three clean runs are a small sample. Under the floor, the new feature's heap objects rise of
 70 per journey (16%) is noise; CPU per journey still flags that change.
