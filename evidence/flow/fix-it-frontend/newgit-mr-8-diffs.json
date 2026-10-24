@@ -1,0 +1,15 @@
+[
+  {
+    "diff": "@@ -13,7 +13,7 @@\n </head>\n <body data-signed-in=\"{{if .User}}1{{else}}0{{end}}\">\n <a class=\"skip\" href=\"#main\">Skip to content</a>\n-<header class=\"topbar\"><img src=\"/static/promo-banner.png\">\n+<header class=\"topbar\">\n   <a class=\"brand\" href=\"/\">{{template \"logo\"}}<span>NewGit</span></a>\n   <nav class=\"topnav\" aria-label=\"Main\">\n     {{if .User}}<a href=\"/\"{{if eq .Nav \"home\"}} aria-current=\"page\"{{end}}>Projects</a>{{end}}\n",
+    "collapsed": false,
+    "too_large": false,
+    "new_path": "internal/web/templates/layout.html",
+    "old_path": "internal/web/templates/layout.html",
+    "a_mode": "100644",
+    "b_mode": "100644",
+    "new_file": false,
+    "renamed_file": false,
+    "deleted_file": false,
+    "generated_file": false
+  }
+]

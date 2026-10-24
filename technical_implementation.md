@@ -286,6 +286,14 @@ option says, commits it on a new branch, opens a merge request with the requeste
 and re-runs the issue's journeys on it. A human reviews and merges. Downstream never merges or
 approves, which is the "Supervised" autonomy tier.
 
+The state block carries exactly what the re-measure needs. A step finding carries its journey.
+An app-wide finding, such as CPU per journey, carries all of the run's journeys, because the
+cost was measured across all of them. A frontend finding carries the page journeys that showed
+it and the changed frontend files, and its re-measure runs the frontend stage instead of k6.
+On NewGit, `fix it` on a missing-banner issue removed the banner and the re-measure showed 0
+regressions and 9 page checks improved; on a CPU issue it replaced a repeated hash and CPU per
+journey fell from 32.11 ms to 9.63 ms ([C-21](docs/CLAIMS.md)).
+
 ## 5. Safety: the model never holds the keys
 
 An agent that runs code from merge requests must assume the merge request is hostile.
@@ -340,6 +348,7 @@ logs hold no unredacted email, and evidence files match their recorded checksums
 | Live bot, current floors: clean change, 3 runs | 0 flagged | [floors/mr-16-notes.json](evidence/flow/floors/mr-16-notes.json) lines 1127, 1329, 1531 |
 | Live bot: planted change; NewGit feature | caught (CPU per journey 2.87 to 424.64 ms; 10.38 to 32.28 ms) | [floors/](evidence/flow/floors/) |
 | `fix it` end to end | fix merge request opened and re-measured, not merged | [C-13](docs/CLAIMS.md) |
+| `fix it` on a frontend issue and on an app-wide CPU issue | banner removed: 0 regressions, 9 improved; CPU per journey 32.11 to 9.63 ms | [C-21](docs/CLAIMS.md) |
 | Frontend stage in the Duo sandbox, template change | 12 regressions on 4 pages, 3 issues; on the live bot after release, 15 on 5 pages, 3 issues | [C-19](docs/CLAIMS.md); [live-1.0.13-newgit-mr-5-notes.json](evidence/flow/frontend/live-1.0.13-newgit-mr-5-notes.json) line 151 |
 | Frontend stage on React and Svelte builds | every planted kind caught, clean change 0 | [frontend-verify.txt](evidence/frontend-verify.txt) |
 | Engine unit and integration tests | run in every pipeline (`go-test`, `engine-e2e`) | [`.gitlab-ci.yml`](.gitlab-ci.yml) |
@@ -353,7 +362,7 @@ These are stated in full in the README's "What is mocked or not built" and in
   stage and the control journeys, but get no blast radius.
 - The sandbox's false-alarm rate is a small sample: 3 clean runs on the current version.
 - Static frontend builds have run end to end only on a local machine, not yet in the sandbox.
-  `fix it` does not apply to frontend issues.
+  `fix it` on frontend issues has one sandbox run so far.
 - Color contrast, layout, paint and database time are not measured.
 - The model posts the engine's report by copying it, and has twice altered a sentence while
   doing so. The figures come from the engine, but the note is only as faithful as that copy.

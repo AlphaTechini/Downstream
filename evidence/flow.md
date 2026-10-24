@@ -149,6 +149,26 @@ and the file is not in the build. The flow came from branch `frontend-stage` (en
   ([live-1.0.13-newgit-mr-5-notes.json](flow/frontend/live-1.0.13-newgit-mr-5-notes.json) L151,
   L263). The test MR and its issues were closed afterwards.
 
+## NewGit, `fix it` on a frontend issue and on an app-wide CPU issue (engine `af542dc`)
+
+A private experiment flow on NewGit ran the new engine. Raw files are in
+[flow/fix-it-frontend/](flow/fix-it-frontend/).
+
+- Test MR !6 adds the promo banner again. The run opened frontend issues #13 to #15, each with
+  three fix options and a state block of kind `frontend`
+  ([newgit-issues-13-15.json](flow/fix-it-frontend/newgit-issues-13-15.json) L6, L79, L152).
+- A run on the demo MR !3 opened CPU issue #12, whose state block now holds all three of the
+  run's journeys ([newgit-issue-12.json](flow/fix-it-frontend/newgit-issue-12.json) L5).
+- `fix it` on #15 removed the banner in fix MR !8
+  ([diff](flow/fix-it-frontend/newgit-mr-8-diffs.json)) and re-ran the page check on it: 0
+  regressions, 9 improved ([newgit-mr-8-notes.json](flow/fix-it-frontend/newgit-mr-8-notes.json)
+  L5; [job log](flow/fix-it-frontend/fix-job-17439455794-issue-15.txt) L573, L588, L639).
+- `fix it` on #12 replaced the repeated hash in `avatarHue` in fix MR !7 and re-ran the journeys:
+  CPU per completed journey 32.11 / 32.22 ms to 9.63 ms, improved
+  ([newgit-mr-7-notes.json](flow/fix-it-frontend/newgit-mr-7-notes.json) L33;
+  [job log](flow/fix-it-frontend/fix-job-17439456063-issue-12.txt) L585, L603, L668).
+- Neither fix was merged. The model set the requester as reviewer on !7 but not on !8.
+
 ## Not shown here
 
 - Noise of the Duo sandbox as a rate: one clean-change run (10001525) came out clean.

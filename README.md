@@ -64,7 +64,8 @@ scenarios it handles.
   sandbox on a server-rendered app and on real React and Svelte builds
   ([`tools/fecheck`](tools/fecheck/README.md), [C-19, C-20](docs/CLAIMS.md)).
 - **It closes the loop, under human control.** `fix it` commits a fix on a new branch, opens a
-  merge request for the requester and re-measures it; Downstream never merges ([C-13](docs/CLAIMS.md)).
+  merge request for the requester and re-measures it, for backend and frontend issues alike;
+  Downstream never merges ([C-13](docs/CLAIMS.md), [C-21](docs/CLAIMS.md)).
 - **The model never holds the keys.** It writes validated JSON and sentences; every command is
   fixed in the flow, every figure comes from the engine, the engine is pinned outside the merge
   request, and traffic stays on `127.0.0.1` ([`flows/downstream.yml`](flows/downstream.yml)).
@@ -302,6 +303,7 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | Gated rule with floors (flow 1.0.12): a clean change opens no issue; planted and demo-feature changes are caught | Verified in the Duo sandbox: 0 of 3 clean runs flagged; planted CPU per journey 2.87 / 2.79 / 424.64 ms; NewGit feature 10.38 / 9.75 / 32.28 ms | `engine/classify` | [floors/mr-16-notes.json](evidence/flow/floors/mr-16-notes.json) L1127, L1329, L1531; [floors/mr-11-notes.json](evidence/flow/floors/mr-11-notes.json) L667; [floors/newgit-mr-3-notes.json](evidence/flow/floors/newgit-mr-3-notes.json) L409 |
 | A template change on a server-rendered app is caught by the frontend stage in the Duo sandbox, with one issue per cause | Verified, session 10003926 on NewGit !5 (12 page checks regressed on 4 pages; 3 issues) | `engine/runner/frontend.go`, `tools/fecheck/` | [newgit-mr-5-notes.json](evidence/flow/frontend/newgit-mr-5-notes.json) L151; [issues](evidence/flow/frontend/newgit-issues-5-7.json) L6, L79, L152; [job log](evidence/flow/frontend/session-10003926-newgit-mr5-job-log.txt) L641 (npm ci), L659 (frontend), L751 |
 | On real React and Svelte (Vite 8) builds the frontend stage catches every planted kind and passes a clean change | Verified locally (WSL2), not in the Duo sandbox | `fixtures/frontend/`, `scripts/verify_frontend.sh` | [frontend-verify.txt](evidence/frontend-verify.txt) L61, L121, L123 |
+| `fix it` works on frontend issues and on app-wide findings: the fix is committed on a new branch, a merge request is opened, and the page check or the backend run is repeated on it | Verified, NewGit: frontend fix !8 (banner removed; 0 regressions, 9 page checks improved) and CPU fix !7 (CPU per journey 32.11 to 9.63 ms, -70%) | `engine/issues/frontend.go`, `engine/cmd/downstream/main.go` (`writeMarkerJourneys`), flow F7 | [newgit-mr-8-notes.json](evidence/flow/fix-it-frontend/newgit-mr-8-notes.json) L5; [newgit-mr-7-notes.json](evidence/flow/fix-it-frontend/newgit-mr-7-notes.json) L33; [issue 15 notes](evidence/flow/fix-it-frontend/newgit-issue-15-notes.json) L235; [frontend fix job](evidence/flow/fix-it-frontend/fix-job-17439455794-issue-15.txt) L573, L588, L639; [CPU fix job](evidence/flow/fix-it-frontend/fix-job-17439456063-issue-12.txt) L585, L603, L668 |
 | `frontend_node` fetches an exact Node version from the npm registry | Written, not run | `engine/runner/fe_node.go` | none |
 | `verify` reruns after merge | Written, not run | `flows/downstream.yml` | none |
 | Cost in credits of one run | Not measured | none | none |
@@ -335,7 +337,7 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
   above"). Figures come from the engine, but a note is only as faithful as that copy.
 - **The frontend stage is new and lightly tested.** One sandbox session, on a server-rendered
   app. Static frontend builds (`frontend_build`, `npm ci` of the app) have run only locally.
-  `fix it` does not apply to frontend issues. happy-dom has no layout or paint, so color
+  `fix it` on a frontend issue has run once in the sandbox (C-21). happy-dom has no layout or paint, so color
   contrast, visual layout and real paint or CPU timing are never checked; every report says so.
 - **Fix merge requests show the requester as author.** GitLab runs the session as the user who
   mentioned the bot; the bot requests the review and posts the notes.

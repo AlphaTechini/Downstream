@@ -1,0 +1,58 @@
+[
+  {
+    "id": 4082833177,
+    "type": null,
+    "body": "Re-measured: baseline is test/fe-banner-fix at f2ba5450, candidate is this fix at b9d690bd. Improvements show as negative changes.\n### Downstream report\n\n#### Frontend\n\n**Frontend (server build, 3 journeys, Node 20.20.2, base f2ba5450, head b9d690bd):** regressions 0, improved 9, withheld 0.\n\n| Journey | Check | Verdict | Detail |\n|---|---|---|---|\n| home_shows_header | missing assets | improved | /static/promo-banner.png (404) |\n| home_shows_header | accessibility | improved | image-alt at img |\n| home_shows_header | markup validity | improved | wcag/h37 at html > body > header > img |\n| explore_shows_header | missing assets | improved | /static/promo-banner.png (404) |\n| explore_shows_header | accessibility | improved | image-alt at img |\n| explore_shows_header | markup validity | improved | wcag/h37 at html > body > header > img |\n| repo_page_shows_header | missing assets | improved | /static/promo-banner.png (404) |\n| repo_page_shows_header | accessibility | improved | image-alt at img |\n| repo_page_shows_header | markup validity | improved | wcag/h37 at html > body > header > img |\n\nBase against base: every page check gave the same result twice, so the changes above are not noise.\n\nFrontend files changed: `internal/web/templates/layout.html`.\n\nNot checked: color-contrast, visual layout, real paint/CPU timing. Pages are rendered in happy-dom, which runs the app's JavaScript but has no layout or paint.",
+    "author": {
+      "id": 43699135,
+      "username": "ai-downstream-frontend-experiment-gitlab-ai-hackathon",
+      "public_email": null,
+      "name": "downstream-frontend-experiment",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43699135/custom-flow-1.png?v=1792853102",
+      "web_url": "https://gitlab.com/ai-downstream-frontend-experiment-gitlab-ai-hackathon"
+    },
+    "created_at": "2026-10-24T16:11:52.019Z",
+    "updated_at": "2026-10-24T16:11:52.019Z",
+    "system": false,
+    "noteable_id": 554850556,
+    "noteable_type": "MergeRequest",
+    "project_id": 88032755,
+    "resolvable": false,
+    "confidential": false,
+    "internal": false,
+    "imported": false,
+    "imported_from": "none",
+    "noteable_iid": 8,
+    "commands_changes": {}
+  },
+  {
+    "id": 4082833212,
+    "type": null,
+    "body": "mentioned in issue #15",
+    "author": {
+      "id": 43699135,
+      "username": "ai-downstream-frontend-experiment-gitlab-ai-hackathon",
+      "public_email": null,
+      "name": "downstream-frontend-experiment",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/43699135/custom-flow-1.png?v=1792853102",
+      "web_url": "https://gitlab.com/ai-downstream-frontend-experiment-gitlab-ai-hackathon"
+    },
+    "created_at": "2026-10-24T16:11:52.836Z",
+    "updated_at": "2026-10-24T16:11:52.838Z",
+    "system": true,
+    "noteable_id": 554850556,
+    "noteable_type": "MergeRequest",
+    "project_id": 88032755,
+    "resolvable": false,
+    "confidential": false,
+    "internal": false,
+    "imported": false,
+    "imported_from": "none",
+    "noteable_iid": 8,
+    "commands_changes": {}
+  }
+]

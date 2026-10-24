@@ -239,6 +239,25 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 - **Does not show:** a run in the Duo sandbox (this ran on a local WSL2 machine, Node 22.23.3);
   Angular, Next.js or server-side rendering frameworks; `frontend_node`, which has not run.
 
+## C-21. `fix it` works on frontend issues and on app-wide findings
+
+- **File:** `engine/issues/frontend.go` (notes and state block for frontend issues),
+  `engine/issues/issues.go` (app-wide markers carry the run's journeys),
+  `engine/cmd/downstream/main.go` (`writeMarkerJourneys`), flow steps R11, R11F and F7. Engine
+  `af542dc`, run by a private experiment flow on NewGit.
+- **Proof:** [newgit-issues-13-15.json](../evidence/flow/fix-it-frontend/newgit-issues-13-15.json) lines 6, 79 and
+  152: three frontend issues with model-written fix options and a state block of kind
+  `frontend`. [Job log](../evidence/flow/fix-it-frontend/fix-job-17439455794-issue-15.txt) lines 573 and 588: `fix it`
+  on #15 parsed the marker and ran the frontend stage on the fix;
+  [newgit-mr-8-notes.json](../evidence/flow/fix-it-frontend/newgit-mr-8-notes.json) line 5: the fix (banner removed,
+  [diff](../evidence/flow/fix-it-frontend/newgit-mr-8-diffs.json)) has 0 regressions and 9 page checks improved.
+  [Job log](../evidence/flow/fix-it-frontend/fix-job-17439456063-issue-12.txt) lines 585 and 603: `fix it` on the
+  app-wide CPU issue #12 parsed the marker's journeys and ran them;
+  [newgit-mr-7-notes.json](../evidence/flow/fix-it-frontend/newgit-mr-7-notes.json) line 33: CPU per completed
+  journey 32.11 / 32.22 ms on the MR to 9.63 ms on the fix (-70%), improved.
+- **Does not show:** more than one run of each; a frontend fix on a static (React or Svelte)
+  build in the sandbox. The model set the requester as reviewer on !7 but not on !8.
+
 ---
 
 ## C-A1. On identical code the rule reports no regression, and the floor is why
