@@ -59,16 +59,76 @@ func parseVmHWMMB(status string) (float64, error) {
 	return 0, fmt.Errorf("no VmHWM line in status")
 }
 
-func readCPUTicks(pid int) (uint64, error) {
-	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+// procDir returns the /proc directory of pid, a child of this process. The Duo
+// sandbox runs commands in their own pid namespace but leaves the outer /proc
+// mounted, so the child's number there differs. There the child is found by
+// its parent (this process, as /proc/self names it) and the last NSpid field.
+func procDir(pid int) (string, error) {
+	link, err := os.Readlink("/proc/self")
+	if err != nil {
+		return "", err
+	}
+	self, err := strconv.Atoi(link)
+	if err != nil {
+		return "", fmt.Errorf("unexpected /proc/self link %q", link)
+	}
+	if self == os.Getpid() {
+		return fmt.Sprintf("/proc/%d", pid), nil
+	}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if _, err := strconv.Atoi(e.Name()); err != nil {
+			continue
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/status")
+		if err != nil {
+			continue
+		}
+		if ppid, nspid, ok := parseStatusIDs(string(b)); ok && ppid == self && nspid == pid {
+			return "/proc/" + e.Name(), nil
+		}
+	}
+	return "", fmt.Errorf("no /proc entry for app pid %d; /proc is from another pid namespace, where this process is %d", pid, self)
+}
+
+// parseStatusIDs returns PPid and the innermost NSpid from /proc/<pid>/status.
+func parseStatusIDs(status string) (ppid, nspid int, ok bool) {
+	var havePPid, haveNSpid bool
+	for _, line := range strings.Split(status, "\n") {
+		if rest, found := strings.CutPrefix(line, "PPid:"); found {
+			v, err := strconv.Atoi(strings.TrimSpace(rest))
+			if err != nil {
+				return 0, 0, false
+			}
+			ppid, havePPid = v, true
+		} else if rest, found := strings.CutPrefix(line, "NSpid:"); found {
+			f := strings.Fields(rest)
+			if len(f) == 0 {
+				return 0, 0, false
+			}
+			v, err := strconv.Atoi(f[len(f)-1])
+			if err != nil {
+				return 0, 0, false
+			}
+			nspid, haveNSpid = v, true
+		}
+	}
+	return ppid, nspid, havePPid && haveNSpid
+}
+
+func readCPUTicks(dir string) (uint64, error) {
+	b, err := os.ReadFile(dir + "/stat")
 	if err != nil {
 		return 0, err
 	}
 	return parseStatTicks(string(b))
 }
 
-func readPeakRSSMB(pid int) (float64, error) {
-	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+func readPeakRSSMB(dir string) (float64, error) {
+	b, err := os.ReadFile(dir + "/status")
 	if err != nil {
 		return 0, err
 	}

@@ -292,7 +292,11 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 		return res, err
 	}
 
-	ticks0, err := readCPUTicks(a.pid)
+	dir, err := procDir(a.pid)
+	if err != nil {
+		return res, fmt.Errorf("finding the app in /proc: %w", err)
+	}
+	ticks0, err := readCPUTicks(dir)
 	if err != nil {
 		return res, fmt.Errorf("reading app CPU time: %w", err)
 	}
@@ -305,11 +309,11 @@ func runPass(ctx context.Context, p passSpec, jf model.JourneyFile) (model.Pass,
 	if kerr != nil {
 		return res, kerr
 	}
-	ticks1, err := readCPUTicks(a.pid)
+	ticks1, err := readCPUTicks(dir)
 	if err != nil {
 		return res, fmt.Errorf("reading app CPU time: %w", err)
 	}
-	rss, err := readPeakRSSMB(a.pid)
+	rss, err := readPeakRSSMB(dir)
 	if err != nil {
 		return res, fmt.Errorf("reading app peak memory: %w", err)
 	}
