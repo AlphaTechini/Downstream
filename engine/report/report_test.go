@@ -1,6 +1,7 @@
 package report
 
 import (
+	"downstream/engine/classify"
 	"encoding/json"
 	"flag"
 	"os"
@@ -51,6 +52,67 @@ func TestGoldenFull(t *testing.T) {
 	golden(t, "report_basic.golden.md", Render(run, &scan))
 }
 
+func TestGoldenProcessCounters(t *testing.T) {
+	run := load[model.Run](t, "run_process.json")
+	scan := load[model.Scan](t, "scan_basic.json")
+	out := Render(run, &scan)
+	golden(t, "report_process.golden.md", out)
+	for _, want := range []string{"CPU time (exact)", "CPU per completed journey", "Bytes written per journey", "Write syscalls per journey", "Open fds", "Threads", "Completed journeys"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing row %q", want)
+		}
+	}
+}
+
+// A run.json from before the counters existed renders without their rows.
+func TestOldRunHasNoCounterRows(t *testing.T) {
+	out := Render(load[model.Run](t, "run_basic.json"), nil)
+	for _, bad := range []string{"(exact)", "per completed journey", "per journey", "Open fds", "Threads", "Completed journeys"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("old run rendered %q", bad)
+		}
+	}
+}
+
+func TestCounterRowsUnmeasuredAndFallback(t *testing.T) {
+	run := load[model.Run](t, "run_process.json")
+	b2 := &run.Passes[2].Process
+	b2.CPUSource = model.CPUSourceProcStat
+	b2.Unmeasured = []string{model.UnmeasuredOpenFDs, model.UnmeasuredWriteBytesPerJourney}
+	b2.OpenFDs, b2.WriteBytesPerJourney = 0, 0
+	out := Render(run, nil)
+	if !strings.Contains(out, "| Open fds | 9 | 9 | not measured |") {
+		t.Errorf("unmeasured fds not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "| Bytes written per journey | 5104 B | 5554 B | not measured |") {
+		t.Errorf("unmeasured bytes not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "10 ms /proc tick count") {
+		t.Errorf("tick fallback not explained")
+	}
+	if strings.Contains(out, "| Open fds | 9 | 9 | 0 |") {
+		t.Errorf("an unread counter was shown as 0")
+	}
+}
+
+// Findings for the new metrics, once the classifier emits them, fill the
+// Change, Noise band and Verdict cells; without one they read "-".
+func TestCounterRowsUseFindingsWhenPresent(t *testing.T) {
+	run := load[model.Run](t, "run_process.json")
+	out := Render(run, nil)
+	if !strings.Contains(out, "| Threads | 7 | 8 | 7 | - | - | - |") {
+		t.Errorf("row without a finding should show dashes:\n%s", out)
+	}
+	run.Findings = append(run.Findings, model.Finding{
+		ID: "app." + model.MetricThreads, Metric: model.MetricThreads, Unit: "count",
+		B1: 7, C: 8, B2: 7, Band: 0, Delta: 1, DeltaPct: 14.3, Class: model.ClassNoise,
+	})
+	out = Render(run, nil)
+	if !strings.Contains(out, "| Threads | 7 | 8 | 7 | +1 (+14%) | 0 | noise |") {
+		t.Errorf("finding not used:\n%s", out)
+	}
+}
+
 func TestGoldenNoScan(t *testing.T) {
 	run := load[model.Run](t, "run_basic.json")
 	out := Render(run, nil)
@@ -76,7 +138,12 @@ func TestGoldenError(t *testing.T) {
 // Every figure in the fixture must appear in the output formatted with the
 // documented decimals, so a number cannot be dropped or reformatted silently.
 func TestFiguresAppear(t *testing.T) {
-	run := load[model.Run](t, "run_basic.json")
+	for _, name := range []string{"run_basic.json", "run_process.json"} {
+		t.Run(name, func(t *testing.T) { figuresAppear(t, load[model.Run](t, name)) })
+	}
+}
+
+func figuresAppear(t *testing.T, run model.Run) {
 	out := Render(run, nil)
 	for _, f := range run.Findings {
 		if f.Metric != model.MetricP95 && f.Class == model.ClassNoise {
@@ -102,13 +169,21 @@ func TestFiguresAppear(t *testing.T) {
 		}
 	}
 	for _, p := range run.Passes {
-		for _, s := range []string{val(p.Process.CPUSeconds, "s"), val(p.Process.PeakRSSMB, "MB")} {
+		want := []string{val(p.Process.CPUSeconds, "s"), val(p.Process.PeakRSSMB, "MB")}
+		if p.Process.CPUSource != "" {
+			want = append(want, fixedDec(p.Process.CPUSecondsExact, 3), fixedDec(p.Process.CPUMsPerJourney, 2),
+				fixedDec(p.Process.WriteBytesPerJourney, 0), fixedDec(p.Process.WriteSyscallsPerJourney, 2),
+				strconv.Itoa(p.Process.OpenFDs), strconv.Itoa(p.Process.Threads), strconv.Itoa(p.Process.CompletedJourneys))
+		}
+		for _, s := range want {
 			if !strings.Contains(out, s) {
 				t.Errorf("pass %s: %q not in output", p.Label, s)
 			}
 		}
 	}
 }
+
+func fixedDec(v float64, n int) string { return strconv.FormatFloat(v, 'f', n, 64) }
 
 func decimals(unit string) int {
 	switch unit {
@@ -124,7 +199,12 @@ func decimals(unit string) int {
 // every number token in the output and require it in an allowed set built from
 // the fixture.
 func TestNoUnexplainedNumbers(t *testing.T) {
-	run := load[model.Run](t, "run_basic.json")
+	for _, name := range []string{"run_basic.json", "run_process.json"} {
+		t.Run(name, func(t *testing.T) { noUnexplainedNumbers(t, load[model.Run](t, name)) })
+	}
+}
+
+func noUnexplainedNumbers(t *testing.T, run model.Run) {
 	out := Render(run, nil)
 	allowed := map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "95": true, "20": true, "50": true, "10": true}
 	for _, f := range run.Findings {
@@ -138,6 +218,13 @@ func TestNoUnexplainedNumbers(t *testing.T) {
 	for _, p := range run.Passes {
 		allowed[val(p.Process.CPUSeconds, "s")] = true
 		allowed[val(p.Process.PeakRSSMB, "MB")] = true
+		if p.Process.CPUSource != "" {
+			for _, v := range []string{fixedDec(p.Process.CPUSecondsExact, 3), fixedDec(p.Process.CPUMsPerJourney, 2),
+				fixedDec(p.Process.WriteBytesPerJourney, 0), fixedDec(p.Process.WriteSyscallsPerJourney, 2),
+				strconv.Itoa(p.Process.OpenFDs), strconv.Itoa(p.Process.Threads), strconv.Itoa(p.Process.CompletedJourneys)} {
+				allowed[v] = true
+			}
+		}
 	}
 	allowed[strconv.Itoa(run.Settings.VUs)] = true
 	allowed[strconv.Itoa(run.Settings.DurationSeconds)] = true
@@ -225,7 +312,9 @@ func TestSummaryAndIssuesToOpen(t *testing.T) {
 			t.Errorf("missing %q", w)
 		}
 	}
-	// without a scan both steps share one group, headed by the failures finding
+	// run_basic.json has no Kind on any finding, so its app-wide regressions join
+	// the largest step group rather than opening an issue of their own.
+	// Without a scan both steps share one group, headed by the failures finding
 	if out := Render(run, nil); !strings.Contains(out, "**Issues to open**\n\n- `signin.login.failures` (2 steps)\n\n2 regressed steps are grouped into 1 by") {
 		t.Errorf("no-scan grouping wrong:\n%s", out)
 	}
@@ -336,5 +425,174 @@ func TestNotReachedIsNotCharted(t *testing.T) {
 	}
 	if !strings.Contains(out, "| n/a |") {
 		t.Errorf("change column should be n/a")
+	}
+}
+
+// gatedRun builds a current-format run: findings come from the classifier, so
+// the report is tested against what the engine writes.
+func gatedRun() model.Run {
+	steps := func(add95, searchFail float64, cpuMs float64) []model.StepMetrics {
+		return []model.StepMetrics{
+			{Journey: "shelf", Step: "signup", Count: 20, P50: 0.6, P95: 1.1, Mean: 0.7},
+			{Journey: "shelf", Step: "add_book", Count: 20, P50: 0.5, P95: add95, Mean: 0.8},
+			{Journey: "catalog", Step: "search", Count: 20, Failures: int(searchFail), P50: 0.9, P95: 1.9, Mean: 1.1},
+		}
+	}
+	proc := func(cpuMs, threads, fds float64) model.ProcessStats {
+		return model.ProcessStats{
+			CPUSeconds: 0.14, PeakRSSMB: 10.2, CPUSecondsExact: 0.156, CPUSource: model.CPUSourceRusage,
+			WriteBytes: 118000, WriteSyscalls: 469, OpenFDs: int(fds), Threads: int(threads), CompletedJourneys: 80,
+			CPUMsPerJourney: cpuMs, WriteBytesPerJourney: 1477, WriteSyscallsPerJourney: 5.86,
+		}
+	}
+	b1 := model.Pass{Label: "B1", Process: proc(2.0, 9, 7), Steps: steps(1.4, 0, 2.0)}
+	c := model.Pass{Label: "C", Process: proc(9.0, 10, 7), Steps: steps(60.5, 5, 9.0)}
+	b2 := model.Pass{Label: "B2", Process: proc(2.1, 10, 7), Steps: steps(1.5, 0, 2.1)}
+	c.Process.Unmeasured = []string{model.UnmeasuredWriteSyscallsPerJourney}
+	c.Process.CPUSeconds = 0.7
+	th := classify.DefaultThresholds()
+	run := model.Run{
+		Version: 1, Base: "1111111122223333444455556666777788889999", Head: "aaaaaaaabbbbccccddddeeeeffff000011112222",
+		StartedAt: "2026-10-23T09:00:00Z", EndedAt: "2026-10-23T09:01:05Z",
+		Settings: model.Settings{VUs: 2, Iterations: 10, DurationSeconds: 60, K6Version: "v0.56.0", Thresholds: th},
+		Journeys: []model.Journey{
+			{ID: "shelf", Goal: "Reader adds a book to their shelf", Steps: []model.Step{
+				{Name: "signup", Method: "POST", Path: "/users", ExpectStatus: 201},
+				{Name: "add_book", Method: "POST", Path: "/shelf/books", ExpectStatus: 201}}},
+			{ID: "catalog", Goal: "Reader searches", Steps: []model.Step{
+				{Name: "search", Method: "GET", Path: "/search", ExpectStatus: 200}}},
+		},
+		Passes: []model.Pass{b1, c, b2},
+	}
+	run.Findings = classify.Classify(run.Passes, th)
+	run.NotMeasured = []string{"database time: not measured"}
+	return run
+}
+
+func TestGoldenGated(t *testing.T) {
+	out := Render(gatedRun(), nil)
+	golden(t, "report_gated.golden.md", out)
+}
+
+func TestGatedSectionOrder(t *testing.T) {
+	out := Render(gatedRun(), nil)
+	at := -1
+	for _, w := range []string{
+		"### Downstream report",
+		"**Findings (gated):**",
+		"**Gated findings (counters, CPU per journey, memory)**",
+		"| Metric | B1 | B2 | C | Change | Noise band | Allowed | Smallest detectable | Verdict |",
+		"**Step failures**",
+		"**Latency (advisory, not used for verdicts)**",
+		"| Step | Baseline p95 (B1 / B2) | Candidate p95 | Change | Noise band | Smallest detectable | Verdict |",
+		"**App process, per pass**",
+		"**p95 per step (advisory)**",
+		"**Issues to open**",
+	} {
+		i := strings.Index(out, w)
+		if i < 0 || i <= at {
+			t.Fatalf("%q missing or out of order (at %d, previous %d):\n%s", w, i, at, out)
+		}
+		at = i
+	}
+}
+
+// Every finding prints its noise band and smallest detectable change.
+func TestGatedFiguresAppear(t *testing.T) {
+	run := gatedRun()
+	out := Render(run, nil)
+	for _, f := range run.Findings {
+		if f.Class == model.ClassNotMeasured {
+			continue
+		}
+		if f.Class == model.ClassNoise && f.Metric != model.MetricP95 && f.Journey != "" {
+			continue // p50 and mean rows appear only when they add something
+		}
+		for name, v := range map[string]float64{"b1": f.B1, "c": f.C, "b2": f.B2, "band": f.Band, "detectable": f.Detectable} {
+			if f.Detectable == 0 && name == "detectable" {
+				continue
+			}
+			if s := val(v, f.Unit); !strings.Contains(out, s) {
+				t.Errorf("%s: %s %q not in output", f.ID, name, s)
+			}
+		}
+	}
+	for _, w := range []string{
+		"| CPU per completed journey | 2.00 ms/journey | 2.10 ms/journey | 9.00 ms/journey | +6.90 ms/journey (+329%) | 0.10 ms/journey | 0.42 ms/journey | 0.42 ms/journey (20.0%) | regression |",
+		"| Write syscalls per journey | not measured | not measured | not measured | - | - | - | - | not-measured |",
+		"| Threads | 9 | 10 | 10 | +0 (+0%) | 1 | 2 | 2 (20.0%) | noise |",
+		"| Reader searches | `search` | 0 / 0 | 5 | +5 | 0 | 1 | regression |",
+		"| `add_book` | 1.4 / 1.5 ms | 60.5 ms | +59.0 ms (+3933%) | 0.1 ms | 10.0 ms (666.7%) | slower |",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing row %q in:\n%s", w, out)
+		}
+	}
+	adv := out[strings.Index(out, "**Latency (advisory, not used"):strings.Index(out, "**App process, per pass**")]
+	if strings.Contains(adv, "| regression |") || strings.Contains(adv, "| improved |") {
+		t.Errorf("an advisory row is given a verdict word:\n%s", adv)
+	}
+}
+
+func TestGatedLatencyOnlyHasNoIssue(t *testing.T) {
+	run := gatedRun()
+	var keep []model.Finding
+	for _, f := range run.Findings {
+		if !f.Decides() || f.Class == model.ClassNoise || f.Class == model.ClassNotMeasured {
+			keep = append(keep, f)
+		}
+	}
+	run.Findings = keep
+	for i := range run.Findings {
+		if run.Findings[i].Metric == model.MetricFailures || run.Findings[i].Metric == model.MetricCPUPerJourney {
+			run.Findings[i].Class = model.ClassNoise
+		}
+	}
+	out := Render(run, nil)
+	for _, w := range []string{
+		"**Findings (gated):** regressed app metrics 0, failing steps 0,",
+		"**Latency (advisory):** slower 2, faster 0.",
+		"**Issues to open**\n\nnone\n",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q in:\n%s", w, out)
+		}
+	}
+}
+
+func TestGatedMethodListsTolerances(t *testing.T) {
+	out := Render(gatedRun(), nil)
+	for _, w := range []string{
+		"CPU per completed journey 20% of the worse baseline",
+		"Open fds an absolute 1",
+		"Threads an absolute 2",
+		"Latency is advisory:",
+		"It never opens an issue.",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("method paragraph lacks %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestGatedTableShowsRuntimeCounters(t *testing.T) {
+	run := gatedRun()
+	for i := range run.Passes {
+		p := &run.Passes[i].Process
+		p.AllocObjectsPerJourney, p.AllocBytesPerJourney, p.GCCycles, p.GCCyclesPerJourney, p.Goroutines = 223, 23000, 3, 0.0375, 7
+	}
+	run.Passes[1].Process.AllocBytesPerJourney = 30000
+	run.Findings = classify.Classify(run.Passes, run.Settings.Thresholds)
+	out := Render(run, nil)
+	for _, want := range []string{
+		"| Heap objects allocated per journey | 223 objects/journey |",
+		"| Heap bytes allocated per journey | 23000 B/journey | 23000 B/journey | 30000 B/journey |",
+		"| GC cycles per pass | 3 cycles | 3 cycles | 3 cycles |",
+		"| Goroutines | 7 | 7 | 7 |",
+		"GC cycles per pass an absolute 2; Goroutines an absolute 1.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report lacks %q", want)
+		}
 	}
 }

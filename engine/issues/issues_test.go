@@ -27,24 +27,46 @@ func journey() model.Journey {
 	}
 }
 
+// lat and gatedApp build findings of the two sorts a current run.json holds.
+func lat(j, step, metric string, b1, c, b2, band, delta, pct float64, class string) model.Finding {
+	return model.Finding{ID: j + "." + step + "." + metric, Journey: j, Step: step, Metric: metric, Unit: "ms",
+		Kind: model.KindLatency, B1: b1, C: c, B2: b2, Band: band, Delta: delta, DeltaPct: pct, Class: class,
+		Reason:     "worse than the worse baseline by " + strconv.FormatFloat(delta, 'f', 1, 64) + " ms",
+		Detectable: 2 * band, DetectablePct: 100 * 2 * band / max(b1, b2)}
+}
+
+func gatedApp(metric, kind, unit string, b1, c, b2, allowed float64, class string) model.Finding {
+	worse := max(b1, b2)
+	band := b1 - b2
+	if band < 0 {
+		band = -band
+	}
+	f := model.Finding{ID: "app." + metric, Metric: metric, Unit: unit, Kind: kind, Gated: true,
+		B1: b1, C: c, B2: b2, Band: band, Delta: c - worse, Class: class, Reason: "gated rule", Allowed: allowed,
+		Detectable: max(allowed, band)}
+	if worse != 0 {
+		f.DeltaPct = 100 * f.Delta / worse
+		f.DetectablePct = 100 * f.Detectable / worse
+	}
+	return f
+}
+
 func fixture() model.Run {
 	return model.Run{
 		Version: 1, Base: baseSHA, Head: headSHA,
 		Journeys: []model.Journey{journey(), {ID: "catalog", Goal: "Reader searches", Steps: []model.Step{{Name: "search", Method: "GET", Path: "/search", ExpectStatus: 200}}}},
 		Findings: []model.Finding{
-			{ID: "shelf.add_book.p95_ms", Journey: "shelf", Step: "add_book", Metric: model.MetricP95, Unit: "ms",
-				B1: 46.3, C: 458.6, B2: 48.1, Band: 1.8, Delta: 410.5, DeltaPct: 853.4, Class: model.ClassRegression,
-				Reason: "worse than the worse baseline by 410.5 ms"},
-			{ID: "shelf.add_book.p50_ms", Journey: "shelf", Step: "add_book", Metric: model.MetricP50, Unit: "ms",
-				B1: 12, C: 120, B2: 12.5, Band: 0.5, Delta: 107.5, DeltaPct: 860, Class: model.ClassRegression,
-				Reason: "worse than the worse baseline by 107.5 ms"},
-			{ID: "shelf.signup.p95_ms", Journey: "shelf", Step: "signup", Metric: model.MetricP95, Unit: "ms",
-				B1: 14, C: 14.5, B2: 14.2, Band: 0.2, Delta: 0.3, DeltaPct: 2, Class: model.ClassNoise},
+			lat("shelf", "add_book", model.MetricP95, 46.3, 458.6, 48.1, 1.8, 410.5, 853.4, model.ClassRegression),
+			lat("shelf", "add_book", model.MetricP50, 12, 120, 12.5, 0.5, 107.5, 860, model.ClassRegression),
+			lat("shelf", "signup", model.MetricP95, 14, 14.5, 14.2, 0.2, 0.3, 2, model.ClassNoise),
 			{ID: "shelf.signup.failures", Journey: "shelf", Step: "signup", Metric: model.MetricFailures, Unit: "count",
+				Kind: model.KindFailures, Gated: true, Detectable: 1,
 				B1: 0, C: 30, B2: 0, Band: 0, Delta: 30, Class: model.ClassRegression,
 				Reason: "passed on both baseline runs, failed 30 times on the candidate"},
-			{ID: "app.cpu_seconds", Metric: model.MetricCPU, Unit: "s",
+			{ID: "app.cpu_seconds", Metric: model.MetricCPU, Unit: "s", Kind: model.KindLatency,
 				B1: 2.31, C: 4.87, B2: 2.35, Band: 0.04, Delta: 2.52, DeltaPct: 107.2, Class: model.ClassRegression},
+			gatedApp(model.MetricCPUPerJourney, model.KindCPU, "ms/journey", 2.31, 4.87, 2.35, 0.47, model.ClassRegression),
+			// a figure from before gating has no kind
 			{ID: "catalog.search.p95_ms", Journey: "catalog", Step: "search", Metric: model.MetricP95, Unit: "ms",
 				B1: 120, C: 60, B2: 123, Band: 3, Delta: -63, DeltaPct: -51, Class: model.ClassTradeOff},
 			{ID: "catalog.search.p50_ms", Journey: "catalog", Step: "search", Metric: model.MetricP50, Unit: "ms",
@@ -69,7 +91,7 @@ func scanFixture() *model.Scan {
 
 func notesFixture() *model.Notes {
 	return &model.Notes{Version: 1, Items: map[string]model.Note{
-		"shelf.add_book.p95_ms": {
+		"app.cpu_ms_per_journey": {
 			LikelyCause: "AddBook now scans every shelf row before inserting.",
 			FixOptions:  []string{"Look the book up by key instead of scanning.", "Revert the scan."},
 		},
@@ -83,43 +105,40 @@ func TestBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(is) != 2 {
-		t.Fatalf("got %d issues, want 2 (one per regressed step; the app regression is listed inside them)", len(is))
+		t.Fatalf("got %d issues, want 2 (the failing step, and one for the app-wide gated regression; latency opens nothing)", len(is))
 	}
 	byID := map[string]Issue{}
 	for _, i := range is {
 		byID[i.FindingID] = i
 	}
-
-	p95 := byID["shelf.add_book.p95_ms"]
-	wantTitle := "[Downstream] Reader adds a book to their shelf: p95 latency up 410.5 ms (+853%)"
-	if p95.Title != wantTitle {
-		t.Errorf("title = %q, want %q", p95.Title, wantTitle)
+	for id := range byID {
+		if strings.Contains(id, "p95") || strings.Contains(id, "p50") || id == "app.cpu_seconds" {
+			t.Errorf("advisory finding %s opened an issue", id)
+		}
 	}
+
 	if got := byID["shelf.signup.failures"].Title; got != "[Downstream] Reader adds a book to their shelf: failures up 30 (was 0)" {
 		t.Errorf("failures title = %q", got)
 	}
-	if _, ok := byID["shelf.add_book.p50_ms"]; ok {
-		t.Errorf("a non-headline metric got its own issue")
-	}
-	if _, ok := byID["app.cpu_seconds"]; ok {
-		t.Errorf("app regression got its own issue although steps regressed")
+	app := byID["app.cpu_ms_per_journey"]
+	wantTitle := "[Downstream] app: CPU per journey up 2.52 ms/journey (+107%)"
+	if app.Title != wantTitle {
+		t.Errorf("title = %q, want %q", app.Title, wantTitle)
 	}
 
-	body := p95.Body
+	body := app.Body
 	order := []string{
 		"Run started by @alice on !12.",
 		"**Changed functions**",
 		"- `store.AddBook` on `POST /shelf/books`",
 		"**Measured**",
-		"| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |",
-		"| shelf | add_book | p95 latency | 46.3 ms | 48.1 ms | 458.6 ms | 1.8 ms | +410.5 ms (+853%) |",
-		"App process:",
-		"- CPU time: B1 2.31 s, B2 2.35 s, C 4.87 s, noise band 0.04 s, change +2.52 s (+107%) against the worse baseline",
+		"| Metric | B1 | B2 | C | Change | Allowed | Noise band | Smallest detectable |",
+		"| CPU per journey | 2.31 ms/journey | 2.35 ms/journey | 4.87 ms/journey | +2.52 ms/journey (+107%) | 0.47 ms/journey | 0.04 ms/journey | 0.47 ms/journey (20.0%) |",
+		"whole app process",
+		"Rule for the headline (`app.cpu_ms_per_journey`): gated rule",
 		"**Repro**",
-		"1. `POST /users`, expect 201",
-		"3. `GET /books/{{book_id}}?full=1`, expect 200",
+		"This figure covers the whole app process",
 		"downstream run --base " + baseSHA + " --head " + headSHA + " --journeys journeys.json --out run.json",
-		"downstream marker parse --journeys-out journeys.json < issue.md",
 		"**Likely cause**",
 		"Likely: AddBook now scans every shelf row before inserting.",
 		"**Fix options**",
@@ -129,19 +148,15 @@ func TestBuild(t *testing.T) {
 		"Reply with a mention of Downstream followed by `fix it` to apply option 1, or `fix option N`",
 		"downstream:v1 ",
 	}
-	pos := 0
-	for _, w := range order {
-		i := strings.Index(body[pos:], w)
-		if i < 0 {
-			t.Fatalf("%q missing or out of order in body:\n%s", w, body)
-		}
-		pos += i + len(w)
-	}
+	assertInOrder(t, body, order)
 	if strings.Contains(body, "store.Lookup") || strings.Contains(body, "store.Unrelated") {
 		t.Errorf("function from a route outside the group is listed")
 	}
-	if !reflect.DeepEqual(p95.Steps, []string{"shelf.add_book.p95_ms"}) {
-		t.Errorf("steps = %v", p95.Steps)
+	if !reflect.DeepEqual(app.Steps, []string{"app.cpu_ms_per_journey"}) {
+		t.Errorf("steps = %v", app.Steps)
+	}
+	if strings.Contains(body, "**Latency on the same run (advisory)**") == false {
+		t.Errorf("the journey with no failing step should have its latency in the app issue:\n%s", body)
 	}
 	if last := lastLine(body); last != "</details>" {
 		t.Errorf("body does not end with the state section: %q", last)
@@ -150,6 +165,50 @@ func TestBuild(t *testing.T) {
 	if strings.Contains(strings.TrimSuffix(strings.TrimPrefix(m, markerPrefix), markerSuffix), "--") {
 		t.Errorf("marker JSON contains \"--\": %s", m)
 	}
+}
+
+func assertInOrder(t *testing.T, body string, order []string) {
+	t.Helper()
+	pos := 0
+	for _, w := range order {
+		i := strings.Index(body[pos:], w)
+		if i < 0 {
+			t.Fatalf("%q missing or out of order in body:\n%s", w, body)
+		}
+		pos += i + len(w)
+	}
+}
+
+// The failing step's issue carries the advisory latency of its own journey,
+// and the app issue carries only the journeys no step issue shows.
+func TestAdvisoryGoesWithItsJourney(t *testing.T) {
+	is, err := Build(fixture(), scanFixture(), notesFixture(), 12, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Issue{}
+	for _, i := range is {
+		byID[i.FindingID] = i
+	}
+	step := byID["shelf.signup.failures"].Body
+	assertInOrder(t, step, []string{
+		"| Journey | Step | Metric | B1 | B2 | C | Noise band | Change |",
+		"| shelf | signup | failures | 0 | 0 | 30 | 0 | +30 |",
+		"**Latency on the same run (advisory)**",
+		"Latency is not used for verdicts",
+		"*Reader adds a book to their shelf*",
+		"| Step | Metric | B1 | B2 | C | Noise band | Change | Smallest detectable |",
+		"| add_book | p95 latency | 46.3 ms | 48.1 ms | 458.6 ms | 1.8 ms | +410.5 ms (+853%) | 3.6 ms (7.5%) |",
+		"**Repro**",
+	})
+	if strings.Contains(step, "p50 latency") {
+		t.Errorf("a step is listed twice in the advisory table:\n%s", step)
+	}
+	app := byID["app.cpu_ms_per_journey"].Body
+	if strings.Contains(app, "add_book") {
+		t.Errorf("the journey shown in the step issue is repeated in the app issue:\n%s", app)
+	}
+	assertInOrder(t, app, []string{"**Latency on the same run (advisory)**", "*App process*", "| - | CPU time | 2.31 s | 2.35 s | 4.87 s | 0.04 s | +2.52 s (+107%) |"})
 }
 
 func markerLine(t *testing.T, body string) string {
@@ -178,7 +237,7 @@ func TestMarkerRoundTrip(t *testing.T) {
 	}
 	var issue Issue
 	for _, i := range is {
-		if i.FindingID == "shelf.add_book.p95_ms" {
+		if i.FindingID == "shelf.signup.failures" {
 			issue = i
 		}
 	}
@@ -187,10 +246,10 @@ func TestMarkerRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := model.Marker{
-		Version: 1, MR: 12, Base: baseSHA, Head: headSHA, FindingID: "shelf.add_book.p95_ms",
-		Metric: model.MetricP95, Step: "add_book", Journey: journey(),
-		B1: 46.3, C: 458.6, B2: 48.1, Band: 1.8,
-		FixOptions: notesFixture().Items["shelf.add_book.p95_ms"].FixOptions,
+		Version: 1, MR: 12, Base: baseSHA, Head: headSHA, FindingID: "shelf.signup.failures",
+		Metric: model.MetricFailures, Step: "signup", Journey: journey(),
+		B1: 0, C: 30, B2: 0, Band: 0,
+		FixOptions: notesFixture().Items["shelf.signup.failures"].FixOptions,
 	}
 	if !reflect.DeepEqual(m, want) {
 		t.Errorf("marker round trip differs:\n got %+v\nwant %+v", m, want)
@@ -272,8 +331,11 @@ func TestValidateNotes(t *testing.T) {
 	notes := func(id string, n model.Note) model.Notes {
 		return model.Notes{Version: 1, Items: map[string]model.Note{id: n}}
 	}
-	if err := ValidateNotes(notes("shelf.add_book.p95_ms", ok), run, scanFixture()); err != nil {
+	if err := ValidateNotes(notes("shelf.signup.failures", ok), run, scanFixture()); err != nil {
 		t.Fatalf("good notes rejected: %v", err)
+	}
+	if err := ValidateNotes(notes("app.cpu_ms_per_journey", ok), run, scanFixture()); err != nil {
+		t.Fatalf("notes for the app issue rejected: %v", err)
 	}
 	long := func(n int) string { return strings.Repeat("a", n) }
 	cases := []struct {
@@ -284,22 +346,22 @@ func TestValidateNotes(t *testing.T) {
 	}{
 		{"unknown id", "nope.x.p95_ms", ok, "not a finding ID"},
 		{"not a regression", "shelf.signup.p95_ms", ok, "not a regression"},
-		{"not the headline", "shelf.add_book.p50_ms", ok, "not a headline finding"},
-		{"app finding while steps regressed", "app.cpu_seconds", ok, "not a headline finding"},
-		{"empty cause", "shelf.add_book.p95_ms", model.Note{FixOptions: ok.FixOptions}, "likely_cause must be 1 to 600"},
-		{"long cause", "shelf.add_book.p95_ms", model.Note{LikelyCause: long(601), FixOptions: ok.FixOptions}, "likely_cause must be 1 to 600"},
-		{"no options", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x"}, "1 to 5 entries"},
-		{"six options", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x", FixOptions: []string{"a", "b", "c", "d", "e", "f"}}, "1 to 5 entries"},
-		{"empty option", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x", FixOptions: []string{" "}}, "1 to 400"},
-		{"long option", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x", FixOptions: []string{long(401)}}, "1 to 400"},
-		{"comment open", "shelf.add_book.p95_ms", model.Note{LikelyCause: "a <!-- b", FixOptions: ok.FixOptions}, "<!--"},
-		{"comment close", "shelf.add_book.p95_ms", model.Note{LikelyCause: "a --> b", FixOptions: ok.FixOptions}, "-->"},
-		{"fence", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x", FixOptions: []string{"```sh\nrm\n```"}}, "```"},
-		{"table", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x\n| a | b |", FixOptions: ok.FixOptions}, "starting with"},
-		{"ms figure", "shelf.add_book.p95_ms", model.Note{LikelyCause: "It takes 412.3 ms now.", FixOptions: ok.FixOptions}, "412.3 ms"},
-		{"percent", "shelf.add_book.p95_ms", model.Note{LikelyCause: "x", FixOptions: []string{"Saves 40% of the time."}}, "40%"},
-		{"MB figure", "shelf.add_book.p95_ms", model.Note{LikelyCause: "Uses 12MB more.", FixOptions: ok.FixOptions}, "12MB"},
-		{"seconds", "shelf.add_book.p95_ms", model.Note{LikelyCause: "Waits 3 s.", FixOptions: ok.FixOptions}, "3 s"},
+		{"advisory regression is not a headline", "shelf.add_book.p50_ms", ok, "not a headline finding"},
+		{"advisory app finding", "app.cpu_seconds", ok, "not a headline finding"},
+		{"empty cause", "shelf.signup.failures", model.Note{FixOptions: ok.FixOptions}, "likely_cause must be 1 to 600"},
+		{"long cause", "shelf.signup.failures", model.Note{LikelyCause: long(601), FixOptions: ok.FixOptions}, "likely_cause must be 1 to 600"},
+		{"no options", "shelf.signup.failures", model.Note{LikelyCause: "x"}, "1 to 5 entries"},
+		{"six options", "shelf.signup.failures", model.Note{LikelyCause: "x", FixOptions: []string{"a", "b", "c", "d", "e", "f"}}, "1 to 5 entries"},
+		{"empty option", "shelf.signup.failures", model.Note{LikelyCause: "x", FixOptions: []string{" "}}, "1 to 400"},
+		{"long option", "shelf.signup.failures", model.Note{LikelyCause: "x", FixOptions: []string{long(401)}}, "1 to 400"},
+		{"comment open", "shelf.signup.failures", model.Note{LikelyCause: "a <!-- b", FixOptions: ok.FixOptions}, "<!--"},
+		{"comment close", "shelf.signup.failures", model.Note{LikelyCause: "a --> b", FixOptions: ok.FixOptions}, "-->"},
+		{"fence", "shelf.signup.failures", model.Note{LikelyCause: "x", FixOptions: []string{"```sh\nrm\n```"}}, "```"},
+		{"table", "shelf.signup.failures", model.Note{LikelyCause: "x\n| a | b |", FixOptions: ok.FixOptions}, "starting with"},
+		{"ms figure", "shelf.signup.failures", model.Note{LikelyCause: "It takes 412.3 ms now.", FixOptions: ok.FixOptions}, "412.3 ms"},
+		{"percent", "shelf.signup.failures", model.Note{LikelyCause: "x", FixOptions: []string{"Saves 40% of the time."}}, "40%"},
+		{"MB figure", "shelf.signup.failures", model.Note{LikelyCause: "Uses 12MB more.", FixOptions: ok.FixOptions}, "12MB"},
+		{"seconds", "shelf.signup.failures", model.Note{LikelyCause: "Waits 3 s.", FixOptions: ok.FixOptions}, "3 s"},
 	}
 	for _, tc := range cases {
 		err := ValidateNotes(notes(tc.id, tc.n), run, scanFixture())
@@ -309,7 +371,7 @@ func TestValidateNotes(t *testing.T) {
 	}
 	// words that merely start with a unit letter, or identifiers with digits, are fine
 	fine := model.Note{LikelyCause: "Calls step 2 of the p95 path and 3 steps of setup.", FixOptions: []string{"Cache results for 2 seconds."}}
-	if err := ValidateNotes(notes("shelf.add_book.p95_ms", fine), run, scanFixture()); err != nil {
+	if err := ValidateNotes(notes("shelf.signup.failures", fine), run, scanFixture()); err != nil {
 		t.Errorf("harmless text rejected: %v", err)
 	}
 }
@@ -324,7 +386,7 @@ func TestBuildRejects(t *testing.T) {
 		t.Errorf("mr 0 accepted")
 	}
 	bad := notesFixture()
-	bad.Items["shelf.add_book.p95_ms"] = model.Note{LikelyCause: "takes 5 ms", FixOptions: []string{"x"}}
+	bad.Items["shelf.signup.failures"] = model.Note{LikelyCause: "takes 5 ms", FixOptions: []string{"x"}}
 	if _, err := Build(fixture(), nil, bad, 1, "a"); err == nil {
 		t.Errorf("invalid notes accepted")
 	}
@@ -378,7 +440,7 @@ func TestLikelyPrefix(t *testing.T) {
 			if !strings.Contains(i.Body, "\nLikely a new validation") || strings.Contains(i.Body, "Likely: Likely") {
 				t.Errorf("prefix added twice:\n%s", i.Body)
 			}
-		case "shelf.add_book.p95_ms":
+		case "app.cpu_ms_per_journey":
 			if !strings.Contains(i.Body, "\nLikely: AddBook") {
 				t.Errorf("prefix missing")
 			}
@@ -437,6 +499,8 @@ func TestRouteMatches(t *testing.T) {
 
 // groupFixture has three causes: a function unique to one step, a shared
 // function carried by two steps, and public routes with no changed function.
+// Its findings have no Kind, as in a run.json written before gating, so the
+// latency regressions in it still decide.
 func groupFixture() (model.Run, *model.Scan) {
 	step := func(name, method, path string) model.Step {
 		return model.Step{Name: name, Method: method, Path: path, ExpectStatus: 200}
@@ -455,7 +519,7 @@ func groupFixture() (model.Run, *model.Scan) {
 		reg("j1", "s3", model.MetricP50, 120, 120),
 		reg("j2", "p1", model.MetricP95, 30, 30),
 		reg("j2", "p2", model.MetricP95, 200, 200),
-		{ID: "app.peak_rss_mb", Metric: model.MetricRSS, Unit: "MB", B1: 50, B2: 50, C: 90, Delta: 40, DeltaPct: 80, Class: model.ClassRegression, Reason: "rss"},
+		{ID: "app.peak_rss_mb", Metric: model.MetricRSS, Unit: "MB", Kind: model.KindMemory, Gated: true, B1: 50, B2: 50, C: 90, Delta: 40, DeltaPct: 80, Class: model.ClassRegression, Reason: "rss"},
 	}
 	scan := &model.Scan{Changed: []model.Impact{
 		{Route: model.Route{Method: "POST", Path: "/a"}, ChangedFuncs: []string{"pkg.Shared", "pkg.OnlyA"}},
@@ -487,13 +551,14 @@ func TestGrouping(t *testing.T) {
 		{"pkg.Shared", []string{"j1.s2.p95_ms", "j1.s3.p50_ms"}, "j1.s3.p50_ms"},
 		{"", []string{"j2.p1.p95_ms", "j2.p2.p95_ms"}, "j2.p2.p95_ms"},
 		{"pkg.OnlyA,pkg.Shared", []string{"j1.s1.p95_ms"}, "j1.s1.p95_ms"},
+		{"pkg.OnlyA,pkg.Shared", nil, "app.peak_rss_mb"}, // the app issue lists the diff's functions on every route
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("groups:\n got %+v\nwant %+v", got, want)
 	}
-	// app regression joins the first of the largest groups
-	if len(plan.Groups[0].App) != 1 || len(plan.Groups[1].App) != 0 {
-		t.Errorf("app regression not attached to the largest group")
+	// the app regression forms its own issue after the step groups
+	if len(plan.Groups) != 4 || !plan.Groups[3].AppIssue || len(plan.Groups[3].App) != 1 || plan.AppRegressions != 1 {
+		t.Fatalf("app regression not in its own last group: %+v", plan)
 	}
 
 	is, err := Build(run, scan, nil, 4, "dana")
@@ -504,6 +569,10 @@ func TestGrouping(t *testing.T) {
 		"[Downstream] 2 steps slower via pkg.Shared: worst j1.s3 p50 latency up 120.0 ms (+120%)",
 		"[Downstream] 2 steps slower on routes outside the diff's call paths: worst j2.p2 p95 latency up 200.0 ms (+200%)",
 		"[Downstream] Writer edits: p95 latency up 50.0 ms (+50%)",
+	}
+	titles = append(titles, "[Downstream] app: peak memory up 40.0 MB (+80%)")
+	if len(is) != len(titles) {
+		t.Fatalf("got %d issues, want %d", len(is), len(titles))
 	}
 	for i, is := range is {
 		if is.Title != titles[i] {
@@ -516,8 +585,8 @@ func TestGrouping(t *testing.T) {
 	if !strings.Contains(is[1].Body, "None: no changed function") || strings.Contains(is[1].Body, "peak memory") {
 		t.Errorf("outside body:\n%s", is[1].Body)
 	}
-	if !strings.Contains(is[0].Body, "peak memory: B1 50.0 MB") {
-		t.Errorf("app process missing from the largest group:\n%s", is[0].Body)
+	if strings.Contains(is[0].Body, "peak memory") || !strings.Contains(is[3].Body, "| peak memory | 50.0 MB | 50.0 MB | 90.0 MB |") {
+		t.Errorf("app regression is not only in the app issue:\n%s\n%s", is[0].Body, is[3].Body)
 	}
 	if !strings.Contains(is[0].Body, "- `pkg.Shared` on `GET /b`") || strings.Contains(is[0].Body, "pkg.OnlyA") {
 		t.Errorf("shared body changed functions wrong:\n%s", is[0].Body)
@@ -535,14 +604,53 @@ func TestGrouping(t *testing.T) {
 	}
 }
 
+// A run.json from before findings had a Kind has no gated/advisory split: the
+// app-wide regression joins the largest step group, and stands alone only when
+// no step regressed.
+func TestLegacyRunAppFindingsJoinLargestGroup(t *testing.T) {
+	run, scan := groupFixture()
+	for i := range run.Findings {
+		run.Findings[i].Kind, run.Findings[i].Gated = "", false
+	}
+	if !Legacy(run) {
+		t.Fatal("run without any Kind is not legacy")
+	}
+	plan := PlanIssues(run, scan)
+	if len(plan.Groups) != 3 || len(plan.Groups[0].App) != 1 || plan.Groups[0].App[0].ID != "app.peak_rss_mb" {
+		t.Fatalf("app finding should join the largest group: %+v", plan)
+	}
+	for _, g := range plan.Groups {
+		if g.AppIssue {
+			t.Errorf("legacy run opened an app issue: %+v", g)
+		}
+	}
+
+	var stepless []model.Finding
+	for _, f := range run.Findings {
+		if f.Journey == "" {
+			stepless = append(stepless, f)
+		}
+	}
+	run.Findings = stepless
+	plan = PlanIssues(run, scan)
+	if len(plan.Groups) != 1 || plan.Groups[0].Headline.ID != "app.peak_rss_mb" {
+		t.Errorf("app finding alone should form one issue: %+v", plan)
+	}
+
+	run.Findings[0].Kind, run.Findings[0].Gated = model.KindMemory, true
+	if Legacy(run) {
+		t.Error("run with a Kind is legacy")
+	}
+}
+
 func TestGroupingWithoutScan(t *testing.T) {
 	run, _ := groupFixture()
 	plan := PlanIssues(run, nil)
-	if len(plan.Groups) != 1 || len(plan.Groups[0].Steps) != 5 {
-		t.Fatalf("want one group of 5 steps, got %+v", plan)
+	if len(plan.Groups) != 2 || len(plan.Groups[0].Steps) != 5 || !plan.Groups[1].AppIssue {
+		t.Fatalf("want one group of 5 steps and the app issue, got %+v", plan)
 	}
 	is, err := Build(run, nil, nil, 4, "dana")
-	if err != nil || len(is) != 1 {
+	if err != nil || len(is) != 2 {
 		t.Fatalf("%v %d", err, len(is))
 	}
 	if is[0].Title != "[Downstream] 5 steps slower: worst j2.p2 p95 latency up 200.0 ms (+200%)" {
@@ -558,8 +666,8 @@ func TestFailuresHeadlineFirst(t *testing.T) {
 	run.Findings = append(run.Findings, model.Finding{ID: "j1.s1.failures", Journey: "j1", Step: "s1", Metric: model.MetricFailures,
 		Unit: "count", C: 3, Delta: 3, Class: model.ClassRegression})
 	h := Headlines(run, nil)
-	if len(h) != 1 || h[0].ID != "j1.s1.failures" {
-		t.Errorf("headlines = %+v, want the failures finding", h)
+	if len(h) != 2 || h[0].ID != "j1.s1.failures" || h[1].ID != "app.peak_rss_mb" {
+		t.Errorf("headlines = %+v, want the failures finding, then the app issue", h)
 	}
 }
 
@@ -654,9 +762,9 @@ func TestHeadlines(t *testing.T) {
 		}
 		return out
 	}
-	// steps regressed: one headline per step, app regressions not headlines
+	// one headline for the failing step, one for the app issue; latency regressions are not headlines
 	got := ids(Headlines(fixture(), scanFixture()))
-	want := []string{"shelf.add_book.p95_ms", "shelf.signup.failures"}
+	want := []string{"shelf.signup.failures", "app.cpu_ms_per_journey"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("headlines = %v, want %v", got, want)
 	}
@@ -703,13 +811,15 @@ func TestAppOnlyIssue(t *testing.T) {
 	run := fixture()
 	var keep []model.Finding
 	for _, f := range run.Findings {
-		if f.Journey == "" || f.Class != model.ClassRegression {
+		if f.Journey == "" && f.Gated || f.Class != model.ClassRegression {
 			keep = append(keep, f)
 		}
 	}
-	run.Findings = append(keep, model.Finding{ID: "app.peak_rss_mb", Metric: model.MetricRSS, Unit: "MB",
-		B1: 48.2, C: 71.9, B2: 48.9, Band: 0.7, Delta: 23, DeltaPct: 47.034, Class: model.ClassRegression, Reason: "rss rule"})
+	run.Findings = append(keep,
+		gatedApp(model.MetricRSS, model.KindMemory, "MB", 48.2, 71.9, 48.9, 0.98, model.ClassRegression),
+		gatedApp(model.MetricThreads, model.KindCounter, "count", 9, 10, 10, 2, model.ClassNoise))
 	h := Headlines(run, nil)
+	// CPU per journey rose 2.52 against 0.47 allowed (5.4 times); memory 23.0 against 0.98 (23 times)
 	if len(h) != 1 || h[0].ID != "app.peak_rss_mb" {
 		t.Fatalf("headlines = %+v, want the peak RSS finding", h)
 	}
@@ -723,21 +833,105 @@ func TestAppOnlyIssue(t *testing.T) {
 	if is[0].Title != "[Downstream] app: peak memory up 23.0 MB (+47%)" {
 		t.Errorf("title = %q", is[0].Title)
 	}
-	for _, w := range []string{
-		"- peak memory: B1 48.2 MB, B2 48.9 MB, C 71.9 MB, noise band 0.7 MB",
-		"- CPU time: B1 2.31 s",
+	assertInOrder(t, is[0].Body, []string{
+		"| Metric | B1 | B2 | C | Change | Allowed | Noise band | Smallest detectable |",
+		"| peak memory | 48.2 MB | 48.9 MB | 71.9 MB | +23.0 MB (+47%) | 1.0 MB | 0.7 MB | 1.0 MB (2.0%) |",
+		"| CPU per journey | 2.31 ms/journey |",
 		"whole app process",
-	} {
-		if !strings.Contains(is[0].Body, w) {
-			t.Errorf("missing %q in:\n%s", w, is[0].Body)
-		}
+	})
+	if strings.Contains(is[0].Body, "| threads |") {
+		t.Errorf("a noise finding is listed as a regression")
 	}
-	if strings.Contains(is[0].Body, "- App process:") {
-		t.Errorf("app-only issue should not nest an App process list")
+	if !reflect.DeepEqual(is[0].Steps, []string{"app.cpu_ms_per_journey", "app.peak_rss_mb"}) {
+		t.Errorf("steps = %v", is[0].Steps)
 	}
 	m, err := ParseMarker(is[0].Body)
-	if err != nil || m.FindingID != "app.peak_rss_mb" {
+	if err != nil || m.FindingID != "app.peak_rss_mb" || m.Journey.ID != "" {
 		t.Errorf("marker: %+v, %v", m, err)
+	}
+}
+
+func TestLatencyAloneOpensNothing(t *testing.T) {
+	run := fixture()
+	var keep []model.Finding
+	for _, f := range run.Findings {
+		if !f.Gated {
+			keep = append(keep, f)
+		}
+	}
+	// only latency (advisory) regressions remain, plus the gated noise
+	run.Findings = append(keep, gatedApp(model.MetricThreads, model.KindCounter, "count", 9, 10, 10, 2, model.ClassNoise))
+	if h := Headlines(run, scanFixture()); len(h) != 0 {
+		t.Errorf("headlines = %+v", h)
+	}
+	if plan := PlanIssues(run, scanFixture()); len(plan.Groups) != 0 || plan.RegressedSteps != 0 {
+		t.Errorf("plan = %+v", plan)
+	}
+	is, err := Build(run, scanFixture(), nil, 5, "carol")
+	if err != nil || len(is) != 0 {
+		t.Errorf("issues = %d, err %v", len(is), err)
+	}
+	if got := len(AdvisoryRegressions(run)); got != 3 {
+		t.Errorf("advisory regressions = %d, want 3 (two step latencies, total CPU seconds)", got)
+	}
+}
+
+func TestAppIssueCountsAgainstTheCap(t *testing.T) {
+	var run model.Run
+	run.Base, run.Head = baseSHA, headSHA
+	scan := &model.Scan{}
+	for g := 1; g <= 6; g++ {
+		jid := "j" + strconv.Itoa(g)
+		path := "/r" + strconv.Itoa(g)
+		scan.Changed = append(scan.Changed, model.Impact{Route: model.Route{Method: "GET", Path: path}, ChangedFuncs: []string{"f" + strconv.Itoa(g)}})
+		run.Journeys = append(run.Journeys, model.Journey{ID: jid, Goal: jid, Steps: []model.Step{{Name: "s", Method: "GET", Path: path, ExpectStatus: 200}}})
+		run.Findings = append(run.Findings, model.Finding{ID: jid + ".s.failures", Journey: jid, Step: "s", Metric: model.MetricFailures,
+			Unit: "count", Kind: model.KindFailures, Gated: true, C: 2, Delta: 2, Class: model.ClassRegression})
+	}
+	run.Findings = append(run.Findings, gatedApp(model.MetricOpenFDs, model.KindCounter, "count", 7, 90, 7, 1, model.ClassRegression))
+	plan := PlanIssues(run, scan)
+	if len(plan.Groups) != maxIssues || !plan.Groups[maxIssues-1].AppIssue || plan.LeftOutGroups != 2 || plan.TotalGroups != 6 {
+		t.Errorf("plan: %d groups, %+v", len(plan.Groups), plan)
+	}
+}
+
+func TestAppHeadlineIsLargestChangeAgainstItsTolerance(t *testing.T) {
+	run := model.Run{Version: 1, Base: baseSHA, Head: headSHA, Findings: []model.Finding{
+		// 100 MB over 1 MB allowed is 100 times; 5 fds over 1 allowed is 4 times
+		gatedApp(model.MetricOpenFDs, model.KindCounter, "count", 7, 12, 7, 1, model.ClassRegression),
+		gatedApp(model.MetricRSS, model.KindMemory, "MB", 50, 150, 50, 1, model.ClassRegression),
+		gatedApp(model.MetricCPUPerJourney, model.KindCPU, "ms/journey", 2, 5, 2, 0.4, model.ClassRegression),
+	}}
+	plan := PlanIssues(run, nil)
+	if len(plan.Groups) != 1 || plan.Groups[0].Headline.ID != "app.peak_rss_mb" {
+		t.Fatalf("plan = %+v", plan)
+	}
+	var ids []string
+	for _, f := range plan.Groups[0].App {
+		ids = append(ids, f.ID)
+	}
+	if !reflect.DeepEqual(ids, []string{"app.peak_rss_mb", "app.cpu_ms_per_journey", "app.open_fds"}) {
+		t.Errorf("order = %v", ids)
+	}
+}
+
+func TestAppTradeOffQuestion(t *testing.T) {
+	run := model.Run{Findings: []model.Finding{
+		gatedApp(model.MetricCPUPerJourney, model.KindCPU, "ms/journey", 2, 5, 2, 0.4, model.ClassTradeOff),
+		gatedApp(model.MetricThreads, model.KindCounter, "count", 20, 10, 20, 2, model.ClassTradeOff),
+	}}
+	qs := Questions(run)
+	if len(qs) != 1 {
+		t.Fatalf("questions = %d", len(qs))
+	}
+	for _, w := range []string{
+		"on the app process, some gated figures got better and others got worse",
+		"Better (change against the worse baseline run):\n\n- threads: -10 (-50%)",
+		"Worse (change against the worse baseline run):\n\n- CPU per journey: +3.00 ms/journey (+150%)",
+	} {
+		if !strings.Contains(qs[0], w) {
+			t.Errorf("missing %q in:\n%s", w, qs[0])
+		}
 	}
 }
 

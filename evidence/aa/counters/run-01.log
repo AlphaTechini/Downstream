@@ -1,0 +1,10 @@
+downstream: base b57fe8729498, head b57fe8729498, k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+downstream: build (base): extracting b57fe8729498
+downstream: build (base): go build -o '/tmp/downstream-run-3573772525/bin/base-app' ./examples/shelf/cmd/shelf
+downstream: head is the same commit as base; building once
+downstream: validate journeys
+downstream: baseline check: one iteration of each journey on base
+downstream: pass B1: base b57fe8729498
+downstream: pass C: head b57fe8729498
+downstream: pass B2: base b57fe8729498
+downstream: done: 3 passes

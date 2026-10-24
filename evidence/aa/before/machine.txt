@@ -1,0 +1,9 @@
+commit: 0fa756eb1ea751743a3b09cf21b928234cb5ec77
+journeys: examples/shelf/journeys.example.json
+date: 2026-10-23T03:44:26Z
+cpus: 4
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+kernel: 6.18.44-fc-v153
+go: go version go1.22.12 linux/amd64
+k6: k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+command: downstream run --base 0fa756eb1ea751743a3b09cf21b928234cb5ec77 --head 0fa756eb1ea751743a3b09cf21b928234cb5ec77 --journeys examples/shelf/journeys.example.json --out run-N.json

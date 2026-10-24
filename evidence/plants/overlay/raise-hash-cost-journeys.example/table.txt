@@ -1,0 +1,14 @@
+run	summary
+run-01	regression=1 trade-off=1 improved=0 withheld=0 advisory=61 discarded=0 passes=3
+run-02	regression=1 trade-off=0 improved=0 withheld=0 advisory=60 discarded=0 passes=3
+run-03	regression=1 trade-off=1 improved=0 withheld=0 advisory=61 discarded=0 passes=3
+
+gated findings that are not noise:
+run-01	app.cpu_ms_per_journey	regression	2.0731	2.0340	245.5913	0.4146	0.0391	0.4146	11746.78
+run-01	app.peak_rss_mb	trade-off	10.1875	10.1523	10.6250	0.2038	0.0352	0.2038	4.29
+run-01	app.write_syscalls_per_journey	trade-off	5.8875	5.9375	5.5750	0.2375	0.0500	0.2375	-6.11
+run-02	app.cpu_ms_per_journey	regression	2.3908	2.1920	251.1111	0.4782	0.1988	0.4782	10403.22
+run-02	app.peak_rss_mb	regression	10.1406	10.1719	10.5781	0.2034	0.0312	0.2034	3.99
+run-03	app.cpu_ms_per_journey	regression	2.1997	2.0407	249.4419	0.4400	0.1591	0.4400	11239.56
+run-03	app.peak_rss_mb	trade-off	10.3086	10.2852	10.6211	0.2062	0.0234	0.2062	3.03
+run-03	app.write_syscalls_per_journey	trade-off	5.9125	5.8625	5.5500	0.2365	0.0500	0.2365	-6.13

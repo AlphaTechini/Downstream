@@ -147,6 +147,7 @@ and in [details.md](details.md).
 | T-13 | Pages publishing on the Free tier (default branch only). | Open, optional | |
 | T-14 | Narrowed allowlist (`include_recommended_allowed: false` plus explicit hosts) still allows the engine's needs. | Open, hardening | |
 | T-15 | `AGENTS.md` injection through `context:inputs.user_rule` in a custom flow. | Open, optional (not depended on) | |
+| T-16 | The flow's model writes the journey steps flow step R6 asks for (negative, edge input, repeated create, page size, second user), with expected statuses read through `downstream files` / `downstream show`. Check: open a merge request with a known change, mention the flow, and compare the posted "Journeys added" note and the `downstream validate` output in the session log with `examples/shelf/journeys.thorough.json`: every changed route should have a non-2xx step and no `warning:` line should remain. Repeat on at least three merge requests. | Open | |
 
 Order of attack: T-07 first (the engine needs the diff), then T-08 and T-09 together (one
 probe flow), then T-10. T-11 and T-12 are reading tasks and can happen any time.

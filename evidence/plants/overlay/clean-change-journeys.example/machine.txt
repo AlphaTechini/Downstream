@@ -1,0 +1,9 @@
+change: clean-change
+journeys: examples/shelf/journeys.example.json
+base: 48ca4f70fbd26f0a8bda000588a1d0f62cf28244
+date: 2026-10-23T04:52:13Z
+cpus: 4
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+go: go version go1.22.12 linux/amd64
+k6: k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+commands: downstream scan --base <base> --head <head> --out scan.json; downstream run --base <base> --head <head> --journeys examples/shelf/journeys.example.json --out run-N.json; downstream summary --run run-N.json --scan scan.json

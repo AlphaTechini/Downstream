@@ -12,11 +12,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"syscall"
+	"unicode"
 
 	"downstream/engine/classify"
 	"downstream/engine/issues"
@@ -36,6 +38,8 @@ const usage = `usage:
   downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
   downstream report   --run run.json [--scan scan.json] --out report.md
   downstream summary  --run run.json --scan scan.json
+  downstream files    --scan scan.json
+  downstream show     --scan scan.json --head <sha> --file N [--repo .]
   downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <username> --out issues.json
   downstream marker   parse [--journeys-out journeys.json] < issue_body.md
   downstream fixcheck --marker marker.json --option N
@@ -56,6 +60,8 @@ func main() {
 		"run":      cmdRun,
 		"report":   cmdReport,
 		"summary":  cmdSummary,
+		"files":    cmdFiles,
+		"show":     cmdShow,
 		"issues":   cmdIssues,
 		"marker":   cmdMarker,
 		"fixcheck": cmdFixcheck,
@@ -117,12 +123,18 @@ func cmdValidate(args []string) error {
 	if err := parse(fs, args, "journeys", "scan"); err != nil {
 		return err
 	}
-	f, err := readJourneys(*jpath)
+	return validate(os.Stdout, *jpath, *spath)
+}
+
+// validate fails only on invalid journeys. Lint findings are printed as
+// warnings after the ok line and never change the result.
+func validate(w io.Writer, jpath, spath string) error {
+	f, err := readJourneys(jpath)
 	if err != nil {
 		return err
 	}
 	var s model.Scan
-	if err := readJSON(*spath, &s); err != nil {
+	if err := readJSON(spath, &s); err != nil {
 		return err
 	}
 	if err := journey.Validate(f, s.Routes); err != nil {
@@ -141,10 +153,13 @@ func cmdValidate(args []string) error {
 		}
 		kinds[k]++
 	}
-	fmt.Printf("ok: %d journeys (%d existing, %d new, %d control), %d steps\n",
+	fmt.Fprintf(w, "ok: %d journeys (%d existing, %d new, %d control), %d steps\n",
 		len(f.Journeys), kinds[model.KindExisting], kinds[model.KindNew], kinds[model.KindControl], steps)
 	for _, r := range uncovered {
-		fmt.Printf("uncovered: %s %s (journey cap reached)\n", r.Method, r.Path)
+		fmt.Fprintf(w, "uncovered: %s %s (journey cap reached)\n", r.Method, r.Path)
+	}
+	for _, msg := range journey.Lint(f, s) {
+		fmt.Fprintf(w, "warning: %s\n", msg)
 	}
 	return nil
 }
@@ -204,7 +219,8 @@ func cmdReport(args []string) error {
 }
 
 // cmdSummary prints one count per line so the flow and CI can branch on it
-// without reading the report.
+// without reading the report. regression counts the issues that would open;
+// advisory counts latency regressions, which open none.
 func cmdSummary(args []string) error {
 	fs := flag.NewFlagSet("summary", flag.ContinueOnError)
 	rpath := fs.String("run", "", "run.json")
@@ -220,25 +236,116 @@ func cmdSummary(args []string) error {
 	if err != nil {
 		return err
 	}
+	writeSummary(os.Stdout, run, scan)
+	return nil
+}
+
+// writeSummary prints the counts. Only findings that may decide count in all
+// but the advisory line: latency is advisory and has its own line.
+func writeSummary(w io.Writer, run model.Run, scan *model.Scan) {
 	counts := map[string]int{}
+	tradeOffs := map[string]bool{}
 	for _, f := range run.Findings {
+		if !f.Decides() {
+			continue
+		}
 		counts[f.Class]++
-	}
-	tradeJourneys := map[string]bool{}
-	for _, f := range run.Findings {
 		if f.Class == model.ClassTradeOff {
-			tradeJourneys[f.Journey] = true
+			tradeOffs[f.Journey] = true
 		}
 	}
-	fmt.Printf("regression=%d\n", len(issues.Headlines(run, scan)))
-	fmt.Printf("trade-off=%d\n", len(tradeJourneys))
-	fmt.Printf("improved=%d\n", counts[model.ClassImproved])
-	fmt.Printf("withheld=%d\n", counts[model.ClassWithheld])
-	fmt.Printf("discarded=%d\n", len(run.Discarded))
-	fmt.Printf("passes=%d\n", len(run.Passes))
-	fmt.Printf("new_failures=%d\n", report.NewFailures(run))
+	fmt.Fprintf(w, "regression=%d\n", len(issues.Headlines(run, scan)))
+	fmt.Fprintf(w, "trade-off=%d\n", len(tradeOffs))
+	fmt.Fprintf(w, "improved=%d\n", counts[model.ClassImproved])
+	fmt.Fprintf(w, "withheld=%d\n", counts[model.ClassWithheld])
+	fmt.Fprintf(w, "advisory=%d\n", len(issues.AdvisoryRegressions(run)))
+	fmt.Fprintf(w, "discarded=%d\n", len(run.Discarded))
+	fmt.Fprintf(w, "passes=%d\n", len(run.Passes))
+	fmt.Fprintf(w, "new_failures=%d\n", report.NewFailures(run))
 	if run.Error != nil {
-		fmt.Printf("stopped=%s\n", run.Error.Stage)
+		fmt.Fprintf(w, "stopped=%s\n", run.Error.Stage)
+	}
+}
+
+// readableFiles is the list of files the model may read, in the order the
+// numbers refer to: the files the diff changed and the file of every route in
+// the blast radius, de-duplicated and sorted. A path that is not a plain
+// relative path inside the repository, or that holds a control character, is
+// left out, so a line of the list is always one path.
+func readableFiles(s *model.Scan) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if p == "" || seen[p] || !filepath.IsLocal(p) || strings.ContainsFunc(p, unicode.IsControl) {
+			return
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	for _, f := range s.ChangedFiles {
+		add(f.Path)
+	}
+	for _, im := range s.Changed {
+		add(im.File)
+	}
+	for _, im := range s.Affected {
+		add(im.File)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func cmdFiles(args []string) error {
+	fs := flag.NewFlagSet("files", flag.ContinueOnError)
+	spath := fs.String("scan", "", "scan.json")
+	if err := parse(fs, args, "scan"); err != nil {
+		return err
+	}
+	var s model.Scan
+	if err := readJSON(*spath, &s); err != nil {
+		return err
+	}
+	listFiles(os.Stdout, readableFiles(&s))
+	return nil
+}
+
+// listFiles prints one "N<tab>path" line per file, numbered from 1.
+func listFiles(w io.Writer, files []string) {
+	for i, p := range files {
+		fmt.Fprintf(w, "%d\t%s\n", i+1, p)
+	}
+}
+
+func cmdShow(args []string) error {
+	fs := flag.NewFlagSet("show", flag.ContinueOnError)
+	spath := fs.String("scan", "", "scan.json")
+	head := fs.String("head", "", "candidate commit SHA")
+	n := fs.Int("file", 0, "file number from `downstream files`")
+	repo := fs.String("repo", ".", "repository root")
+	if err := parse(fs, args, "scan", "head", "file"); err != nil {
+		return err
+	}
+	if err := commits(*repo, *head); err != nil {
+		return err
+	}
+	var s model.Scan
+	if err := readJSON(*spath, &s); err != nil {
+		return err
+	}
+	return showFile(os.Stdout, *repo, *head, readableFiles(&s), *n)
+}
+
+// showFile writes the content of entry n (1-based) of files at commit head.
+// The path goes to git as one argument; no shell is involved.
+func showFile(w io.Writer, repo, head string, files []string, n int) error {
+	if n < 1 || n > len(files) {
+		return fmt.Errorf("--file %d is out of range: the list has %d files", n, len(files))
+	}
+	var stderr strings.Builder
+	cmd := exec.Command("git", "-C", repo, "show", head+":"+files[n-1])
+	cmd.Stdout, cmd.Stderr = w, &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git show %s: %w: %s", files[n-1], err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
 }

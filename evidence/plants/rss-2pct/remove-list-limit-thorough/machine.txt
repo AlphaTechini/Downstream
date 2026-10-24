@@ -1,0 +1,9 @@
+change: remove-list-limit
+journeys: examples/shelf/journeys.thorough.json
+base: 35fe494c0724916ff34ab2dd2212ffa797b63695
+date: 2026-10-23T05:19:48Z
+cpus: 4
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+go: go version go1.22.12 linux/amd64
+k6: k6 v0.56.0 (commit/50afb99947, go1.23.4, linux/amd64)
+commands: downstream scan --base <base> --head <head> --out scan.json; downstream run --base <base> --head <head> --journeys examples/shelf/journeys.thorough.json --out run-N.json; downstream summary --run run-N.json --scan scan.json

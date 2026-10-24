@@ -138,13 +138,20 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 		w("")
 	}
 	if len(g.App) > 0 {
-		w("App process:")
-		w("")
+		w("| Metric | B1 | B2 | C | Change | Allowed | Noise band | Smallest detectable |")
+		w("|---|---|---|---|---|---|---|---|")
 		for _, a := range g.App {
-			measuredLines(w, a)
+			w("| " + metricWords(a.Metric) + " | " + figure(a.B1, a.Unit) + " | " + figure(a.B2, a.Unit) + " | " + figure(a.C, a.Unit) +
+				" | " + cell(deltaWords(a)) + " | " + allowedWords(a) + " | " + figure(a.Band, a.Unit) +
+				" | " + cell(detectableWords(a)) + " |")
 		}
 		w("")
+		w("These are measured on the whole app process, not per journey. Change is against the worse baseline run. " +
+			"Allowed is the tolerance for the metric. A rise counts only when it is more than both the allowed figure and the noise band. " +
+			"Smallest detectable is the larger of the two: the smallest change this run could have told apart from noise.")
+		w("")
 	}
+	advisoryLines(w, g.Advisory, run)
 	w("Rule for the headline (" + code(f.ID) + "): " + oneLine(f.Reason))
 	w("")
 	w("**Repro**")
@@ -221,6 +228,9 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 	for _, s := range g.Steps {
 		ids = append(ids, s.ID)
 	}
+	for _, a := range g.App {
+		ids = append(ids, a.ID)
+	}
 	if len(ids) == 0 {
 		ids = append(ids, f.ID)
 	}
@@ -228,10 +238,87 @@ func build(run model.Run, scan *model.Scan, note *model.Note, g Group, mr int, s
 	return Issue{FindingID: f.ID, Title: g.title(run), Body: b.String(), Steps: ids}, nil
 }
 
-func measuredLines(w func(string), f model.Finding) {
-	w("- " + metricWords(f.Metric) + ": B1 " + figure(f.B1, f.Unit) + ", B2 " + figure(f.B2, f.Unit) +
-		", C " + figure(f.C, f.Unit) + ", noise band " + figure(f.Band, f.Unit) +
-		", change " + deltaWords(f) + " against the worse baseline")
+// advisoryLines writes the latency regressions that share the issue, per
+// journey. They are not used for verdicts and open nothing on their own.
+func advisoryLines(w func(string), fs []model.Finding, run model.Run) {
+	if len(fs) == 0 {
+		return
+	}
+	w("**Latency on the same run (advisory)**")
+	w("")
+	w("Latency is not used for verdicts: it varies too much between runs of identical code. " +
+		"These figures rose on this run and are listed for context only. Each step shows one figure: p95, else mean, else p50.")
+	w("")
+	// One row per step: its p95 if that rose, else mean, else p50.
+	chosen := map[string]model.Finding{}
+	for _, f := range rank(fs, headlineOrder) {
+		k := f.Journey + "\x00" + f.Step
+		if _, ok := chosen[k]; !ok {
+			chosen[k] = f
+		}
+	}
+	var order []string
+	byJourney := map[string][]model.Finding{}
+	emitted := map[string]bool{}
+	for _, f := range fs {
+		k := f.Journey + "\x00" + f.Step
+		if emitted[k] {
+			continue
+		}
+		emitted[k] = true
+		if _, ok := byJourney[f.Journey]; !ok {
+			order = append(order, f.Journey)
+		}
+		byJourney[f.Journey] = append(byJourney[f.Journey], chosen[k])
+	}
+	for _, j := range order {
+		label := "App process"
+		if j != "" {
+			label = j
+			for _, rj := range run.Journeys {
+				if rj.ID == j && oneLine(rj.Goal) != "" {
+					label = oneLine(rj.Goal)
+				}
+			}
+		}
+		w("*" + cell(label) + "*")
+		w("")
+		w("| Step | Metric | B1 | B2 | C | Noise band | Change | Smallest detectable |")
+		w("|---|---|---|---|---|---|---|---|")
+		for _, f := range byJourney[j] {
+			step := f.Step
+			if step == "" {
+				step = "-"
+			}
+			w("| " + cell(step) + " | " + metricWords(f.Metric) + " | " + figure(f.B1, f.Unit) + " | " + figure(f.B2, f.Unit) +
+				" | " + figure(f.C, f.Unit) + " | " + figure(f.Band, f.Unit) + " | " + cell(deltaWords(f)) +
+				" | " + cell(detectableWords(f)) + " |")
+		}
+		w("")
+	}
+}
+
+// allowedWords is the tolerance as a figure, or n/a for a finding from before
+// gating, which carries none.
+func allowedWords(f model.Finding) string {
+	if f.Allowed == 0 {
+		return "n/a"
+	}
+	return figure(f.Allowed, f.Unit)
+}
+
+// detectableWords is "5.00 ms/journey (10.0%)": the smallest change the run
+// could tell from noise, and its share of the worse baseline when that is not
+// zero.
+func detectableWords(f model.Finding) string {
+	if f.Detectable == 0 {
+		return "n/a"
+	}
+	s := figure(f.Detectable, f.Unit)
+	if f.DetectablePct != 0 {
+		s += " (" + strconv.FormatFloat(f.DetectablePct, 'f', 1, 64) + "%)"
+	}
+	return s
 }
 
 func cell(s string) string {
@@ -280,15 +367,37 @@ func metricWords(m string) string {
 		return "CPU time"
 	case model.MetricRSS:
 		return "peak memory"
+	case model.MetricCPUPerJourney:
+		return "CPU per journey"
+	case model.MetricWriteBytesPerJourney:
+		return "bytes written per journey"
+	case model.MetricWriteSyscallsPerJourney:
+		return "write syscalls per journey"
+	case model.MetricOpenFDs:
+		return "open file descriptors"
+	case model.MetricThreads:
+		return "threads"
+	case model.MetricAllocObjectsPerJourney:
+		return "heap objects allocated per journey"
+	case model.MetricAllocBytesPerJourney:
+		return "heap bytes allocated per journey"
+	case model.MetricGCCycles:
+		return "GC cycles per pass"
+	case model.MetricGCCyclesPerJourney:
+		return "GC cycles per journey"
+	case model.MetricGoroutines:
+		return "goroutines"
 	}
 	return m
 }
 
 func decimals(unit string) int {
 	switch unit {
-	case "s":
+	case "s", "ms/journey", "calls/journey":
 		return 2
-	case "count":
+	case "GC cycles/journey":
+		return 4
+	case "count", "B/journey", "objects/journey", "cycles":
 		return 0
 	}
 	return 1
@@ -442,17 +551,19 @@ func FixCheck(m model.Marker, option int) (string, error) {
 	return m.FixOptions[option-1], nil
 }
 
-// Questions returns one markdown question per trade-off journey, for the
-// merge request. Journeys follow run.Journeys order, then any others sorted.
+// Questions returns one markdown question per trade-off, for the merge
+// request: one for each journey that has one (a run.json from before gating),
+// then one for the app process. Journeys follow run.Journeys order, then any
+// others sorted.
 func Questions(run model.Run) []string {
 	byJourney := map[string][]model.Finding{}
 	for _, f := range run.Findings {
-		if f.Class == model.ClassTradeOff && f.Journey != "" {
+		if f.Class == model.ClassTradeOff {
 			byJourney[f.Journey] = append(byJourney[f.Journey], f)
 		}
 	}
 	var order []string
-	seen := map[string]bool{}
+	seen := map[string]bool{"": true}
 	for _, j := range run.Journeys {
 		if len(byJourney[j.ID]) > 0 && !seen[j.ID] {
 			order = append(order, j.ID)
@@ -467,6 +578,9 @@ func Questions(run model.Run) []string {
 	}
 	sort.Strings(rest)
 	order = append(order, rest...)
+	if len(byJourney[""]) > 0 {
+		order = append(order, "")
+	}
 
 	goal := func(id string) string {
 		for _, j := range run.Journeys {
@@ -483,7 +597,10 @@ func Questions(run model.Run) []string {
 		sort.Slice(fs, func(i, j int) bool { return fs[i].ID < fs[j].ID })
 		var better, worse []string
 		for _, f := range fs {
-			line := "- " + code(f.Step) + " " + metricWords(f.Metric) + ": " + deltaWords(f)
+			line := "- " + metricWords(f.Metric) + ": " + deltaWords(f)
+			if f.Step != "" {
+				line = "- " + code(f.Step) + " " + metricWords(f.Metric) + ": " + deltaWords(f)
+			}
 			if f.Delta > 0 {
 				worse = append(worse, line)
 			} else {
@@ -491,8 +608,13 @@ func Questions(run model.Run) []string {
 			}
 		}
 		var b strings.Builder
-		b.WriteString("**Question for the reviewers:** on " + goal(id) +
-			", some latency figures got better and others got worse. Is that acceptable for this change? No issue opened.\n")
+		if id == "" {
+			b.WriteString("**Question for the reviewers:** on the app process, some gated figures got better and others got worse. " +
+				"Is that acceptable for this change? No issue opened.\n")
+		} else {
+			b.WriteString("**Question for the reviewers:** on " + goal(id) +
+				", some latency figures got better and others got worse. Is that acceptable for this change? No issue opened.\n")
+		}
 		b.WriteString("\nBetter (change against the worse baseline run):\n\n" + strings.Join(better, "\n") + "\n")
 		b.WriteString("\nWorse (change against the worse baseline run):\n\n" + strings.Join(worse, "\n") + "\n")
 		out = append(out, b.String())

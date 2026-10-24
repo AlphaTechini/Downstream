@@ -142,6 +142,8 @@ downstream validate --journeys journeys.json --scan scan.json
 downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
 downstream report   --run run.json [--scan scan.json] --out report.md
 downstream summary  --run run.json --scan scan.json   # one count per line: regression=N ...
+downstream files    --scan scan.json                 # numbered list of files the model may read
+downstream show     --scan scan.json --head <sha> --file N   # one of them at the head commit
 downstream issues   --run run.json [--scan scan.json] [--notes notes.json] --mr <iid> --starter <user> --out issues.json
 downstream marker   parse [--journeys-out journeys.json] < issue_body.md
 downstream fixcheck --marker marker.json --option N  # checks option N exists; does not apply it
@@ -170,6 +172,7 @@ change how it is measured. Parser: `engine/target`. This repository's own file:
 
 ```yaml
 root: examples/shelf                      # directory scanned for routes
+main_dir: examples/shelf/cmd/shelf        # package main; the engine adds runtime counters here
 build: go build -o {out} ./examples/shelf/cmd/shelf
 start: "{out}"
 port_env: PORT                            # engine sets this to a free loopback port
@@ -230,6 +233,18 @@ The model writes journeys; the engine decides whether to trust them.
    "Reviewer summary"), so a human can say "yes, users do that" or "add one for X" before
    anyone reads numbers.
 
+Coverage rules (`agentnotes.md` "Coverage per route", flow step R6): for each changed or
+affected route the journeys must include the happy path, a negative step, an edge-input step,
+a repeated request if the route creates data, enough data to pass a list's page size, and a
+second user if the route is scoped to an owner, with expected statuses read from the head code.
+`downstream validate` warns, without failing, when a changed route is covered only by 2xx steps
+or not at all, or an affected route is not covered (`engine/journey/lint.go`).
+`examples/shelf/journeys.thorough.json` has all of these against the demo app, and
+`examples/shelf/thorough_test.go` replays it against the app. Whether the flow's model
+reliably writes such steps has **not been tested**. Known limit: the model may read only
+changed files and route registration files, so a handler in an unchanged file cannot settle a
+status.
+
 At least one journey must avoid the changed route and share only a dependency with it. That
 is the point of the product: finding the thing nobody was looking at.
 
@@ -286,38 +301,141 @@ answers with a redirect to another host is never followed.
 - Per step: request count, failure count, p50, p95, mean latency (from k6 trends the
   generated script defines per step).
 - Per pass: CPU seconds the app used while k6 ran (user plus system time from
-  `/proc/<pid>/stat`, read before and after) and its peak RSS (`VmHWM` from
+  `/proc/<pid>/stat`, read before and after, in 10 ms ticks) and its peak RSS (`VmHWM` from
   `/proc/<pid>/status` after k6 exits).
+- Per pass, process counters (`engine/runner/proc.go`, `stats.go`):
+  - CPU seconds over the k6 window at nanosecond resolution: the first field of
+    `/proc/<pid>/task/*/schedstat` (time on CPU) summed over the app's threads just before
+    k6 starts and just after it exits (`cpu_seconds_window`). A thread that exits inside the
+    window loses its time; Go runtime threads rarely exit. If schedstat cannot be read, the
+    app's rusage when it exits (whole process life, microseconds) is used, then the tick
+    counter. `cpu_source` says which; CPU per journey is compared only when B1, C and B2
+    used the same source;
+  - bytes written and write syscalls (`wchar`, `syscw` from `/proc/<pid>/io`) over the k6
+    window. `rchar` and `syscr` are read but not reported;
+  - open file descriptors (`/proc/<pid>/fd`) and threads (`Threads:` in
+    `/proc/<pid>/status`), read 500 ms after k6 exits so keep-alive connections can close;
+  - completed journeys: iterations that finished every step without a failure, from a k6
+    counter per journey, and from them CPU ms, bytes written and write syscalls per
+    completed journey.
+  A counter that cannot be read is recorded as not measured for that pass and listed under
+  "Not measured" in the report; the run does not fail.
+- Per pass, Go runtime counters (`engine/runner/metrics.go`), only when `downstream.yml` sets
+  the optional key `main_dir`, the directory of the target's package main (relative to the
+  repo, no `..`, checked like `root`). Without it they are recorded as not measured, with the
+  reason in the report.
+  - How: for the base and the head build alike, the engine writes one file,
+    `zz_downstream_metrics.go` (package main, standard library only, every identifier
+    prefixed `zzDownstream`), and an overlay JSON that maps
+    `<extracted tree>/<main_dir>/zz_downstream_metrics.go` to it. The build runs with
+    `-overlay=<json>` added to `GOFLAGS` in its environment (any existing `GOFLAGS` is kept),
+    so the build command from `downstream.yml` is not rewritten and neither the repository
+    nor the extracted tree gains a file;
+  - the file's `init` does nothing unless the environment variable
+    `DOWNSTREAM_METRICS_ADDR` is set. The engine sets it, on the measured app process only,
+    to a free `127.0.0.1` port other than the app's own. It then serves `GET /metrics`
+    there: a JSON object with four unsigned integers read from `runtime/metrics`:
+    `/gc/heap/allocs:objects`, `/gc/heap/allocs:bytes`, `/gc/cycles/total:gc-cycles` and
+    `/sched/goroutines:goroutines`;
+  - the engine reads that endpoint three times per measured pass, on the side port, so the
+    reads are not journey traffic: just before the k6 window, just after it, and after the
+    same 500 ms drain as the descriptor and thread counts. Allocated objects, allocated bytes
+    and GC cycles are the difference between the first two readings, divided by the
+    completed journeys; goroutines is the third reading;
+  - the gated metrics are `alloc_objects_per_journey`, `alloc_bytes_per_journey`,
+    `gc_cycles` (GC cycles in the k6 window, per pass) and `goroutines`;
+    `gc_cycles_per_journey` is shown but not judged;
+  - the injection never fails a run. If `main_dir` is not a directory in the commit, the
+    overlay cannot be written, or the build with the injected file fails (for example the
+    package in `main_dir` is not named main), that commit is built again without it. If the
+    endpoint does not answer or a counter goes backwards, the pass keeps its other counters.
+    In each case the four figures are listed as not measured for that pass and a line in
+    "Not measured" says why;
+  - limits: the reads add a few allocations of their own, the same in every pass, and the
+    goroutine count includes the goroutine that serves the side port. A `GOFLAGS` set with
+    `go env -w` rather than in the environment is replaced by the environment value for
+    these builds.
 - Database time: **not measured in the MVP.** It is reported only if the target exposes it
   (for example a debug route). Otherwise the report says "DB time: not measured". We do not
   guess.
 
 ### 6.3 Classification
 
-Initial defaults (also in `agentnotes.md`), to be tuned against logged runs and then stated
-in the README with the evidence:
+Implemented in `engine/classify`. The A/A runs in `evidence/aa/` (identical code as B1, C and
+B2) showed that the process counters vary far less than latency on the same code: bytes
+written per journey by under 1 percent, CPU per completed journey by up to about a fifth,
+step p95 by several times its own value at worst (`evidence/aa/counters/summary.txt`). So
+metrics are of two kinds:
 
-- **noise**: inside the baseline noise band (the difference between B1 and B2).
-- **regression**: a step that passed in baseline fails in the candidate; or a metric worse
-  than the worse baseline run by more than twice the noise band, and by at least 20 percent,
-  and by at least 10 ms (latency) or 10 MB (memory).
-- **trade-off**: one metric clearly better and another clearly worse on the same journey.
-  Becomes a question on the merge request, never an issue.
+- **Gated** metrics decide whether a run has a regression: the process counters (bytes
+  written and write syscalls per completed journey, open file descriptors, threads), the
+  runtime counters read through the build overlay (objects and bytes allocated per completed
+  journey, GC cycles per pass, goroutines), CPU milliseconds per completed journey, peak
+  memory, and step failures.
+- **Advisory** metrics are shown but never decide: p50, p95 and mean latency per step, and the
+  app's total CPU seconds (which depends on how many journeys completed; CPU per completed
+  journey replaces it as the gated CPU metric).
 
-These thresholds are a starting point and are not claimed to be statistically rigorous. A
-three-run design cannot give a confidence interval; the report says so in one line.
+**The gated rule** (counters, CPU per journey, memory). Let `worse = max(B1, B2)`,
+`better = min(B1, B2)` and `band = |B1 - B2|`. Each metric has a tolerance with a relative and
+an absolute part, and `allowed = max(relative x worse, absolute)`. Then:
 
-Implemented in `engine/classify` with these rules plus three more, all stated in the report's
-method paragraph. Rules are applied in this order: regression, then **improved** (the
-opposite of regression: better than the better baseline run by the same margins), then
-**withheld** (the two baseline runs differ by more than 50 percent of the smaller one and by
-at least the absolute floor, so no verdict is given; a clear regression or improvement is
-never withheld), then noise. **not-reached**: a step with no requests in B1, C or B2 (an
-earlier step of its journey failed) has its latencies left uncompared, so a broken endpoint
-cannot make a later step look faster. Every metric counts higher as worse. Absolute floors:
-10 ms latency, 10 MB memory, 0.5 s CPU. A journey with a latency regression and a latency
-improvement has both re-classed as trade-off. Unit tests cover each class with synthetic
-inputs (FR-23).
+- **regression**: `C - worse > allowed` and `C - worse > band`.
+- **improved**: the opposite, against `better`.
+- **withheld**: neither of the above, and `band > allowed`: the two baselines of this run
+  disagree by more than the tolerance, so a change of the tolerance's size could not be seen.
+  The reason names both figures.
+- **noise**: otherwise.
+- **not-measured**: a counter listed in a pass's `unmeasured`. Nothing is compared and it is
+  never a regression.
+
+Every finding carries `allowed`, `band` and the **smallest detectable change**,
+`max(allowed, band)`, also as a percentage of the worse baseline. It is the smallest change
+this run could tell apart from noise. A change beyond it is a regression even when the
+baselines are noisy, so a large regression is not hidden by noisy baselines. A change below it
+is not evidence of no change; the report says so beside every figure.
+
+The tolerances are `Thresholds.Tolerances` in `run.json` (`settings.thresholds`), set by
+`DefaultThresholds` in `engine/classify/classify.go`. Each was picked from the A/A runs in
+`evidence/aa/counters/summary.txt` and `evidence/aa/runtime/summary.txt` (largest excess of C
+over the worse baseline on identical code), at between about 1.8 and 2.9 times that excess,
+rounded up; the ratio for each metric is in the comment on `DefaultThresholds`. Small integer
+counts (open file descriptors, threads, goroutines, GC cycles per pass) have an absolute
+tolerance instead, because one thread is a large fraction of ten. Peak RSS is allowed 5%,
+more than its A/A excess suggests, because A/A runs use one binary and two builds of a clean
+change differed by up to 2.17% (`evidence/plants/README.md`); GC cycles were 0 in every
+A/A pass, so their tolerance of 2 cycles is chosen, not derived. CPU per journey was
+calibrated on whole-process CPU and is now measured over the k6 window; no committed A/A set
+used the window figure before `evidence/aa/final`. No command-line flag changes them.
+
+**Step failures** are gated: a step that passed on both baseline runs and failed on the
+candidate is a regression, whatever its latency. Its smallest detectable change is one
+failure.
+
+**Trade-off**, for gated app metrics only: a regression is re-classed together with an
+improvement when some gated app metric improved by at least as large a fraction of its own
+baseline as the regression rose. A smaller improvement never excuses a regression. It
+becomes a question on the merge request, never an issue. Step failures and latency are not
+re-classed.
+
+**Advisory latency** keeps the older rule so a report can say "slower" or "faster": worse than
+the worse baseline by more than twice the noise band, by at least 20 percent and by at least
+10 ms, with the earlier **withheld** rule (baselines more than 50 percent apart) and
+**not-reached** (a step with no requests in some pass has its latencies left uncompared).
+Its findings have `gated: false`. They are never counted in `regression=`, never open an
+issue and are never the only reason for one. Their smallest detectable change is the largest
+of twice the noise band, the absolute floor and the relative minimum; the report prints it
+too. The `advisory=` line of `downstream summary` counts advisory findings classed as
+regression.
+
+A `run.json` written before findings had a `kind` has no gated or advisory split. The engine
+treats such findings as deciding, as they did then, and the report renders them in the older
+layout.
+
+Unit tests cover each branch with synthetic inputs, and a replay test feeds the A/A runs in
+`evidence/aa/{before,counters,after,runtime}/passes.tsv` through the classifier and requires zero gated regressions. These
+thresholds are not claimed to be statistically rigorous. A three-run design cannot give a
+confidence interval; the report says so in one line.
 
 ### 6.4 Finding the cause
 
@@ -339,17 +457,21 @@ Two levels, the second only if time allows:
 ### 7.1 Merge request notes
 
 1. **Journeys added** (posted before the run): plain-English summary per journey.
-2. **Report** (posted after): script-rendered tables: per journey and step, baseline range,
-   candidate, change, noise band, verdict; a Mermaid chart comparing p95 per step;
-   discarded journeys; what was not measured; the issues to open (the flow posts the list of
-   issues it opened in a separate note).
+2. **Report** (posted after): script-rendered tables, in this order after the header: the
+   gated findings (metric, B1, B2, C, change, noise band, allowed, smallest detectable,
+   verdict), step failures, latency per journey labelled advisory (with its own smallest
+   detectable column), the raw per-pass process figures, a Mermaid chart comparing p95 per
+   step, the issues to open, discarded journeys, what was not measured, and the method;
+   the flow posts the list of issues it opened in a separate note.
 3. **A final note is always posted**, including on failure. A failed run is reported as
    failed, with the engine's error text and the step it failed at.
 
 Implemented in `engine/report`. Each figure comes from `run.json` and is formatted with
-fixed decimals (ms 1, s 2, MB 1). Besides the tables and chart above, the report has a
-findings line (regressed steps, trade-off journeys, improved and withheld metrics), the list
-of issues to open, the blast radius from `scan.json`, and the method and thresholds in words.
+fixed decimals (ms 1, s 2, MB 1, and per journey: CPU ms 2, bytes 0, write syscalls 2). Every
+finding row prints its noise band and smallest detectable change. Besides the tables and chart
+above, the report has two findings lines (gated, then advisory latency), the blast radius from
+`scan.json`, and the method and the tolerances in effect in words. A `run.json` from before
+findings had a `kind` renders in the older layout.
 The chart is a Mermaid `xychart-beta` block, capped at 20 steps; whether GitLab's Mermaid
 version renders `xychart-beta` in a note is **unverified**. A golden-file test checks the
 output, and a second test checks that every number in it is derived from the input.
@@ -357,7 +479,7 @@ output, and a second test checks that every number in it is derived from the inp
 ### 7.2 Issues (one per cause)
 
 Title: `[Downstream] <journey>: <metric> <direction> <amount>` for a single step, or
-`[Downstream] <N> steps slower via <changed functions>: worst <step> ...` for a group. Body, in
+`[Downstream] <N> steps failing via <changed functions>: worst <step> ...` for a group. Body, in
 order: who started the run (tagged with `@username` so they are notified), the changed
 functions, the figures for every step in the group with the noise band, the repro, a likely
 cause, numbered fix options, how to reply. It ends with a collapsed "Downstream state"
@@ -367,22 +489,25 @@ section holding one marker line in a fenced block:
 downstream:v1 {"v":1,"mr":12,"base":"<sha>","head":"<sha>","journey":{...},"metric":"p95_ms","step":"..."}
 ```
 
-The marker was first a hidden HTML comment; GitLab's issue tools drop HTML comments, so issue
-#4 lost it (`evidence/flow.md`). The engine still reads the old comment form.
-
-Implemented in `engine/issues`. One change usually slows many steps for one reason, so
-issues are grouped by cause rather than opened per step: regressed steps are keyed by the
-changed functions (from `scan.json`) on the routes they call, and each key gets one issue.
-Steps whose routes reach no changed function share one more issue ("slower on routes outside
-the diff's call paths"); on the demo that group holds public reads slowed by CPU contention.
-At most 5 issues per run. Each issue has an engine-rendered table of every step in the group,
-and its headline (the title and the marker) is the step that got slowest in absolute terms,
-with failures always first. The likely cause and fix options come from a `notes.json` the
-model writes, keyed by headline finding ID and validated by the engine: no comment or fence
-markup, no table rows, and no figures with units, so the model cannot add numbers.
-`ParseMarker` accepts a whole
-issue body or the bare marker JSON. `Questions` writes one merge request question per
-trade-off journey.
+Implemented in `engine/issues`. Only gated regressions open issues. Failing steps are grouped
+by cause rather than opened per step: they are keyed by the changed functions (from
+`scan.json`) on the routes they call, and each key gets one issue. Steps whose routes reach no
+changed function share one more issue ("on routes outside the diff's call paths"). The gated
+app-wide regressions (counters, CPU per completed journey, memory) are measured per process,
+not per journey, so they form one more issue, "app", that lists every one of them with B1, B2,
+C, the allowed rise, the noise band and the smallest detectable change; its headline (the title
+and the marker) is the one with the largest change measured in allowed rises. At most 5 issues
+per run, the app issue included. Latency never opens an issue: advisory regressions are listed
+in a section "Latency on the same run (advisory)", grouped by journey and one figure per step,
+inside the issue that already covers their journey (so a failing step and its latency changes
+are together), and the app issue lists the rest. Each step issue has an engine-rendered table of
+every step in the group, and its headline is the step that got slowest in absolute terms, with
+failures always first. The likely cause and fix options come from a `notes.json` the model
+writes, keyed by headline finding ID and validated by the engine: no comment or fence markup,
+no table rows, and no figures with units, so the model cannot add numbers.
+`ParseMarker` accepts a whole issue body or the bare marker JSON. `Questions` writes one merge
+request question per trade-off: one for the app process, and one per journey for a `run.json`
+from before gating.
 
 The marker embeds the one journey that regressed, so an issue is self-contained: replying
 `fix it` or `fix option 2` needs the issue and nothing else. Verified in flow sessions
@@ -459,6 +584,11 @@ is loaded automatically. So:
 
 ## 11. Security model
 
+- To read the head code before choosing expected statuses, the model runs `downstream files`,
+  which numbers the files it may read (changed files and the files registering changed or
+  affected routes), and `downstream show --file <n>`, which prints one at the head commit with
+  `git show` run from an argument list, not a shell. The model types only the number, so a
+  file name chosen by a merge request author never reaches a shell.
 - The model's only output that reaches execution is `journeys.json` and `notes.json`, which
   the engine validates (schema, route table, text rules). They reach the shell only as the
   body of a quoted heredoc (`<<'DOWNSTREAM_JSON'`), so the shell expands nothing in them; the

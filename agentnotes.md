@@ -37,6 +37,41 @@ up to 20. `downstream validate` checks the coverage rules below and names what i
   there is discarded and the discard is reported, not hidden.
 - Name journeys by the user's goal ("reader opens an article and favourites it").
 
+### Coverage per route
+
+A journey of successful requests only passes on most real regressions. Which regressions a
+change breaks shows up with the steps below, so for each route the scan lists under
+`changed` or `affected` the journeys together include:
+
+1. The happy path.
+2. At least one negative step: a missing or invalid token, another user's resource, or
+   invalid input. Expect the 401, 403, 404, 409 or 400 the code returns.
+3. At least one edge-input step: a negative, empty, oversized or wrong-type value.
+4. A repeated request when the route creates data: the same create twice, or the same
+   idempotency key twice. The schema allows only Authorization, Content-Type, Accept and X-*
+   headers, so an idempotency key must travel in an X-* header.
+5. Enough created data to pass the default page size when the route is a list. A journey is
+   capped at 12 steps. If one iteration cannot pass the page size, rely on data accumulating
+   over the iterations of a pass, and say so in `why_included`. Do not state how many
+   iterations that takes: the run's settings say, and you do not know them in advance.
+6. A second user (own sign-up and login, names built with `{{uniq}}`) when the route is
+   scoped to an owner: the second user reads or changes what the first user created.
+
+Expected statuses come from the head code, never from a guess. `downstream files` lists the
+files you may read, numbered: the changed files and the files that register changed or
+affected routes. `downstream show --file <n>` prints one of them at the head commit; you type
+only the number. A route's file is where the route is registered, so a handler in another
+unchanged file is not readable this way: leave out a step whose status the files you may read do not
+settle. Name the file the statuses came from in `why_included`. A step that expects a status
+the baseline does not return discards its whole journey, so a guess costs the journey.
+
+Extract a variable only from a step that expects a 2xx status; a negative step has no
+value to extract. `downstream validate` prints a `warning:` line for a changed route covered
+only by 2xx steps or by no step, and for an affected route no step reaches. A warning does
+not fail validation. Fix the journeys when the code you read settles a status for it,
+otherwise say in the "Journeys added" note that the gap remains. A worked example with all
+five additions is `examples/shelf/journeys.thorough.json`.
+
 ## Reviewer summary (the "Journeys added" note)
 
 Group the journeys under three headings: "Existing parts the change reaches (compared old
@@ -46,19 +81,52 @@ the run ("changed route", "calls the changed route", "shares table X", "new rout
 "control"). No jargon, no k6 syntax. A reviewer should be able to say "yes, that
 is a thing users do" or "no, add one for Y" in under a minute.
 
-## Classification (initial defaults, to be tuned against logged runs)
+## Classification
 
-- noise: within the baseline noise band (two baseline runs differ by this much on their own).
-- regression: a step that passed on baseline now fails; or a latency, CPU, memory or DB
-  time metric that is worse than the worse baseline run by more than twice the noise band
-  and by at least 20 percent and at least 10 ms (latency) or 10 MB (memory).
-- trade-off: one metric clearly better and another clearly worse on the same journey.
-  Ask a question in the merge request. Do not open an issue.
+Metrics come in two kinds. Gated metrics decide whether a run has a regression. Latency is
+advisory: it never counts toward a verdict, never opens an issue and is never the only
+reason for one.
+
+Gated metrics, per app process: write bytes and write syscalls per completed journey, open
+file descriptors, threads, objects and bytes allocated per completed journey, GC cycles per
+pass, goroutines (kind "counter"), CPU per completed journey (kind "cpu"), peak
+memory (kind "memory"); and step failures (kind "failures"). Advisory ("latency"): p50, p95
+and mean per step, and the app's total CPU seconds, which depends on how many journeys
+completed.
+
+Rule for a counter, CPU or memory metric. Let worse = max(B1, B2), better = min(B1, B2),
+band = |B1 - B2| and allowed = max(relative tolerance x worse, absolute tolerance). The
+tolerances are in `settings.thresholds.tolerances` of `run.json`.
+
+- regression: C - worse is more than allowed and more than band.
+- improved: the opposite, against better.
+- withheld: neither of those, and band is more than allowed. This run's baselines disagree by
+  more than the tolerance, so a change of the tolerance's size could not be seen.
+- noise: otherwise.
+- not-measured: a counter that could not be read in some pass. Never a regression.
+
+Smallest detectable change for a finding is max(allowed, band), also given as a percent of
+worse. Every finding carries it. A change beyond it is a regression even when the baselines
+are noisy, so a large regression is never hidden. Say "not detectable in this run" about
+anything below it; do not call a finding below it clean.
+
+- failures: a step that passed on both baseline runs and failed on the candidate.
+- trade-off: a gated app metric that is a regression while another gated app metric improved
+  by at least as large a fraction of its own baseline. Ask a question in the merge request. Do
+  not open an issue. Latency is never re-classed as a trade-off.
+- latency (advisory): keeps the older rule so the report can say "slower" or "faster": worse
+  than the worse baseline by more than twice the noise band, by at least 20 percent and by at
+  least a minimum in ms. A step with no requests in some pass is "not-reached".
 
 ## Issues (one per cause)
 
-The engine groups regressed steps by the changed functions on the routes they call and writes
-one issue per group; steps on routes the diff does not reach share one more issue. Titles,
+Only gated findings open issues (see "Classification"). Steps that fail on the candidate
+but passed on both baselines are grouped by the changed functions on the routes they call,
+one issue per group; failing steps on routes the diff does not reach share one more issue.
+Regressions of the app process (CPU per journey, bytes or write syscalls per journey, file
+descriptors, threads, allocations, GC cycles, goroutines, peak memory) form one separate
+issue. Latency is advisory: it is shown
+beside a gated finding but never opens an issue by itself. Titles,
 figures, the repro and the "Downstream state" marker come from the engine and are never edited. Post each
 title and body exactly as `downstream issues` prints them.
 

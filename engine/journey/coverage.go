@@ -77,8 +77,6 @@ func Coverage(f model.JourneyFile, sc model.Scan) (uncovered []model.Route, err 
 	return uncovered, nil
 }
 
-func routeKey(r model.Route) string { return r.Method + " " + r.Path }
-
 func label(r model.Route) string {
 	if r.Method == "" {
 		return r.Path

@@ -1,0 +1,13 @@
+diff --git a/examples/shelf/handlers.go b/examples/shelf/handlers.go
+index 0f84625..a832582 100644
+--- a/examples/shelf/handlers.go
++++ b/examples/shelf/handlers.go
+@@ -13,7 +13,7 @@ var (
+ )
+ 
+ const (
+-	maxListed = 50
++	maxListed = 100000
+ 	maxTags   = 10
+ )
+ 

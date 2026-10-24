@@ -116,6 +116,13 @@ row unless stated; details in [evidence/runs.md](evidence/runs.md)):
 | Planted change: app CPU time, B1 / candidate / B2 | 0.16 / 27.10 / 0.16 s | [report](evidence/runs/ci-63-engine-e2e/raise-hash-cost/report.md) L53 |
 | Clean change: runs flagged as regression | 0 of 22 (pipelines 63 and 66) | [pipeline 63](evidence/runs/ci-63-engine-e2e/clean-change-job-log.txt) L77; [pipeline 66](evidence/runs/ci-66-engine-noise/) |
 | Clean change: largest step p95 increase over 20 runs | 4.6 ms (regression floor 10 ms) | `evidence/runs/ci-66-engine-noise/noise-*/report-*.md` |
+| A/A (same commit as base and head), 4-CPU dev machine: runs with a false regression | 0 of 20; 19 of 20 if the 10 ms floor were removed | [evidence/aa/README.md](evidence/aa/README.md), [summary](evidence/aa/before/summary.txt) L2-L3 |
+| A/A: B1/B2 spread of step p95 (median, p90) | 32.5%, 105.8% | [summary](evidence/aa/before/summary.txt) L10 |
+| A/A: largest excess of C over the worse baseline, 20 runs: CPU per journey / bytes written per journey / write syscalls per journey | 11.17% / 0.35% / 1.51% | [summary](evidence/aa/counters/summary.txt) L14-L16 |
+| A/A with the gated rule (latency advisory), 20 fresh runs: runs with a false regression | 0 of 20 (560 gated findings) | [summary](evidence/aa/after/summary.txt) L2, L6-L16 |
+| Gated rule, 5 runs each, 4-CPU dev machine: planted `raise-hash-cost` / planted `remove-list-limit` / clean control (two journey sets) | regression in 5 of 5 / 5 of 5 / 0 of 10 | [evidence/plants/README.md](evidence/plants/README.md) |
+| `remove-list-limit` (scripted edit): bytes written per completed journey | +58.10% to +59.80% | [table](evidence/plants/remove-list-limit-thorough/table.txt) |
+| A/A with runtime counters from the build overlay (allocations, alloc bytes, GC cycles per journey, goroutines), 20 runs: runs with a false regression | 0 of 20 | [summary](evidence/aa/runtime/summary.txt) L2, L31-L33 |
 
 The platform, from the logs in `evidence/day0/`:
 
@@ -275,7 +282,8 @@ own credentials.
 **Deployment.** The flow is enabled in the GitLab project through the UI; there is nothing to
 deploy from this repo. What the brief means by deployment for a flow entry is unverified (T-12).
 
-**Security.** The model's only output that reaches execution is validated JSON, the engine talks
+**Security.** The model's only output that reaches execution is validated JSON and a number
+picking a file from the engine's own list (`downstream show --file <n>`), the engine talks
 to 127.0.0.1 only, diffs and issue text are treated as data, and files that steer the agent are
 under CODEOWNERS. The engine and `agentnotes.md` come from this repo at a commit pinned in the
 flow, and `downstream.yml` is read from the base commit, so a merge request cannot rewrite any

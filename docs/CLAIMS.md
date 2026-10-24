@@ -185,6 +185,50 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 
 ---
 
+## C-A1. On identical code the rule reports no regression, and the floor is why
+
+- **Files:** `engine/classify/classify.go`, `scripts/aa.sh`, `scripts/aa_summary.py`
+- **Proof:** [evidence/aa/before/summary.txt](../evidence/aa/before/summary.txt) lines 2-3
+  and 8-10: 20 A/A runs on a 4-CPU machine, 0 with a false regression; with the 10 ms
+  absolute floor removed, the same band and 20% rules would flag 8.6% to 11.8% of latency
+  findings and 19 of 20 runs. Raw figures: `evidence/aa/before/passes.tsv`.
+- **Check:** `scripts/aa.sh 20 /tmp/aa && python3 scripts/aa_summary.py /tmp/aa`
+- **Does not show:** behaviour on the GitLab runner or in the Duo sandbox; behaviour on a
+  slower machine (the laptop runs in `evidence/runs.md` had false regressions); that a real
+  latency regression under 10 ms would be reported (it would not).
+
+---
+
+## C-A2. With the gated rule, identical code gave no false regression in 20 fresh runs
+
+- **Files:** `engine/classify/classify.go` (`DefaultThresholds`, gated rule), `scripts/aa.sh`
+- **Proof:** [evidence/aa/after/summary.txt](../evidence/aa/after/summary.txt) line 2 (0 of
+  20 runs) and lines 6-16 (classes per metric); the tolerances were picked from the earlier
+  `counters` set, so these runs are out of sample. `TestReplayAARuns` in
+  `engine/classify` replays the `before` and `counters` sets and requires no gated
+  regression.
+- **Check:** `scripts/aa.sh 20 /tmp/aa && python3 scripts/aa_summary.py /tmp/aa`
+- **Does not show:** behaviour on the GitLab runner or in the Duo sandbox; the margin for CPU
+  per journey is small (largest A/A excess 13.96% against a 20% tolerance,
+  after/summary.txt line 19).
+
+---
+
+## C-A3. The gated rule reports both planted regressions and no clean change
+
+- **Files:** `engine/classify/classify.go`, `examples/changes/`, `scripts/plant.sh`
+- **Proof:** [evidence/plants/README.md](../evidence/plants/README.md);
+  `evidence/plants/final/*/summary-NN.txt` with the final engine: `raise-hash-cost` and
+  `remove-list-limit` regression=1 in 3 of 3 runs each, `clean-change` regression=0 in 6 of 6
+  runs over two journey sets. Earlier sets (5 runs each) agree, except one clean run under a
+  2% peak-memory tolerance (`evidence/plants/rss-2pct/`), which is why the tolerance is 5%.
+- **Check:** `scripts/plant.sh remove-list-limit examples/shelf/journeys.thorough.json 3 /tmp/p && cat /tmp/p/summary-*.txt`
+- **Does not show:** anything about real, unplanted changes or how often they would be caught;
+  behaviour on the GitLab runner or in the Duo sandbox (the `engine-e2e` CI job runs these
+  changes, but no log of it under the gated rule is committed).
+
+---
+
 ## Not built, not measured (no proof exists)
 
 | ID | Claim | Planned file | Blocking test |
@@ -192,6 +236,7 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 | N-5 | `verify` reruns after merge | `flows/downstream.yml` (written, not run) | T-09 |
 | N-6 | Cost in credits of one run | none | T-11 |
 | N-8 | A clean change comes out clean inside the Duo sandbox, as a rate | `flows/downstream.yml` | repeated clean-change sessions (one so far, clean: [mr-16-notes.json](../evidence/flow/session-10001525/mr-16-notes.json) line 151) |
+| N-9 | The flow's model writes negative, edge-input, repeated, page-size and cross-user steps | `flows/downstream.yml` R6, `agentnotes.md` | T-16; no flow session has run, and `downstream validate` warnings are the only check |
 
 N-1 to N-4 (regressions found in a flow run, model-written journeys, issues opened by the
 flow, fixes applied) moved to C-12 to C-15; N-7 (licence shown by GitLab) moved to C-16.
