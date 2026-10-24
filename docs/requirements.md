@@ -196,7 +196,7 @@ not quotations from the brief.
 | A custom flow cannot create issues or commit (T-08, T-10 fail). | Medium | Loses the issue and fix-loop story | Fall back to merge request threads and diffs in notes (FR-35, FR-42). Say so. |
 | Credits run out before enough evidence runs. | Unknown (T-11) | Fewer runs | Measure early; cap runs; prioritise the five required. |
 | Demo target does not build in the sandbox. | Medium | Lost day | Decide by Friday; prefer the purpose-built small API if the first candidate fails. |
-| A target needs a newer Go than the sandbox's 1.22.12. | Occurred once (the demo app) | Run stops at the build stage, no verdict | Pin the target to Go 1.22 or install a newer Go in `setup_script`; see `docs/details.md` section 3.4. |
+| A target needs something the sandbox lacks: a newer Go (the sandbox has 1.22.12), another Node or Python version, a build tool, a blocked download, or a service such as a database or docker. | Occurred once (the demo app, Go 1.24) | Run stops at the build or baseline check stage, no verdict | Pin the target to the sandbox's versions, or install the missing runtime or tool in `setup_script`; see `docs/details.md` section 3.4. |
 | Baseline noise on a shared runner is higher than the thresholds allow. | Medium | False regressions or none | Widen thresholds with evidence; report noise honestly. |
 | The first probe stopped after one action; a longer chain could stop early again. | Low-medium | Incomplete runs | Firm prompt, final-note rule (FR-04), short chains between notes. |
 | Judges cannot trigger the flow unless added as project members. | Likely (C-07) | Cannot reproduce live | Committed evidence runs and the recorded demo. State it. |
