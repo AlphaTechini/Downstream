@@ -93,7 +93,7 @@ prompts:
 
         SETUP (first command of every procedure; run it exactly)
         S1. run_command:
-            export GOCACHE=/tmp/gocache GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=6986a4638272 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
+            export GOCACHE=/tmp/gocache GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=29ce4ef481b8 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
         Every later command starts with:
             export GOCACHE=/tmp/gocache GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp &&
 
@@ -138,9 +138,9 @@ prompts:
             Then post a last merge request note listing the issues you opened.
 
         FIX (reply "fix it" or "fix option N" in an issue; "fix it" means N = 1)
-        F1. get_issue for the IID. The last line of its description is a hidden HTML comment
-            whose text starts with "downstream:v1 " followed by one JSON object. Copy that JSON
-            object exactly, from its first "{" to its last "}". SETUP, then run_command:
+        F1. get_issue for the IID. Its description ends with a "Downstream state" section that
+            holds one line starting with "downstream:v1 " followed by one JSON object. Copy that
+            JSON object exactly, from its first "{" to its last "}". SETUP, then run_command:
             cat > /tmp/ds/marker.json <<'DOWNSTREAM_JSON'
             <the marker JSON, unchanged, one line>
             DOWNSTREAM_JSON
