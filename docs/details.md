@@ -385,9 +385,10 @@ issue body or the bare marker JSON. `Questions` writes one merge request questio
 trade-off journey.
 
 The marker embeds the one journey that regressed, so an issue is self-contained: replying
-`fix option 2` needs the issue and nothing else. **UNVERIFIED (T-08, T-09):** whether a
-custom flow can create issues, whether the starter's mention notifies them when the author
-is a service account, and whether it can read the issue body on a mention.
+`fix it` or `fix option 2` needs the issue and nothing else. Verified in flow sessions
+(`evidence/flow.md`): the flow creates the issues, and a mention in an issue starts a session
+that reads the issue body. Not checked: whether the starter's mention sends them a
+notification.
 
 ### 7.3 Report page (optional)
 
