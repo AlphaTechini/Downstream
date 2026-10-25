@@ -25,6 +25,10 @@ type Config struct {
 	Iterations int           // journey iterations per VU; a fixed sample size per pass
 	Duration   time.Duration // cap on the time one pass may take
 	Frontend   Frontend
+	// History opts the project in to the Downstream memory service: each run's
+	// numbers-only record is sent there and a trend over merged merge requests
+	// is added to the report.
+	History bool
 }
 
 // Frontend describes a static frontend build. All fields are empty when the
@@ -115,6 +119,14 @@ func Parse(data []byte) (Config, error) {
 			cfg.Frontend.Out = val
 		case "frontend_node":
 			cfg.Frontend.Node = val
+		case "history":
+			switch val {
+			case "on":
+				cfg.History = true
+			case "off":
+			default:
+				return Config{}, fmt.Errorf("line %d: history must be on or off", n)
+			}
 		case "vus":
 			v, err := strconv.Atoi(val)
 			if err != nil {

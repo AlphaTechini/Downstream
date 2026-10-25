@@ -1,0 +1,17 @@
+# Builds the memory service image from the repository root.
+# Used by cloud/deploy.sh: gcloud builds submit --config cloud/memory/cloudbuild.yaml .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - cloud/memory/Dockerfile
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/downstream-memory:latest
+options:
+  dynamicSubstitutions: true

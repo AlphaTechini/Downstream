@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	"downstream/engine/classify"
+	"downstream/engine/history"
 	"downstream/engine/issues"
 	"downstream/engine/journey"
 	"downstream/engine/model"
@@ -37,13 +38,15 @@ const usage = `usage:
   downstream schema   journeys
   downstream validate --journeys journeys.json --scan scan.json
   downstream run      --base <sha> --head <sha> --journeys journeys.json [--repo .] [--k6 path] --out run.json
-  downstream report   [--run run.json] [--scan scan.json] [--frontend frontend.json] --out report.md
+  downstream report   [--run run.json] [--scan scan.json] [--frontend frontend.json] [--trend trend.json] --out report.md
   downstream summary  --run run.json --scan scan.json
   downstream files    --scan scan.json
   downstream show     --scan scan.json --head <sha> --file N [--repo .]
   downstream issues   [--run run.json] [--scan scan.json] [--notes notes.json] [--frontend frontend.json] --mr <iid> --starter <username> --out issues.json
   downstream frontend --base <sha> --head <sha> --journeys fe-journeys.json --fecheck <dir> [--repo .] --out frontend.json
   downstream frontend --detect --base <sha> --head <sha> [--repo .]
+  downstream history  record --run run.json --mr <iid> [--project path] [--repo .] --out history.json
+  downstream history  trend --record history.json --response memory.json [--service url] [--repo .] --out trend.json
   downstream marker   parse [--journeys-out journeys.json] < issue_body.md
   downstream fixcheck --marker marker.json --option N
 `
@@ -69,6 +72,7 @@ func main() {
 		"marker":   cmdMarker,
 		"fixcheck": cmdFixcheck,
 		"frontend": cmdFrontend,
+		"history":  cmdHistory,
 	}
 	cmd, ok := cmds[os.Args[1]]
 	if !ok {
@@ -211,6 +215,7 @@ func cmdReport(args []string) error {
 	rpath := fs.String("run", "", "run.json")
 	spath := fs.String("scan", "", "scan.json")
 	fpath := fs.String("frontend", "", "frontend.json; adds the Frontend section")
+	tpath := fs.String("trend", "", "trend.json; adds the Trend section")
 	out := fs.String("out", "", "output file")
 	if err := parse(fs, args, "out"); err != nil {
 		return err
@@ -241,6 +246,13 @@ func cmdReport(args []string) error {
 			text = "### Downstream report\n\n"
 		}
 		text += report.RenderFrontend(f)
+	}
+	if *tpath != "" && *rpath != "" {
+		var t history.Trend
+		if err := readJSON(*tpath, &t); err != nil {
+			return err
+		}
+		text += "\n" + report.RenderTrend(t)
 	}
 	return os.WriteFile(*out, []byte(text), 0o644)
 }
