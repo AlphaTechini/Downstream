@@ -96,7 +96,7 @@ prompts:
 
         SETUP (first command of every procedure; run it exactly)
         S1. run_command:
-            export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=af542dc65a97 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
+            export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp ENGINE_SHA=ca82fe218b57 && mkdir -p /tmp/ds/tmp /tmp/bin /tmp/ds-engine && (test -f /tmp/ds-engine/go.mod || curl -fsSL "https://codeload.github.com/AlphaTechini/Downstream/tar.gz/$ENGINE_SHA" | tar -xz -C /tmp/ds-engine --strip-components=1) && (cd /tmp/ds-engine && go build -o /tmp/bin/downstream ./engine/cmd/downstream) && downstream version
         Every later command starts with:
             export GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOPATH=/tmp/gopath GOFLAGS=-modcacherw GOTOOLCHAIN=local PATH=/tmp/bin:$PATH TMPDIR=/tmp/ds/tmp &&
 
@@ -173,8 +173,12 @@ prompts:
             cd /tmp/ds-engine/tools/fecheck && (test -d node_modules || npm ci --legacy-peer-deps --no-audit --no-fund)
             then run_command (allow 200 seconds): downstream frontend --base <base> --head <head> --journeys /tmp/ds/fe-journeys.json --fecheck /tmp/ds-engine/tools/fecheck --out /tmp/ds/frontend.json
             It always writes frontend.json and prints a last line "frontend: status=...
-            regression=N ..."; continue to R9 either way.
-        R9. run_command: F=""; test -f /tmp/ds/frontend.json && F="--frontend /tmp/ds/frontend.json"; downstream report --run /tmp/ds/run.json --scan /tmp/ds/scan.json $F --out /tmp/ds/report.md && cat /tmp/ds/report.md && downstream summary --run /tmp/ds/run.json --scan /tmp/ds/scan.json
+            regression=N ..."; continue to R8H either way.
+        R8H. run_command: rm -f /tmp/ds/history.json /tmp/ds/memory.json /tmp/ds/trend.json && downstream history record --run /tmp/ds/run.json --mr <iid> --out /tmp/ds/history.json && if [ -f /tmp/ds/history.json ]; then curl -fsS --max-time 20 -o /tmp/ds/memory.json -H 'content-type: application/json' --data-binary @/tmp/ds/history.json https://downstream-memory-1083478229816.us-central1.run.app/v1/runs; downstream history trend --record /tmp/ds/history.json --response /tmp/ds/memory.json --service https://downstream-memory-1083478229816.us-central1.run.app --out /tmp/ds/trend.json; fi
+            It prints "history: off" for a project that has not opted in. Otherwise it sends
+            this run's numbers-only record to the Downstream memory service on Google Cloud Run
+            and prints a "trend:" line. Continue to R9 either way.
+        R9. run_command: F=""; test -f /tmp/ds/frontend.json && F="--frontend /tmp/ds/frontend.json"; T=""; test -f /tmp/ds/trend.json && T="--trend /tmp/ds/trend.json"; downstream report --run /tmp/ds/run.json --scan /tmp/ds/scan.json $F $T --out /tmp/ds/report.md && cat /tmp/ds/report.md && downstream summary --run /tmp/ds/run.json --scan /tmp/ds/scan.json
         R9F. Frontend-only project: run_command: downstream report --frontend /tmp/ds/frontend.json --out /tmp/ds/report.md && cat /tmp/ds/report.md
         R10. create_merge_request_note with the report text exactly as printed.
         R11. If summary shows regression=0 and trade-off=0, and R8F did not run or its last line
