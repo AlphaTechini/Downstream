@@ -4,6 +4,10 @@
 old and new builds, finds what else the change quietly broke or slowed, traces the likely
 cause, and files a fix.** It is a GitLab Duo Agent Platform flow. *Merged is not safe.*
 
+**Demo video (under 3 minutes): [youtu.be/I2ALGSSF1vM](https://youtu.be/I2ALGSSF1vM).** GitLab's
+Duo Developer agent builds two features on NewGit, Downstream finds what they slowed down, and
+`fix it` applies a fix and re-measures it.
+
 **The mechanism, in one sentence:** a change is blamed only for what exceeds the disagreement
 between two runs of the old build, measured in the same session.
 
@@ -117,7 +121,7 @@ have not been re-read against the live page since and are to be re-checked befor
 | Genuine use of Duo Agent Platform (agents, flows, MCP) | [`flows/downstream.yml`](flows/downstream.yml), a public custom flow in the AI Catalog with a mention trigger; [`flows/probe.yml`](flows/probe.yml) was the day-0 feasibility flow | Verified: full sessions on two projects ([evidence/flow.md](evidence/flow.md)) |
 | Public MIT-licensed GitLab project | [`LICENSE`](LICENSE); this is the [GitLab showcase project](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/35141659/showcase) where the flow runs | Public, and GitLab detects the MIT licence, per the GitLab API on 2026-10-24 ([record](evidence/gitlab-project-2026-10-24.json)) |
 | Visible CI/CD pipeline history | GitLab agent-session pipelines; copies in [`evidence/day0/`](evidence/day0/). [`.gitlab-ci.yml`](.gitlab-ci.yml) runs `make verify`, the Go tests, and `engine-e2e`, which runs the engine end to end on the demo app for the planted and the clean change; `engine-noise` repeats the clean change on the `measure-noise` branch | 3 probe sessions; engine CI runs from pipelines 63 and 66 in [`evidence/runs/`](evidence/runs/); flow sessions in [`evidence/flow/`](evidence/flow/) |
-| Demo video under 3 minutes | script in [`docs/userflow.md`](docs/userflow.md) section 7 | Not recorded |
+| Demo video under 3 minutes | [Downstream demo on YouTube](https://youtu.be/I2ALGSSF1vM); script in [`docs/userflow.md`](docs/userflow.md) section 7 | Recorded 2026-10-25 on NewGit !12 and !13, with the fix merge requests !14 and !15 |
 | One declared autonomy tier: **Supervised** | the flow never merges; a human picks a fix option, the flow opens a merge request for it, and a human reviews and merges | Verified: `fix it` opened !13 with the requester as reviewer and did not merge ([evidence/flow.md](evidence/flow.md)) |
 | Path A (new project) | first commit 2026-10-22 (`git log`) | Intended path |
 
