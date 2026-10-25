@@ -53,7 +53,7 @@ spec:
           tcpSocket:
             port: 8080
           timeoutSeconds: 240
-      serviceAccountName: downstream-memory@downstream-transcend-26.iam.gserviceaccount.com
+      serviceAccountName: downstream-memory@<project>.iam.gserviceaccount.com
       timeoutSeconds: 30
   traffic:
   - latestRevision: true

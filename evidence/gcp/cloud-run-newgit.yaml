@@ -59,7 +59,7 @@ spec:
           tcpSocket:
             port: 8080
           timeoutSeconds: 240
-      serviceAccountName: 1083478229816-compute@developer.gserviceaccount.com
+      serviceAccountName: 1083478229816-compute@<developer>.gserviceaccount.com
       timeoutSeconds: 60
   traffic:
   - latestRevision: true
