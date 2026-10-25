@@ -17,8 +17,9 @@ func entry(mr int, head, recorded string, cpu float64) Entry {
 
 func TestSummarizeKeepsComparedGatedAppMetrics(t *testing.T) {
 	run := model.Run{Base: sha("a"), Head: sha("b"), Findings: []model.Finding{
-		{ID: "app.cpu_ms_per_journey", Metric: "CPU per completed journey", Unit: "ms/journey", B1: 9, B2: 10, C: 12, Gated: true, Class: model.ClassNoise},
-		{ID: "app.peak_rss_mb", Metric: "Peak RSS", Unit: "MB", B1: 5, B2: 5, C: 5, Gated: true, Class: model.ClassWithheld},
+		{ID: "app.cpu_ms_per_journey", Metric: model.MetricCPUPerJourney, Unit: "ms/journey", B1: 9, B2: 10, C: 12, Gated: true, Class: model.ClassNoise},
+		{ID: "app.peak_rss_mb", Metric: model.MetricRSS, Unit: "MB", B1: 5, B2: 5, C: 5, Gated: true, Class: model.ClassWithheld},
+		{ID: "app.goroutines", Metric: model.MetricGoroutines, Unit: "count", B1: 8, B2: 8, C: 7, Gated: true, Class: model.ClassNoise},
 		{ID: "j.s.p95", Journey: "j", Step: "s", Metric: "p95", B1: 1, B2: 1, C: 9, Class: model.ClassRegression},
 		{ID: "app.cpu_seconds", Metric: "CPU time", B1: 1, B2: 1, C: 2, Class: model.ClassRegression},
 	}}
@@ -30,7 +31,7 @@ func TestSummarizeKeepsComparedGatedAppMetrics(t *testing.T) {
 		t.Fatalf("metrics = %v", e.Metrics)
 	}
 	m := e.Metrics["app.cpu_ms_per_journey"]
-	if m.Base != 10 || math.Abs(m.Change-0.2) > 1e-9 {
+	if m.Base != 10 || math.Abs(m.Change-0.2) > 1e-9 || m.Label != "CPU per journey" {
 		t.Fatalf("cpu = %+v (want the worse baseline 10 and +20%%)", m)
 	}
 }

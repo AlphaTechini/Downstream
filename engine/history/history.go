@@ -83,12 +83,26 @@ func (e Entry) Validate() error {
 	return nil
 }
 
-// Summarize builds the record for a run: every gated app-wide metric that was
-// compared (withheld and unmeasured ones are left out) with a non-zero baseline.
+// Tracked are the metrics a record keeps, with the labels the report shows.
+// Small integer counts (threads, open files, goroutines, GC cycles) move in whole
+// units, so compounding their percentage changes would mean nothing.
+var Tracked = map[string]string{
+	model.MetricCPUPerJourney:           "CPU per journey",
+	model.MetricWriteBytesPerJourney:    "Bytes written per journey",
+	model.MetricWriteSyscallsPerJourney: "Write syscalls per journey",
+	model.MetricAllocObjectsPerJourney:  "Heap objects allocated per journey",
+	model.MetricAllocBytesPerJourney:    "Heap bytes allocated per journey",
+	model.MetricRSS:                     "Peak memory",
+}
+
+// Summarize builds the record for a run: each tracked gated app-wide metric
+// that was compared (withheld and unmeasured ones are left out) with a
+// non-zero baseline.
 func Summarize(run model.Run, project string, mr int) (Entry, error) {
 	e := Entry{Version: Version, Project: project, MR: mr, Base: run.Base, Head: run.Head, Metrics: map[string]Metric{}}
 	for _, f := range run.Findings {
-		if f.Journey != "" || !f.Gated {
+		label, tracked := Tracked[f.Metric]
+		if f.Journey != "" || !f.Gated || !tracked {
 			continue
 		}
 		if f.Class != model.ClassRegression && f.Class != model.ClassImproved && f.Class != model.ClassNoise {
@@ -98,7 +112,7 @@ func Summarize(run model.Run, project string, mr int) (Entry, error) {
 		if base <= 0 {
 			continue
 		}
-		e.Metrics[f.ID] = Metric{Label: f.Metric, Unit: f.Unit, Base: base, C: f.C, Change: (f.C - base) / base}
+		e.Metrics[f.ID] = Metric{Label: label, Unit: f.Unit, Base: base, C: f.C, Change: (f.C - base) / base}
 	}
 	if err := e.Validate(); err != nil {
 		return Entry{}, err
