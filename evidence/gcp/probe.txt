@@ -1,0 +1,14 @@
+# Probe of the Downstream memory service, 2026-10-25T00:36:19Z
+$ curl https://downstream-memory-1083478229816.us-central1.run.app/health
+ok
+HTTP 200
+$ POST /v1/runs for a project that has not opted in
+{"error":"project someone/else is not opted in on this instance"}
+
+HTTP 403
+$ POST /v1/runs naming a commit that is not in NewGit
+{"error":"head ffffffffffffffffffffffffffffffffffffffff is not a commit of gitlab-ai-hackathon/transcend-october-2026/35141659/newgit"}
+
+HTTP 403
+$ GET / (dashboard)
+HTTP 200, 2692 bytes

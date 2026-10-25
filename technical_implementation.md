@@ -294,6 +294,36 @@ On NewGit, `fix it` on a missing-banner issue removed the banner and the re-meas
 regressions and 9 page checks improved; on a CPU issue it replaced a repeated hash and CPU per
 journey fell from 32.11 ms to 9.63 ms ([C-21](docs/CLAIMS.md)).
 
+### 4.8 Memory on Google Cloud: catching slow creep
+
+A sandbox starts empty on every run, so on its own Downstream can only compare a merge request
+with its target branch. That misses the most common way apps get slow: many small changes,
+each under its tolerance. Ten merge requests that each add 8% CPU per journey all pass, and the
+app ends up more than twice as expensive.
+
+The **Downstream memory service** runs on Google Cloud Run with Firestore
+([`cloud/`](cloud/README.md), live at https://downstream-memory-1083478229816.us-central1.run.app). For a project that opts in with
+`history: on` in `downstream.yml`:
+
+1. After the run, the engine writes a numbers-only record: for each of six continuous metrics
+   (CPU, bytes written and write syscalls per journey, heap objects and bytes per journey, peak
+   memory), the new build's change against the worse of the two old-build runs. Absolute figures
+   are not kept, because the same branch measured 5.2 ms and 10.4 ms of CPU per journey in two
+   sandbox sessions; a change measured within one session is comparable across sessions.
+2. The flow posts the record to Cloud Run. The service checks the project is on its allowlist
+   and that the commit exists on GitLab, stores the record, deletes records older than 30 days,
+   logs one line, and answers with the project's earlier records.
+3. The engine, back in the sandbox, uses git to keep only records whose head is an ancestor of
+   the current base (merge requests that really merged), compounds their changes with this
+   merge request's, and the report gains a **Trend** table. A metric whose compounded change
+   would reach 25% is flagged as creep.
+
+On NewGit, the run on !11 (a README change) was recorded and !11 was merged; the run on the
+demo merge request !3 then counted !11 in its trend and flagged CPU per journey at +199.5%
+compounded ([evidence/gcp/](evidence/gcp/README.md)). If Cloud Run cannot be reached, the
+report says the trend is unavailable and nothing else changes. The service keeps no code, no
+diffs and no route names, and runs on Google Cloud's free tier: both services scale to zero.
+
 ## 5. Safety: the model never holds the keys
 
 An agent that runs code from merge requests must assume the merge request is hostile.

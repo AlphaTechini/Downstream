@@ -1,0 +1,47 @@
+[
+  {
+    "timestamp": "2026-10-25T00:37:08.988424382Z",
+    "severity": "INFO",
+    "jsonPayload": {
+      "cpu_ms_per_journey_change_pct": 206.6,
+      "head": "de7fbea5ee95",
+      "message": "run recorded for !3",
+      "metrics": 6,
+      "mr": 3,
+      "prior_records": 1,
+      "project": "gitlab-ai-hackathon/transcend-october-2026/35141659/newgit",
+      "pruned": 0
+    },
+    "revision": "downstream-memory-00002-wjk"
+  },
+  {
+    "timestamp": "2026-10-25T00:30:34.684936684Z",
+    "severity": "INFO",
+    "jsonPayload": {
+      "cpu_ms_per_journey_change_pct": -2.3,
+      "head": "5d670fe8fab1",
+      "message": "run recorded for !11",
+      "metrics": 10,
+      "mr": 11,
+      "prior_records": 0,
+      "project": "gitlab-ai-hackathon/transcend-october-2026/35141659/newgit",
+      "pruned": 0
+    },
+    "revision": "downstream-memory-00002-wjk"
+  },
+  {
+    "timestamp": "2026-10-25T00:07:19.198395494Z",
+    "severity": "INFO",
+    "jsonPayload": {
+      "cpu_ms_per_journey_change_pct": 0,
+      "head": "2893f09986e8",
+      "message": "run recorded for !3",
+      "metrics": 1,
+      "mr": 3,
+      "prior_records": 0,
+      "project": "gitlab-ai-hackathon/transcend-october-2026/35141659/newgit",
+      "pruned": 0
+    },
+    "revision": "downstream-memory-00001-b94"
+  }
+]

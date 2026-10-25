@@ -239,6 +239,27 @@ run3 = session 9883560 (probe v3, `flows/probe.yml`).
 - **Does not show:** a run in the Duo sandbox (this ran on a local WSL2 machine, Node 22.23.3);
   Angular, Next.js or server-side rendering frameworks; `frontend_node`, which has not run.
 
+## C-22. The Downstream memory service runs on Google Cloud Run and adds a trend across merged merge requests
+
+- **File:** `engine/memory/` and `engine/cmd/downstream-memory/main.go` (service),
+  `engine/history/history.go` (record and trend), `engine/report/trend.go`, `cloud/` (Dockerfile,
+  Cloud Build config, `deploy.sh`), flow step R8H. Engine `a5cce4a` on a private experiment flow.
+- **Proof:** [cloud-run-downstream-memory.yaml](../evidence/gcp/cloud-run-downstream-memory.yaml)
+  line 27 (at most one instance) and line 56 (own service account);
+  [firestore-databases.yaml](../evidence/gcp/firestore-databases.yaml) line 9 (`freeTier: true`);
+  [probe.txt](../evidence/gcp/probe.txt) lines 5 to 12: a project that has not opted in and a
+  commit that is not in NewGit are refused with HTTP 403.
+  [newgit-mr-11-notes.json](../evidence/gcp/newgit-mr-11-notes.json) line 151: NewGit !11's
+  report with a Trend section and no merged merge requests yet;
+  [newgit-mr-3-notes.json](../evidence/gcp/newgit-mr-3-notes.json) line 179: after !11 merged,
+  the demo merge request's trend counts it, with CPU per journey +199.5% compounded and flagged.
+  [cloud-logging-run-recorded.json](../evidence/gcp/cloud-logging-run-recorded.json): the
+  service's log lines for both records.
+- **Does not show:** creep built from many small merged changes (only one merged merge request
+  is recorded so far, so the flag on !3 comes from !3's own rise); squash merges, which are not
+  traced; the live bot using it (the proof ran on the experiment flow). The first log line, at
+  00:07, is a manual test write that was deleted afterwards.
+
 ## C-21. `fix it` works on frontend issues and on app-wide findings
 
 - **File:** `engine/issues/frontend.go` (notes and state block for frontend issues),

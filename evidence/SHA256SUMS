@@ -319,3 +319,10 @@ a15cd721a74543a2dd23e45ff42e894061ea2c5c7d9950a1c7b16520df37bd80  evidence/flow/
 a3ba6514f74bf34d45733817394857c0167b524ac33d4d2a57eec587b4d57a8d  evidence/flow/fix-it-frontend/newgit-mr-8-diffs.json
 fe75e6d358b50e8996b0dc44c66e540d9e14aa74e6902e75a66735e97f8640d7  evidence/flow/fix-it-frontend/newgit-mr-8-notes.json
 4862a4de0dd5ba74c2aaacca0c59434006fe4c26b1c79f2279369f28eb44a651  evidence/flow/fix-it-frontend/newgit-mr-8.json
+5c735639f47499834a65e086dbf44d1c81af719f619a2a20683d4a9d35e30ce7  evidence/gcp/cloud-logging-run-recorded.json
+8236cc26a79808c227687359e48014ad58a580e7c4ce913bb2b5f5e648f08d8d  evidence/gcp/cloud-run-downstream-memory.yaml
+f50ec39b8ab50be999f0eae0abe694ec8732a8a058611e8beaa7ccd91dbc70ca  evidence/gcp/cloud-run-newgit.yaml
+54acecc6ed0055911ba5cd472801c4ef086a5639876b85a684945d5163625386  evidence/gcp/firestore-databases.yaml
+e6d4ef53df56e405e27f9119315c47399008d08369b238a18ea4e0b951236450  evidence/gcp/newgit-mr-11-notes.json
+c4131dfb3c6514e8c14c3983ef580daf30cc699722ab23f3025e3e5367a3e46e  evidence/gcp/newgit-mr-3-notes.json
+fdd25f43feeec0086962add9995a4f0da10c86a44b97fe23dfd65c372ed8bb32  evidence/gcp/probe.txt
