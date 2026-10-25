@@ -8,3 +8,4 @@ ready_path: /health
 vus: 2
 iterations: 10                            # per VU; fixed sample size per pass
 duration: 60s                             # cap per pass
+history: on                               # send numbers-only run records to the Downstream memory service

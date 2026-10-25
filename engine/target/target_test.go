@@ -115,6 +115,12 @@ func TestParseTable(t *testing.T) {
 		{name: "empty quoted main_dir", in: req + "main_dir: \"\"\n", wantErr: "line 6: main_dir must not be empty"},
 		{name: "bad port_env", in: strings.Replace(req, "PORT", "p;rt", 1), wantErr: "port_env"},
 		{name: "ready_path without slash", in: strings.Replace(req, "/health", "health", 1), wantErr: "ready_path"},
+		{name: "history on", in: req + "history: on\n", check: func(t *testing.T, c Config) {
+			if !c.History {
+				t.Fatal("history not on")
+			}
+		}},
+		{name: "history bad value", in: req + "history: yes\n", wantErr: "line 6: history must be on or off"},
 		{name: "frontend only", in: "frontend_dir: web\nfrontend_build: npm run build\nfrontend_out: web/dist\nfrontend_node: 20.20.2\n", check: func(t *testing.T, c Config) {
 			if c.HasBackend() || !c.HasStaticFrontend() {
 				t.Fatalf("backend %v, static frontend %v", c.HasBackend(), c.HasStaticFrontend())

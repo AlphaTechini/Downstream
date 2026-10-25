@@ -1,0 +1,7 @@
+# The memory service image needs only go.mod and engine/; everything else
+# (evidence, fixtures, docs, tools) stays out of the build context.
+*
+!go.mod
+!engine
+engine/**/testdata
+engine/**/*_test.go

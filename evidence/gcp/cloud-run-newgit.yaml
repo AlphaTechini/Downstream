@@ -1,0 +1,87 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    run.googleapis.com/build-enable-automatic-updates: 'false'
+    run.googleapis.com/build-id: 4d1734c4-ed70-4c31-83fe-82d1ca5c05dd
+    run.googleapis.com/build-image-uri: us-central1-docker.pkg.dev/downstream-transcend-26/cloud-run-source-deploy/newgit
+    run.googleapis.com/build-name: projects/1083478229816/locations/us-central1/builds/4d1734c4-ed70-4c31-83fe-82d1ca5c05dd
+    run.googleapis.com/build-source-location: gs://run-sources-downstream-transcend-26-us-central1/services/newgit/1792886049.874371-7da9abdb95f04364b75eb2977684c25a.zip#1792886072483590
+    run.googleapis.com/client-name: gcloud
+    run.googleapis.com/client-version: 577.0.0
+    run.googleapis.com/ingress: all
+    run.googleapis.com/ingress-status: all
+    run.googleapis.com/maxScale: '20'
+    run.googleapis.com/operation-id: 6ed419e6-f069-4ab4-80bf-5f8e712b41db
+    run.googleapis.com/urls: '["https://newgit-1083478229816.us-central1.run.app","https://newgit-guetkeggfa-uc.a.run.app"]'
+    serving.knative.dev/creator: <redacted-email>
+    serving.knative.dev/lastModifier: <redacted-email>
+  creationTimestamp: '2026-10-24T23:55:25.540523Z'
+  generation: 2
+  labels:
+    cloud.googleapis.com/location: us-central1
+  name: newgit
+  namespace: '1083478229816'
+  resourceVersion: AAZentsvfCs
+  selfLink: /apis/serving.knative.dev/v1/namespaces/1083478229816/services/newgit
+  uid: 0dad9adf-98ba-4824-980d-1cde0ea35888
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '1'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 577.0.0
+        run.googleapis.com/startup-cpu-boost: 'true'
+      labels:
+        client.knative.dev/nonce: nlqhjmglid
+        run.googleapis.com/startupProbeType: Default
+    spec:
+      containerConcurrency: 40
+      containers:
+      - args:
+        - serve
+        - -seed-demo
+        env:
+        - name: NEWGIT_BASE_URL
+          value: https://newgit-1083478229816.us-central1.run.app
+        image: us-central1-docker.pkg.dev/downstream-transcend-26/cloud-run-source-deploy/newgit@sha256:dca08129855e7e22cdadab71e84533d63f7899ac4ec656dec9f0c2a4adc804a8
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 240
+      serviceAccountName: 1083478229816-compute@<developer>.gserviceaccount.com
+      timeoutSeconds: 60
+  traffic:
+  - latestRevision: true
+    percent: 100
+status:
+  address:
+    url: https://newgit-guetkeggfa-uc.a.run.app
+  conditions:
+  - lastTransitionTime: '2026-10-24T23:57:15.429931Z'
+    status: 'True'
+    type: Ready
+  - lastTransitionTime: '2026-10-24T23:57:11.325062Z'
+    status: 'True'
+    type: ConfigurationsReady
+  - lastTransitionTime: '2026-10-24T23:57:15.388048Z'
+    status: 'True'
+    type: RoutesReady
+  latestCreatedRevisionName: newgit-00002-6f4
+  latestReadyRevisionName: newgit-00002-6f4
+  observedGeneration: 2
+  traffic:
+  - latestRevision: true
+    percent: 100
+    revisionName: newgit-00002-6f4
+  url: https://newgit-guetkeggfa-uc.a.run.app

@@ -63,6 +63,10 @@ scenarios it handles.
   to the asset responsible, and findings are grouped into one issue per cause. Shown in the Duo
   sandbox on a server-rendered app and on real React and Svelte builds
   ([`tools/fecheck`](tools/fecheck/README.md), [C-19, C-20](docs/CLAIMS.md)).
+- **It remembers, on Google Cloud.** A sandbox forgets everything after each run, so ten merge
+  requests that each add 8% CPU would all pass. The Downstream memory service on Cloud Run keeps
+  a numbers-only record of each run, and every report gains a Trend section that compounds the
+  changes of merged merge requests ([`cloud/`](cloud/README.md), [C-22](docs/CLAIMS.md)).
 - **It closes the loop, under human control.** `fix it` commits a fix on a new branch, opens a
   merge request for the requester and re-measures it, for backend and frontend issues alike;
   Downstream never merges ([C-13](docs/CLAIMS.md), [C-21](docs/CLAIMS.md)).
@@ -127,8 +131,11 @@ where each is answered:
 | Potential impact | [The problem](#the-problem) (change-caused outages, sourced); [scenarios](technical_implementation.md#3-real-projects-it-is-built-for) for APIs, server-rendered apps, single-page apps and full-stack repositories |
 | Idea quality | [The mechanism](#downstream) above; prior art and what is not novel in [`docs/details.md`](docs/details.md) section 13 |
 
-Not claimed: coverage of all nine lifecycle stages, the Google Cloud bonus (no deployment code
-here), the environmental prize.
+Google Cloud (bonus): the Downstream memory service and the NewGit demo app run on Cloud Run,
+with the deployment code in [`cloud/`](cloud/README.md). Live: [memory service and dashboard](https://downstream-memory-1083478229816.us-central1.run.app),
+[NewGit](https://newgit-1083478229816.us-central1.run.app). Proof: [evidence/gcp/](evidence/gcp/README.md).
+
+Not claimed: coverage of all nine lifecycle stages, the environmental prize.
 
 ## The problem
 
@@ -159,6 +166,7 @@ per cause and the `fix it` loop ([`docs/details.md`](docs/details.md) section 13
 | 5 | Only differences beyond the noise and a per-metric tolerance open issues: failing steps, and process counters (CPU per completed journey, bytes written net of responses, write syscalls, memory, fds, threads, allocations, GC, goroutines). Latency is shown but advisory. One issue per cause (repro, likely cause, numbered fix options, starter tagged); trade-offs become a question on the MR | Verified: issues opened by the flow. Under the gated rule the planted change gives 1 issue (CPU per journey); the earlier latency rule gave 2 for 1 cause. A trade-off question was posted in session 10002748 ([evidence](evidence/flow.md)) |
 | 6 | `@handle fix it` (option 1) or `fix option N` commits the option on a new branch, opens a merge request mentioning the requester and re-runs the issue's journey on it; `verify` reruns after merge | `fix it` verified (!13, [evidence](evidence/flow.md)); `verify` written, not run |
 | 7 | When frontend files change, the model writes page journeys and the engine builds both versions, renders each page in happy-dom (old build twice, so noise is measured) and adds a Frontend section to the report, with one issue per cause | Verified in the sandbox on a server-rendered app (NewGit !5, [evidence](evidence/flow.md)); React and Svelte builds verified locally only ([evidence](evidence/frontend/README.md)) |
+| 8 | For projects that opt in, each run's numbers-only record goes to the Downstream memory service on Google Cloud Run, and the report adds a Trend: each metric's change compounded over the merged merge requests, flagged as creep at 25% | Verified in the sandbox on NewGit: the trend on !3 counts merged !11 ([evidence](evidence/gcp/README.md)) |
 
 User-activity simulation, not load testing: a few virtual users for tens of seconds. The model
 chooses journeys and writes sentences; code produces every number, table and chart.
@@ -304,6 +312,7 @@ Proof is a committed file. Longer notes and limits: [`docs/CLAIMS.md`](docs/CLAI
 | A template change on a server-rendered app is caught by the frontend stage in the Duo sandbox, with one issue per cause | Verified, session 10003926 on NewGit !5 (12 page checks regressed on 4 pages; 3 issues) | `engine/runner/frontend.go`, `tools/fecheck/` | [newgit-mr-5-notes.json](evidence/flow/frontend/newgit-mr-5-notes.json) L151; [issues](evidence/flow/frontend/newgit-issues-5-7.json) L6, L79, L152; [job log](evidence/flow/frontend/session-10003926-newgit-mr5-job-log.txt) L641 (npm ci), L659 (frontend), L751 |
 | On real React and Svelte (Vite 8) builds the frontend stage catches every planted kind and passes a clean change | Verified locally (WSL2), not in the Duo sandbox | `fixtures/frontend/`, `scripts/verify_frontend.sh` | [frontend-verify.txt](evidence/frontend-verify.txt) L61, L121, L123 |
 | `fix it` works on frontend issues and on app-wide findings: the fix is committed on a new branch, a merge request is opened, and the page check or the backend run is repeated on it | Verified, NewGit: frontend fix !8 (banner removed; 0 regressions, 9 page checks improved) and CPU fix !7 (CPU per journey 32.11 to 9.63 ms, -70%) | `engine/issues/frontend.go`, `engine/cmd/downstream/main.go` (`writeMarkerJourneys`), flow F7 | [newgit-mr-8-notes.json](evidence/flow/fix-it-frontend/newgit-mr-8-notes.json) L5; [newgit-mr-7-notes.json](evidence/flow/fix-it-frontend/newgit-mr-7-notes.json) L33; [issue 15 notes](evidence/flow/fix-it-frontend/newgit-issue-15-notes.json) L235; [frontend fix job](evidence/flow/fix-it-frontend/fix-job-17439455794-issue-15.txt) L573, L588, L639; [CPU fix job](evidence/flow/fix-it-frontend/fix-job-17439456063-issue-12.txt) L585, L603, L668 |
+| The Downstream memory service runs on Google Cloud Run with Firestore, refuses projects that have not opted in and commits that do not exist, and the flow adds a Trend across merged merge requests to the report | Verified, live in project `downstream-transcend-26`; NewGit !11 recorded, then !3's trend counted it (CPU per journey +199.5% compounded, flagged) | `engine/memory/`, `engine/history/`, `cloud/`, flow R8H | [probe.txt](evidence/gcp/probe.txt) L5-L12; [cloud-run-downstream-memory.yaml](evidence/gcp/cloud-run-downstream-memory.yaml) L27, L56; [newgit-mr-3-notes.json](evidence/gcp/newgit-mr-3-notes.json) L179; [cloud-logging-run-recorded.json](evidence/gcp/cloud-logging-run-recorded.json) |
 | `frontend_node` fetches an exact Node version from the npm registry | Written, not run | `engine/runner/fe_node.go` | none |
 | `verify` reruns after merge | Written, not run | `flows/downstream.yml` | none |
 | Cost in credits of one run | Not measured | none | none |
@@ -426,7 +435,8 @@ of them for its own run. Known gap: the model's JSON reaches the shell inside a 
 
 Done: engine built and logged in CI; the flow runs end to end on GitLab on two projects;
 `fix it` opens and re-measures a fix merge request; journeys cover the change, including new
-features; tolerances hardened with floors on the live bot; a browser-free frontend stage. Next: a clean-change control inside the flow to measure the sandbox's noise, `verify`
+features; tolerances hardened with floors on the live bot; a browser-free frontend stage; a
+memory service on Google Cloud Run with a trend across merged merge requests. Next: a clean-change control inside the flow to measure the sandbox's noise, `verify`
 after a merge, following `template.FuncMap` in static analysis, and the cost of a session.
 
 ## Docs

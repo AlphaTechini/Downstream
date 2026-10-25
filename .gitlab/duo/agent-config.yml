@@ -26,3 +26,5 @@ network_policy:
     - objects.githubusercontent.com
     - release-assets.githubusercontent.com
     - dl.k6.io
+    # Downstream memory service on Google Cloud Run (history: on in downstream.yml).
+    - downstream-memory-1083478229816.us-central1.run.app

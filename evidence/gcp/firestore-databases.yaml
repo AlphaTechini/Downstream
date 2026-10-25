@@ -1,0 +1,17 @@
+---
+appEngineIntegrationMode: DISABLED
+concurrencyMode: PESSIMISTIC
+createTime: '2026-10-24T23:53:25.694968Z'
+databaseEdition: STANDARD
+deleteProtectionState: DELETE_PROTECTION_DISABLED
+earliestVersionTime: '2026-10-24T23:53:25.694968Z'
+etag: IICK6rD205cDMLS3q/nv05cD
+freeTier: true
+locationId: us-central1
+name: projects/downstream-transcend-26/databases/(default)
+pointInTimeRecoveryEnablement: POINT_IN_TIME_RECOVERY_DISABLED
+realtimeUpdatesMode: REALTIME_UPDATES_MODE_ENABLED
+type: FIRESTORE_NATIVE
+uid: cee829e8-17c5-4b06-a927-a2ea217f7d47
+updateTime: '2026-10-24T23:53:25.694968Z'
+versionRetentionPeriod: 3600s
